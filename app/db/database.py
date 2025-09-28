@@ -19,6 +19,9 @@ class Database:
     async def connect(self) -> None:
         """Create database connection pool."""
         try:
+            logger.info(
+                f"Creating database connection pool with URL: {settings.database_url}"
+            )
             self.pool = await asyncpg.create_pool(
                 settings.database_url,
                 min_size=settings.database_pool_min_size,

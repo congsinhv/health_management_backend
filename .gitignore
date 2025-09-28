@@ -160,8 +160,6 @@ logs/
 *.temp
 .tmp/
 
-# Alembic
-scripts/migrations/versions/
 
 # Test database
 *_test

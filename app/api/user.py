@@ -3,11 +3,19 @@ User API endpoints.
 """
 
 import asyncpg
-from typing import List
+from typing import List, Annotated
 from app.services.user import UserService
 from app.db.database import get_database_pool
+from app.auth.dependencies import get_current_active_user, get_current_active_superuser
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserLogin, Token
+from app.schemas.user import (
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    UserLogin,
+    Token,
+    UserInDB,
+)
 
 router = APIRouter()
 
@@ -38,11 +46,12 @@ async def create_user(
 
 @router.get("/", response_model=List[UserResponse])
 async def get_users(
+    current_user: Annotated[UserInDB, Depends(get_current_active_superuser)],
+    user_service: UserService = Depends(get_user_service),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
-    user_service: UserService = Depends(get_user_service),
 ):
-    """Get all users with pagination."""
+    """Get all users with pagination (admin only)."""
     try:
         users = await user_service.get_users(limit=limit, offset=offset)
         return users
@@ -138,8 +147,11 @@ async def login(
 
 
 @router.get("/count/total")
-async def get_user_count(user_service: UserService = Depends(get_user_service)):
-    """Get total user count."""
+async def get_user_count(
+    current_user: Annotated[UserInDB, Depends(get_current_active_superuser)],
+    user_service: UserService = Depends(get_user_service),
+):
+    """Get total user count (admin only)."""
     try:
         count = await user_service.count_users()
         return {"total_users": count}
