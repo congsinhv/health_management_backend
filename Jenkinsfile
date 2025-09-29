@@ -42,24 +42,47 @@ pipeline {
                 '''
             }
         }
-
         stage('Setup GCP Authentication') {
             steps {
                 echo 'Setting up GCP authentication...'
                 withCredentials([file(credentialsId: 'gcp-key-json', variable: 'GCP_KEY_FILE')]) {
                     sh '''
-                        # Authenticate with GCP using service account key
-                        gcloud auth activate-service-account --key-file="$GCP_KEY_FILE"
+                        set -e  # Exit on any error
+                        
+                        echo "Authenticating with GCP using service account key..."
+                        if ! gcloud auth activate-service-account --key-file="$GCP_KEY_FILE"; then
+                            echo "❌ Failed to authenticate with GCP service account"
+                            echo "Key file: $GCP_KEY_FILE"
+                            echo "Contents check:"
+                            ls -la "$GCP_KEY_FILE" || echo "Key file not found"
+                            exit 1
+                        fi
 
-                        # Set the project
-                        gcloud config set project ${PROJECT_ID}
+                        echo "Setting GCP project..."
+                        if ! gcloud config set project ${PROJECT_ID}; then
+                            echo "❌ Failed to set GCP project: ${PROJECT_ID}"
+                            exit 1
+                        fi
 
-                        # Configure Docker for Artifact Registry
-                        gcloud auth configure-docker ${REGISTRY_REGION}-docker.pkg.dev --quiet
+                        echo "Configuring Docker for Artifact Registry..."
+                        if ! gcloud auth configure-docker ${REGISTRY_REGION}-docker.pkg.dev --quiet; then
+                            echo "❌ Failed to configure Docker for Artifact Registry"
+                            echo "Registry region: ${REGISTRY_REGION}"
+                            exit 1
+                        fi
 
-                        # Verify authentication
-                        gcloud auth list
-                        gcloud config list
+                        echo "Verifying authentication..."
+                        if ! gcloud auth list; then
+                            echo "❌ Failed to list authenticated accounts"
+                            exit 1
+                        fi
+                        
+                        if ! gcloud config list; then
+                            echo "❌ Failed to list gcloud configuration"
+                            exit 1
+                        fi
+                        
+                        echo "✅ GCP authentication setup completed successfully"
                     '''
                 }
             }
