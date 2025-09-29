@@ -9,7 +9,7 @@ pipeline {
 
         // Artifact Registry Configuration
         REGISTRY_REGION = 'asia-southeast1'     // Use same region as Cloud Run
-        REGISTRY_NAME = 'health-management-registry'
+        REGISTRY_NAME = 'health-management'
         IMAGE_NAME = "${REGISTRY_REGION}-docker.pkg.dev/${PROJECT_ID}/${REGISTRY_NAME}/${SERVICE_NAME}"
 
         // Cloud Run Configuration
