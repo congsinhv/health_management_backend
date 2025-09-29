@@ -49,18 +49,24 @@ pipeline {
                     sh '''
                         set -e  # Exit on any error
                         
+                        echo "Creating temporary key file with proper permissions..."
+                        cp "$GCP_KEY_FILE" "/tmp/gcp-key.json"
+                        chmod 600 "/tmp/gcp-key.json"
+                        
                         echo "Authenticating with GCP using service account key..."
-                        if ! gcloud auth activate-service-account --key-file="$GCP_KEY_FILE"; then
+                        if ! gcloud auth activate-service-account --key-file="/tmp/gcp-key.json"; then
                             echo "❌ Failed to authenticate with GCP service account"
-                            echo "Key file: $GCP_KEY_FILE"
+                            echo "Key file: /tmp/gcp-key.json"
                             echo "Contents check:"
-                            ls -la "$GCP_KEY_FILE" || echo "Key file not found"
+                            ls -la "/tmp/gcp-key.json" || echo "Key file not found"
+                            rm -f /tmp/gcp-key.json
                             exit 1
                         fi
 
                         echo "Setting GCP project..."
                         if ! gcloud config set project ${PROJECT_ID}; then
                             echo "❌ Failed to set GCP project: ${PROJECT_ID}"
+                            rm -f /tmp/gcp-key.json
                             exit 1
                         fi
 
@@ -68,21 +74,27 @@ pipeline {
                         if ! gcloud auth configure-docker ${REGISTRY_REGION}-docker.pkg.dev --quiet; then
                             echo "❌ Failed to configure Docker for Artifact Registry"
                             echo "Registry region: ${REGISTRY_REGION}"
+                            rm -f /tmp/gcp-key.json
                             exit 1
                         fi
 
                         echo "Verifying authentication..."
                         if ! gcloud auth list; then
                             echo "❌ Failed to list authenticated accounts"
+                            rm -f /tmp/gcp-key.json
                             exit 1
                         fi
                         
                         if ! gcloud config list; then
                             echo "❌ Failed to list gcloud configuration"
+                            rm -f /tmp/gcp-key.json
                             exit 1
                         fi
                         
                         echo "✅ GCP authentication setup completed successfully"
+                        
+                        # Clean up the temporary key file
+                        rm -f /tmp/gcp-key.json
                     '''
                 }
             }
