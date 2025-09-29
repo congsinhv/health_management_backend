@@ -88,14 +88,18 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo 'Building Docker image...'
+                echo 'Building Docker image with caching...'
                 script {
-                    // Build the Docker image
+                    // Build the Docker image with layer caching
                     sh '''
                         echo "Building Docker image: ${FULL_IMAGE_NAME}"
 
-                        # Build the image with build args
+                        # Pull latest image for layer caching (ignore failures)
+                        docker pull ${IMAGE_NAME}:latest || echo "No previous image found for caching"
+
+                        # Build the image with build args and cache optimization
                         docker build \
+                            --cache-from=${IMAGE_NAME}:latest \
                             --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
                             --build-arg VCS_REF=$(git rev-parse --short HEAD) \
                             --build-arg BUILD_NUMBER=${BUILD_NUMBER} \
@@ -112,7 +116,7 @@ pipeline {
 
         stage('Test Docker Image') {
             steps {
-                echo 'Testing Docker image...'
+                echo 'Testing Docker image with intelligent polling...'
                 sh '''
                     # Test that the image can start and respond to health checks
                     echo "Testing Docker image locally..."
@@ -123,26 +127,44 @@ pipeline {
                         -e SECRET_KEY="test-secret-key-for-testing-only" \
                         ${FULL_IMAGE_NAME})
 
-                    # Wait for container to start
-                    sleep 10
+                    # Function to wait for service with timeout
+                    wait_for_service() {
+                        local url=$1
+                        local timeout=30
+                        local counter=0
+                        
+                        echo "Waiting for service at $url..."
+                        while [ $counter -lt $timeout ]; do
+                            if curl -f --connect-timeout 2 --max-time 5 "$url" >/dev/null 2>&1; then
+                                echo "Service is ready after ${counter} seconds"
+                                return 0
+                            fi
+                            sleep 1
+                            counter=$((counter + 1))
+                        done
+                        echo "Service failed to start within $timeout seconds"
+                        return 1
+                    }
 
-                    # Test health endpoint
-                    if curl -f http://localhost:8081/health; then
+                    # Wait for container to start and test endpoints
+                    if wait_for_service "http://localhost:8081/health"; then
                         echo "Health check passed"
                     else
                         echo "Health check failed"
                         docker logs $CONTAINER_ID
                         docker stop $CONTAINER_ID
+                        docker rm $CONTAINER_ID
                         exit 1
                     fi
 
-                    # Test root endpoint
-                    if curl -f http://localhost:8081/; then
+                    # Test root endpoint (should be fast now)
+                    if curl -f --connect-timeout 2 --max-time 5 http://localhost:8081/; then
                         echo "Root endpoint test passed"
                     else
                         echo "Root endpoint test failed"
                         docker logs $CONTAINER_ID
                         docker stop $CONTAINER_ID
+                        docker rm $CONTAINER_ID
                         exit 1
                     fi
 
@@ -155,15 +177,28 @@ pipeline {
 
         stage('Push to Artifact Registry') {
             steps {
-                echo 'Pushing image to Artifact Registry...'
+                echo 'Pushing image to Artifact Registry in parallel...'
                 sh '''
                     echo "Pushing images to Artifact Registry..."
 
-                    # Push versioned image
-                    docker push ${FULL_IMAGE_NAME}
+                    # Push versioned image and latest tag in parallel
+                    docker push ${FULL_IMAGE_NAME} &
+                    PUSH1_PID=$!
+                    
+                    docker push ${IMAGE_NAME}:latest &
+                    PUSH2_PID=$!
 
-                    # Push latest tag
-                    docker push ${IMAGE_NAME}:latest
+                    # Wait for both pushes to complete
+                    echo "Waiting for parallel pushes to complete..."
+                    wait $PUSH1_PID
+                    PUSH1_STATUS=$?
+                    wait $PUSH2_PID  
+                    PUSH2_STATUS=$?
+
+                    if [ $PUSH1_STATUS -ne 0 ] || [ $PUSH2_STATUS -ne 0 ]; then
+                        echo "One or more pushes failed"
+                        exit 1
+                    fi
 
                     echo "Images pushed successfully"
                 '''
@@ -204,9 +239,30 @@ pipeline {
                     echo "Build: ${BUILD_NUMBER}"
                     echo "=========================="
 
-                    # Test the deployed service
-                    sleep 30  # Wait for service to be ready
-                    if curl -f "$SERVICE_URL/health"; then
+                    # Function to wait for Cloud Run service with intelligent polling
+                    wait_for_cloud_run() {
+                        local url=$1
+                        local timeout=120
+                        local counter=0
+                        
+                        echo "Waiting for Cloud Run service at $url..."
+                        while [ $counter -lt $timeout ]; do
+                            if curl -f --connect-timeout 5 --max-time 10 "$url/health" >/dev/null 2>&1; then
+                                echo "Cloud Run service is ready after ${counter} seconds"
+                                return 0
+                            fi
+                            sleep 2
+                            counter=$((counter + 2))
+                            if [ $((counter % 20)) -eq 0 ]; then
+                                echo "Still waiting... (${counter}s elapsed)"
+                            fi
+                        done
+                        echo "Cloud Run service failed to start within $timeout seconds"
+                        return 1
+                    }
+
+                    # Test the deployed service with intelligent polling
+                    if wait_for_cloud_run "$SERVICE_URL"; then
                         echo "Deployment health check passed"
                     else
                         echo "Deployment health check failed"
@@ -220,12 +276,24 @@ pipeline {
             steps {
                 echo 'Tagging successful deployment...'
                 sh '''
-                    # Tag the git commit with the successful deployment
-                    git tag -a "deploy-${BUILD_NUMBER}" -m "Deployed build ${BUILD_NUMBER} to Cloud Run"
+                    # Tag the git commit with the successful deployment (background)
+                    git tag -a "deploy-${BUILD_NUMBER}" -m "Deployed build ${BUILD_NUMBER} to Cloud Run" &
+                    GIT_TAG_PID=$!
 
-                    # Tag the Docker image as production
+                    # Tag and push the Docker image as production (background)
                     docker tag ${FULL_IMAGE_NAME} ${IMAGE_NAME}:production
-                    docker push ${IMAGE_NAME}:production
+                    docker push ${IMAGE_NAME}:production &
+                    DOCKER_PUSH_PID=$!
+
+                    # Wait for git tagging to complete
+                    wait $GIT_TAG_PID
+
+                    # Wait for docker push to complete
+                    wait $DOCKER_PUSH_PID
+                    if [ $? -ne 0 ]; then
+                        echo "Production image push failed"
+                        exit 1
+                    fi
 
                     echo "Build ${BUILD_NUMBER} successfully deployed and tagged"
                 '''
@@ -237,11 +305,19 @@ pipeline {
         always {
             echo 'Cleaning up...'
             sh '''
-                # Clean up local Docker images to save space
-                docker image prune -f
+                # Clean up local Docker images to save space (background)
+                docker image prune -f &
+                PRUNE_PID=$!
 
-                # Remove build-specific images but keep latest and production
-                docker rmi ${FULL_IMAGE_NAME} || true
+                # Remove build-specific images but keep latest and production (background)
+                docker rmi ${FULL_IMAGE_NAME} &
+                RMI_PID=$!
+
+                # Wait for cleanup operations (don't fail if they error)
+                wait $PRUNE_PID || true
+                wait $RMI_PID || true
+
+                echo "Cleanup completed"
             '''
         }
 
