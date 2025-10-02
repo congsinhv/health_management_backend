@@ -339,40 +339,6 @@ pipeline {
             }
         }
 
-        stage('Run Database Migrations') {
-            steps {
-                script {
-                    echo 'Running database migrations...'
-
-                    def connectionName = sh(
-                        script: 'cd terraform && terraform output -raw cloud_sql_connection_name',
-                        returnStdout: true
-                    ).trim()
-
-                    sh """
-                        if [ ! -f cloud_sql_proxy ]; then
-                            wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
-                            chmod +x cloud_sql_proxy
-                        fi
-
-                        ./cloud_sql_proxy -instances=${connectionName}=tcp:5432 &
-                        PROXY_PID=\$!
-
-                        sleep 5
-
-                        cd scripts
-                        export DATABASE_URL=\$(gcloud secrets versions access latest --secret=${params.ENVIRONMENT}-database-url --project=${GCP_PROJECT_ID})
-                        python3 -m venv venv || true
-                        . venv/bin/activate
-                        pip install -q alembic asyncpg psycopg2-binary
-                        alembic upgrade head
-
-                        kill \$PROXY_PID || true
-                    """
-                }
-            }
-        }
-
         stage('Smoke Tests') {
             steps {
                 script {
@@ -402,23 +368,6 @@ pipeline {
                 }
             }
         }
-
-        stage('Tag Release') {
-            when {
-                expression { return params.ENVIRONMENT == 'prod' }
-            }
-            steps {
-                script {
-                    echo 'Tagging release...'
-                    def tagName = "v${IMAGE_TAG}"
-
-                    sh """
-                        git tag -a ${tagName} -m "Release ${tagName} to production"
-                        git push origin ${tagName} || echo "Tag already exists or push failed"
-                    """
-                }
-            }
-        }
     }
 
     post {
@@ -439,7 +388,6 @@ pipeline {
         always {
             sh '''
                 docker system prune -f || true
-                rm -f cloud_sql_proxy || true
             '''
         }
     }
