@@ -241,11 +241,11 @@ pipeline {
                 script {
                     echo 'Running Trivy security scan...'
                     sh """
+                        export PATH="\${HOME}/.local/bin:\${PATH}"
+
                         if ! command -v trivy &> /dev/null; then
-                            wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-                            echo "deb https://aquasecurity.github.io/trivy-repo/deb \$(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-                            sudo apt-get update
-                            sudo apt-get install trivy -y
+                            mkdir -p \${HOME}/.local/bin
+                            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b \${HOME}/.local/bin
                         fi
 
                         trivy image --severity HIGH,CRITICAL --exit-code 0 ${IMAGE_FULL}
