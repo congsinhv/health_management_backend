@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --shell /bin/bash appuser
+USER appuser
 WORKDIR /home/appuser
 
 COPY requirements-prod.txt .
