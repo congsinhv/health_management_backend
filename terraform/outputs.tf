@@ -51,6 +51,7 @@ output "cloud_run_service_name" {
 
 output "cloud_run_config" {
   description = "Cloud Run configuration values for gcloud deployment"
+  sensitive   = true
   value = {
     service_name          = var.cloud_run_service_name
     service_account_email = google_service_account.cloud_run_sa.email
