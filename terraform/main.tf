@@ -103,7 +103,8 @@ module "secret_manager" {
   service_account_email = google_service_account.cloud_run_sa.email
   secrets = {
     # Construct DATABASE_URL for Cloud Run to connect to Cloud SQL via Unix socket
-    database_url            = "postgresql://${module.cloud_sql.db_user}:${module.cloud_sql.db_password}@/${module.cloud_sql.database_name}?host=/cloudsql/${module.cloud_sql.connection_name}"
+    # Note: Password is URL-encoded to handle special characters
+    database_url            = "postgresql://${module.cloud_sql.db_user}:${urlencode(module.cloud_sql.db_password)}@/${module.cloud_sql.database_name}?host=/cloudsql/${module.cloud_sql.connection_name}"
     secret_key             = var.secret_key
     google_client_id       = var.google_client_id
     google_client_secret   = var.google_client_secret
