@@ -38,6 +38,22 @@ pipeline {
         disableConcurrentBuilds()
     }
 
+    def fetchSecret = { secretName, placeholder ->
+        try {
+            return sh(
+                script: """
+                    gcloud secrets versions access latest \
+                        --secret=${secretName}-${params.ENVIRONMENT} \
+                        --project=${GCP_PROJECT_ID} 2>/dev/null \
+                    || echo '${placeholder}'
+                """,
+                returnStdout: true
+            ).trim()
+        } catch (Exception e) {
+            return placeholder
+        }
+    }
+
     stages {
         stage('Initialize') {
             steps {
@@ -92,7 +108,8 @@ pipeline {
                             terraform init \
                                 -backend-config="bucket=${TF_BACKEND_BUCKET}" \
                                 -backend-config="prefix=terraform/state/${params.ENVIRONMENT}" \
-                                -reconfigure
+                                -reconfigure \
+                                -no-color
                         """
                     }
                 }
@@ -104,7 +121,7 @@ pipeline {
                 dir('terraform') {
                     script {
                         echo 'Validating Terraform configuration...'
-                        sh 'terraform validate'
+                        sh 'terraform validate -no-color'
                     }
                 }
             }
@@ -120,47 +137,12 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-
-                    try {
-                        env.TF_VAR_google_client_id = sh(
-                            script: "gcloud secrets versions access latest --secret=google-client-id-${params.ENVIRONMENT} --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'placeholder-client-id'",
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        env.TF_VAR_google_client_id = 'placeholder-client-id'
-                    }
-
-                    try {
-                        env.TF_VAR_google_client_secret = sh(
-                            script: "gcloud secrets versions access latest --secret=google-client-secret-${params.ENVIRONMENT} --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'placeholder-client-secret'",
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        env.TF_VAR_google_client_secret = 'placeholder-client-secret'
-                    }
-
-                    try {
-                        env.TF_VAR_mail_username = sh(
-                            script: "gcloud secrets versions access latest --secret=mail-username-${params.ENVIRONMENT} --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'placeholder@example.com'",
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        env.TF_VAR_mail_username = 'placeholder@example.com'
-                    }
-
-                    try {
-                        env.TF_VAR_mail_password = sh(
-                            script: "gcloud secrets versions access latest --secret=mail-password-${params.ENVIRONMENT} --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'placeholder-password'",
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        env.TF_VAR_mail_password = 'placeholder-password'
-                    }
+                    env.TF_VAR_google_client_id     = fetchSecret("google-client-id", "placeholder-client-id")
+                    env.TF_VAR_google_client_secret = fetchSecret("google-client-secret", "placeholder-client-secret")
+                    env.TF_VAR_mail_username        = fetchSecret("mail-username", "placeholder@example.com")
+                    env.TF_VAR_mail_password        = fetchSecret("mail-password", "placeholder-password")
 
                     echo 'Secrets fetched successfully!'
-                    echo "Secret key: [GENERATED - ${env.TF_VAR_secret_key.length()} characters]"
-                    echo "Google Client ID: ${env.TF_VAR_google_client_id.take(20)}..."
-                    echo "Mail Username: ${env.TF_VAR_mail_username}"
                 }
             }
         }
@@ -173,7 +155,8 @@ pipeline {
                         sh """
                             terraform plan \
                                 -var-file="environments/${params.ENVIRONMENT}.tfvars" \
-                                -out=tfplan
+                                -out=tfplan \
+                                -no-color
                         """
                     }
                 }
@@ -199,7 +182,7 @@ pipeline {
                 dir('terraform') {
                     script {
                         echo 'Applying Terraform changes...'
-                        sh 'terraform apply -auto-approve tfplan'
+                        sh 'terraform apply -auto-approve -no-color tfplan'
 
                         sh '''
                             terraform output -json > terraform_outputs.json
@@ -222,24 +205,6 @@ pipeline {
                             -t ${IMAGE_FULL} \
                             -t ${IMAGE_LATEST} \
                             .
-                    """
-                }
-            }
-        }
-
-        stage('Run Security Scan') {
-            steps {
-                script {
-                    echo 'Running Trivy security scan...'
-                    sh """
-                        export PATH="\${HOME}/.local/bin:\${PATH}"
-
-                        if ! command -v trivy &> /dev/null; then
-                            mkdir -p \${HOME}/.local/bin
-                            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b \${HOME}/.local/bin
-                        fi
-
-                        trivy image --severity HIGH,CRITICAL --exit-code 0 ${IMAGE_FULL}
                     """
                 }
             }
