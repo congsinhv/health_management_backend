@@ -1,7 +1,7 @@
 """add_enhanced_authentication_support
 
 Revision ID: cde7763a63b8
-Revises:
+Revises: 904d1105f515
 Create Date: 2025-09-25 22:30:46.369877
 
 """
@@ -12,7 +12,7 @@ from migrations.utils import database_connect
 
 # revision identifiers, used by Alembic.
 revision = "cde7763a63b8"
-down_revision = None
+down_revision = "904d1105f515"
 branch_labels = None
 depends_on = None
 
