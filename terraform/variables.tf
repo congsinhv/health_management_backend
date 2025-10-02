@@ -105,11 +105,6 @@ variable "cloud_sql_deletion_protection" {
   type        = bool
 }
 
-variable "cloud_sql_private_ip_name" {
-  description = "Name for Cloud SQL private IP address"
-  type        = string
-}
-
 # Cloud Run Variables
 variable "cloud_run_service_name" {
   description = "Cloud Run service name"

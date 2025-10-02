@@ -82,15 +82,15 @@ module "artifact_registry" {
 module "vpc_connector" {
   source = "./modules/vpc_connector"
 
-  project_id       = var.project_id
-  region           = var.region
-  connector_name   = var.vpc_connector_name
-  vpc_network      = var.vpc_network
-  ip_cidr_range    = var.vpc_connector_ip_range
-  min_instances    = var.vpc_connector_min_instances
-  max_instances    = var.vpc_connector_max_instances
-  machine_type     = var.vpc_connector_machine_type
-  environment      = var.environment
+  project_id     = var.project_id
+  region         = var.region
+  connector_name = var.vpc_connector_name
+  vpc_network    = var.vpc_network
+  ip_cidr_range  = var.vpc_connector_ip_range
+  min_instances  = var.vpc_connector_min_instances
+  max_instances  = var.vpc_connector_max_instances
+  machine_type   = var.vpc_connector_machine_type
+  environment    = var.environment
 
   depends_on = [google_project_service.required_apis]
 }
@@ -102,14 +102,19 @@ module "secret_manager" {
   environment           = var.environment
   service_account_email = google_service_account.cloud_run_sa.email
   secrets = {
-    # Construct DATABASE_URL for Cloud Run to connect to Cloud SQL via Unix socket
+    # Database credentials stored separately for flexibility
+    db_name     = module.cloud_sql.database_name
+    db_username = module.cloud_sql.db_user
+    db_password = module.cloud_sql.db_password
+    db_host     = module.cloud_sql.public_ip_address
+    # Construct DATABASE_URL for Cloud Run to connect to Cloud SQL via public IP
     # Note: Password is URL-encoded to handle special characters
-    database_url            = "postgresql://${module.cloud_sql.db_user}:${urlencode(module.cloud_sql.db_password)}@/${module.cloud_sql.database_name}?host=/cloudsql/${module.cloud_sql.connection_name}"
-    secret_key             = var.secret_key
-    google_client_id       = var.google_client_id
-    google_client_secret   = var.google_client_secret
-    mail_username          = var.mail_username
-    mail_password          = var.mail_password
+    database_url         = "postgresql://${module.cloud_sql.db_user}:${urlencode(module.cloud_sql.db_password)}@${module.cloud_sql.public_ip_address}:5432/${module.cloud_sql.database_name}?sslmode=require"
+    secret_key           = var.secret_key
+    google_client_id     = var.google_client_id
+    google_client_secret = var.google_client_secret
+    mail_username        = var.mail_username
+    mail_password        = var.mail_password
   }
 
   depends_on = [
@@ -122,23 +127,18 @@ module "secret_manager" {
 module "cloud_sql" {
   source = "./modules/cloud_sql"
 
-  project_id                = var.project_id
-  region                    = var.region
-  instance_name             = var.cloud_sql_instance_name
-  database_version          = var.cloud_sql_database_version
-  tier                      = var.cloud_sql_tier
-  availability_type         = var.cloud_sql_availability_type
-  backup_enabled            = var.cloud_sql_backup_enabled
-  backup_start_time         = var.cloud_sql_backup_start_time
-  database_name             = var.cloud_sql_database_name
-  deletion_protection       = var.cloud_sql_deletion_protection
-  vpc_network              = var.vpc_network
-  private_ip_address_name   = var.cloud_sql_private_ip_name
-  environment              = var.environment
+  project_id          = var.project_id
+  region              = var.region
+  instance_name       = var.cloud_sql_instance_name
+  database_version    = var.cloud_sql_database_version
+  tier                = var.cloud_sql_tier
+  availability_type   = var.cloud_sql_availability_type
+  backup_enabled      = var.cloud_sql_backup_enabled
+  backup_start_time   = var.cloud_sql_backup_start_time
+  database_name       = var.cloud_sql_database_name
+  deletion_protection = var.cloud_sql_deletion_protection
+  environment         = var.environment
 
-  depends_on = [
-    google_project_service.required_apis,
-    module.vpc_connector
-  ]
+  depends_on = [google_project_service.required_apis]
 }
 

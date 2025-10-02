@@ -30,9 +30,13 @@ resource "google_sql_database_instance" "instance" {
     }
 
     ip_configuration {
-      ipv4_enabled    = false
-      private_network = "projects/${var.project_id}/global/networks/${var.vpc_network}"
-      ssl_mode        = "ENCRYPTED_ONLY"
+      ipv4_enabled = true
+      ssl_mode     = "ENCRYPTED_ONLY"
+
+      authorized_networks {
+        name  = "allow-all"
+        value = "0.0.0.0/0"
+      }
     }
 
     database_flags {
@@ -41,7 +45,7 @@ resource "google_sql_database_instance" "instance" {
     }
 
     maintenance_window {
-      day  = 7  # Sunday
+      day  = 7 # Sunday
       hour = 3
     }
 
@@ -52,23 +56,6 @@ resource "google_sql_database_instance" "instance" {
       record_client_address   = true
     }
   }
-
-  depends_on = [google_service_networking_connection.private_vpc_connection]
-}
-
-# Private VPC Connection for Cloud SQL
-resource "google_compute_global_address" "private_ip_address" {
-  name          = var.private_ip_address_name
-  purpose       = "VPC_PEERING"
-  address_type  = "INTERNAL"
-  prefix_length = 16
-  network       = "projects/${var.project_id}/global/networks/${var.vpc_network}"
-}
-
-resource "google_service_networking_connection" "private_vpc_connection" {
-  network                 = "projects/${var.project_id}/global/networks/${var.vpc_network}"
-  service                 = "servicenetworking.googleapis.com"
-  reserved_peering_ranges = [google_compute_global_address.private_ip_address.name]
 }
 
 # Database

@@ -48,16 +48,6 @@ variable "deletion_protection" {
   type        = bool
 }
 
-variable "vpc_network" {
-  description = "VPC network name"
-  type        = string
-}
-
-variable "private_ip_address_name" {
-  description = "Private IP address name"
-  type        = string
-}
-
 variable "environment" {
   description = "Environment name"
   type        = string

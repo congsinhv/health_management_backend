@@ -38,9 +38,9 @@ output "cloud_sql_database_name" {
   value       = module.cloud_sql.database_name
 }
 
-output "cloud_sql_private_ip" {
-  description = "Cloud SQL private IP address"
-  value       = module.cloud_sql.private_ip_address
+output "cloud_sql_public_ip" {
+  description = "Cloud SQL public IP address"
+  value       = module.cloud_sql.public_ip_address
   sensitive   = true
 }
 
@@ -58,12 +58,26 @@ output "cloud_run_config" {
     sql_connection_name   = module.cloud_sql.connection_name
     secrets = {
       DATABASE_URL         = module.secret_manager.secret_versions["database_url"]
-      SECRET_KEY          = module.secret_manager.secret_versions["secret_key"]
-      GOOGLE_CLIENT_ID    = module.secret_manager.secret_versions["google_client_id"]
+      DB_NAME              = module.secret_manager.secret_versions["db_name"]
+      DB_USERNAME          = module.secret_manager.secret_versions["db_username"]
+      DB_PASSWORD          = module.secret_manager.secret_versions["db_password"]
+      DB_HOST              = module.secret_manager.secret_versions["db_host"]
+      SECRET_KEY           = module.secret_manager.secret_versions["secret_key"]
+      GOOGLE_CLIENT_ID     = module.secret_manager.secret_versions["google_client_id"]
       GOOGLE_CLIENT_SECRET = module.secret_manager.secret_versions["google_client_secret"]
-      MAIL_USERNAME       = module.secret_manager.secret_versions["mail_username"]
-      MAIL_PASSWORD       = module.secret_manager.secret_versions["mail_password"]
+      MAIL_USERNAME        = module.secret_manager.secret_versions["mail_username"]
+      MAIL_PASSWORD        = module.secret_manager.secret_versions["mail_password"]
     }
+  }
+}
+
+output "database_secret_names" {
+  description = "Database credential secret names in Secret Manager"
+  value = {
+    db_name     = module.secret_manager.secret_names["db_name"]
+    db_username = module.secret_manager.secret_names["db_username"]
+    db_password = module.secret_manager.secret_names["db_password"]
+    db_host     = module.secret_manager.secret_names["db_host"]
   }
 }
 

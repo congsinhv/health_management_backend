@@ -13,9 +13,9 @@ output "database_name" {
   value       = google_sql_database.database.name
 }
 
-output "private_ip_address" {
-  description = "Private IP address"
-  value       = google_sql_database_instance.instance.private_ip_address
+output "public_ip_address" {
+  description = "Public IP address"
+  value       = google_sql_database_instance.instance.public_ip_address
   sensitive   = true
 }
 
