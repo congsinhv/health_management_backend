@@ -1,0 +1,272 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'prod'],
+            description: 'Target environment for migration'
+        )
+        string(
+            name: 'BRANCH_NAME',
+            defaultValue: 'develop',
+            description: 'Git branch to checkout for migration scripts'
+        )
+        choice(
+            name: 'MIGRATION_ACTION',
+            choices: ['current', 'upgrade', 'history', 'downgrade'],
+            description: 'Alembic migration action to perform'
+        )
+        string(
+            name: 'DOWNGRADE_REVISION',
+            defaultValue: '-1',
+            description: 'Revision to downgrade to (only used if MIGRATION_ACTION is downgrade)'
+        )
+    }
+
+    environment {
+        GCP_PROJECT_DEV = 'vhealth-dev'
+        GCP_PROJECT_PROD = 'vhealth-prod'
+        GCP_PROJECT = "${params.ENVIRONMENT == 'prod' ? env.GCP_PROJECT_PROD : env.GCP_PROJECT_DEV}"
+        DB_SECRET_NAME = "${params.ENVIRONMENT}-database-url"
+        VENV_PATH = "${WORKSPACE}/venv"
+        PYTHONPATH = "${WORKSPACE}/scripts"
+    }
+
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    echo "========================================="
+                    echo "Database Migration Pipeline"
+                    echo "========================================="
+                    echo "Environment: ${params.ENVIRONMENT}"
+                    echo "Branch: ${params.BRANCH_NAME}"
+                    echo "Action: ${params.MIGRATION_ACTION}"
+                    echo "GCP Project: ${env.GCP_PROJECT}"
+                    echo "========================================="
+
+                    // Validate parameters
+                    if (params.ENVIRONMENT != 'dev' && params.ENVIRONMENT != 'prod') {
+                        error("Invalid ENVIRONMENT: ${params.ENVIRONMENT}")
+                    }
+
+                    // Add manual approval for production
+                    if (params.ENVIRONMENT == 'prod') {
+                        timeout(time: 10, unit: 'MINUTES') {
+                            input message: "⚠️ WARNING: You are about to run migrations on PRODUCTION. Continue?",
+                                  ok: 'Yes, proceed with production migration',
+                                  submitter: 'admin'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                script {
+                    echo "Checking out branch: ${params.BRANCH_NAME}"
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${params.BRANCH_NAME}"]],
+                        userRemoteConfigs: [[
+                            url: scm.userRemoteConfigs[0].url,
+                            credentialsId: scm.userRemoteConfigs[0].credentialsId
+                        ]]
+                    ])
+                    echo "✓ Code checked out successfully"
+                }
+            }
+        }
+
+        stage('Setup Python Environment') {
+            steps {
+                script {
+                    echo "Setting up Python virtual environment..."
+                    sh """
+                        # Remove old venv if exists
+                        rm -rf ${VENV_PATH}
+
+                        # Create new virtual environment
+                        python3 -m venv ${VENV_PATH}
+
+                        # Activate and install dependencies
+                        . ${VENV_PATH}/bin/activate
+                        pip install --upgrade pip
+                        cd scripts
+                        pip install -r requirements.txt
+
+                        # Verify installations
+                        echo "Installed packages:"
+                        pip list | grep -E 'alembic|SQLAlchemy|psycopg2'
+                    """
+                    echo "✓ Python environment ready"
+                }
+            }
+        }
+
+        stage('Fetch Database Credentials') {
+            steps {
+                script {
+                    echo "Fetching database URL from Secret Manager..."
+
+                    withCredentials([file(credentialsId: 'gcp-service-account-key', variable: 'GCP_KEY_FILE')]) {
+                        sh """
+                            gcloud auth activate-service-account --key-file=\$GCP_KEY_FILE
+                            gcloud config set project ${env.GCP_PROJECT}
+
+                            echo "Fetching secret: ${env.DB_SECRET_NAME}"
+                            gcloud secrets versions access latest --secret="${env.DB_SECRET_NAME}" > ${WORKSPACE}/db_url.txt
+
+                            if [ -s ${WORKSPACE}/db_url.txt ]; then
+                                echo "✓ Database URL retrieved successfully"
+                            else
+                                echo "✗ Failed to retrieve database URL"
+                                exit 1
+                            fi
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Run Migration') {
+            steps {
+                script {
+                    echo "========================================="
+                    echo "Running Alembic Migration: ${params.MIGRATION_ACTION}"
+                    echo "========================================="
+
+                    def migrationCommand = ""
+                    switch(params.MIGRATION_ACTION) {
+                        case 'current':
+                            migrationCommand = "alembic current -v"
+                            break
+                        case 'upgrade':
+                            migrationCommand = "alembic upgrade head"
+                            break
+                        case 'history':
+                            migrationCommand = "alembic history -v"
+                            break
+                        case 'downgrade':
+                            migrationCommand = "alembic downgrade ${params.DOWNGRADE_REVISION}"
+                            break
+                        default:
+                            error("Unknown migration action: ${params.MIGRATION_ACTION}")
+                    }
+
+                    sh """
+                        . ${VENV_PATH}/bin/activate
+
+                        export DATABASE_URI=\$(cat ${WORKSPACE}/db_url.txt)
+
+                        if [ -z "\$DATABASE_URI" ]; then
+                            echo "✗ DATABASE_URI is empty"
+                            exit 1
+                        fi
+                        echo "✓ DATABASE_URI is set"
+
+                        export PYTHONPATH=${env.PYTHONPATH}
+
+                        cd ${WORKSPACE}/scripts
+
+                        echo "Executing: ${migrationCommand}"
+                        ${migrationCommand}
+
+                        MIGRATION_EXIT_CODE=\$?
+                        if [ \$MIGRATION_EXIT_CODE -eq 0 ]; then
+                            echo "✓ Migration completed successfully"
+                        else
+                            echo "✗ Migration failed with exit code: \$MIGRATION_EXIT_CODE"
+                            exit \$MIGRATION_EXIT_CODE
+                        fi
+                    """
+                }
+            }
+        }
+
+        stage('Verify Migration Status') {
+            steps {
+                script {
+                    echo "========================================="
+                    echo "Verifying Migration Status"
+                    echo "========================================="
+
+                    sh """
+                        # Activate virtual environment
+                        . ${VENV_PATH}/bin/activate
+
+                        # Read database URL
+                        export DATABASE_URI=\$(cat ${WORKSPACE}/db_url.txt)
+                        export PYTHONPATH=${env.PYTHONPATH}
+
+                        # Navigate to scripts directory
+                        cd ${WORKSPACE}/scripts
+
+                        # Show current migration status
+                        echo "Current migration version:"
+                        alembic current -v
+
+                        echo ""
+                        echo "Recent migration history:"
+                        alembic history -r-5: -v
+                    """
+                    echo "✓ Migration verification complete"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                echo "========================================="
+                echo "Cleanup"
+                echo "========================================="
+                sh """
+                    if [ -f ${WORKSPACE}/db_url.txt ]; then
+                        rm -f ${WORKSPACE}/db_url.txt
+                        echo "✓ Removed database URL file"
+                    fi
+                """
+                archiveArtifacts artifacts: '**/*.log', allowEmptyArchive: true
+                echo "✓ Cleanup complete"
+            }
+        }
+        success {
+            script {
+                echo "========================================="
+                echo "✓ MIGRATION SUCCESSFUL"
+                echo "========================================="
+                echo "Environment: ${params.ENVIRONMENT}"
+                echo "Branch: ${params.BRANCH_NAME}"
+                echo "Action: ${params.MIGRATION_ACTION}"
+                echo "========================================="
+            }
+        }
+        failure {
+            script {
+                echo "========================================="
+                echo "✗ MIGRATION FAILED"
+                echo "========================================="
+                echo "Environment: ${params.ENVIRONMENT}"
+                echo "Branch: ${params.BRANCH_NAME}"
+                echo "Action: ${params.MIGRATION_ACTION}"
+                echo "========================================="
+                echo "Please check the console output for details"
+            }
+        }
+
+        cleanup {
+            script {
+                sh """
+                    if [ -d ${VENV_PATH} ]; then
+                        rm -rf ${VENV_PATH}
+                        echo "✓ Removed virtual environment"
+                    fi
+                """
+            }
+        }
+    }
+}
