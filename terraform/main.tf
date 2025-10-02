@@ -102,7 +102,8 @@ module "secret_manager" {
   environment           = var.environment
   service_account_email = google_service_account.cloud_run_sa.email
   secrets = {
-    database_url            = var.database_url
+    # Construct DATABASE_URL for Cloud Run to connect to Cloud SQL via Unix socket
+    database_url            = "postgresql://${module.cloud_sql.db_user}:${module.cloud_sql.db_password}@/${module.cloud_sql.database_name}?host=/cloudsql/${module.cloud_sql.connection_name}"
     secret_key             = var.secret_key
     google_client_id       = var.google_client_id
     google_client_secret   = var.google_client_secret
@@ -112,7 +113,8 @@ module "secret_manager" {
 
   depends_on = [
     google_project_service.required_apis,
-    google_service_account.cloud_run_sa
+    google_service_account.cloud_run_sa,
+    module.cloud_sql
   ]
 }
 

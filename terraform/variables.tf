@@ -157,11 +157,6 @@ variable "cloud_run_concurrency" {
 }
 
 # Secret Manager Variables
-variable "database_url" {
-  description = "Database URL (will be stored in Secret Manager)"
-  type        = string
-  sensitive   = true
-}
 
 variable "secret_key" {
   description = "JWT secret key (will be stored in Secret Manager)"

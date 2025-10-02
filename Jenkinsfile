@@ -120,14 +120,6 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    try {
-                        env.TF_VAR_database_url = sh(
-                            script: "gcloud secrets versions access latest --secret=database-url-${params.ENVIRONMENT} --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'postgresql://placeholder:placeholder@localhost/placeholder'",
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        env.TF_VAR_database_url = 'postgresql://placeholder:placeholder@localhost/placeholder'
-                    }
 
                     try {
                         env.TF_VAR_google_client_id = sh(
@@ -166,7 +158,6 @@ pipeline {
                     }
 
                     echo 'Secrets fetched successfully!'
-                    echo "Database URL: ${env.TF_VAR_database_url.take(30)}..."
                     echo "Secret key: [GENERATED - ${env.TF_VAR_secret_key.length()} characters]"
                     echo "Google Client ID: ${env.TF_VAR_google_client_id.take(20)}..."
                     echo "Mail Username: ${env.TF_VAR_mail_username}"
@@ -370,7 +361,7 @@ pipeline {
                         sleep 5
 
                         cd scripts
-                        export DATABASE_URL="${TF_VAR_database_url}"
+                        export DATABASE_URL=\$(gcloud secrets versions access latest --secret=${params.ENVIRONMENT}-database-url --project=${GCP_PROJECT_ID})
                         python3 -m venv venv || true
                         . venv/bin/activate
                         pip install -q alembic asyncpg psycopg2-binary
