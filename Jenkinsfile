@@ -256,11 +256,6 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    def sqlConnection = sh(
-                        script: 'cd terraform && terraform output -raw cloud_sql_connection_name',
-                        returnStdout: true
-                    ).trim()
-
                     sh """
                         gcloud run deploy ${cloudRunService} \
                             --image ${IMAGE_FULL} \
@@ -270,7 +265,6 @@ pipeline {
                             --service-account ${serviceAccount} \
                             --vpc-connector ${vpcConnector} \
                             --vpc-egress all-traffic \
-                            --add-cloudsql-instances ${sqlConnection} \
                             --set-env-vars "DEBUG=${params.ENVIRONMENT == 'dev' ? 'True' : 'False'}" \
                             --set-env-vars "LOG_LEVEL=INFO" \
                             --set-env-vars "APP_NAME=Health Management API" \
