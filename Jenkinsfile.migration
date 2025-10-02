@@ -1,3 +1,4 @@
+import groovy.transform.Field
 
 @Field final String DEV_ENV = 'dev'
 @Field final String PROD_ENV = 'prod'
