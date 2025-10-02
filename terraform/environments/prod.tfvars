@@ -53,3 +53,9 @@ mail_server = "smtp.gmail.com"
 mail_port   = "587"
 mail_from   = "noreply@healthmanagement.com"
 webui_url   = "https://healthmanagement.com"
+
+# Domain Configuration (Optional - set enable_custom_domain = true to activate)
+enable_custom_domain = true  # Set to true when ready to configure custom domain
+custom_domain        = "vhealth.io.net"
+api_subdomain        = "api"  # This will create api.vhealth.io.net
+enable_cdn           = true

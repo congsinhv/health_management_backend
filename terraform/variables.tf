@@ -235,3 +235,28 @@ variable "webui_url" {
   type        = string
   default     = ""
 }
+
+# Domain Configuration (Optional)
+variable "enable_custom_domain" {
+  description = "Enable custom domain mapping for Cloud Run"
+  type        = bool
+  default     = false
+}
+
+variable "custom_domain" {
+  description = "Base custom domain (e.g., vhealth.io.net)"
+  type        = string
+  default     = ""
+}
+
+variable "api_subdomain" {
+  description = "API subdomain (e.g., 'api' for api.vhealth.io.net or 'dev.api' for dev.api.vhealth.io.net)"
+  type        = string
+  default     = "api"
+}
+
+variable "enable_cdn" {
+  description = "Enable Cloud CDN for the API load balancer"
+  type        = bool
+  default     = true
+}
