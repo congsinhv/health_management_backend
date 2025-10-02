@@ -28,7 +28,6 @@ pipeline {
         GCP_PROJECT_DEV = 'vhealth-dev'
         GCP_PROJECT_PROD = 'vhealth-prod'
         GCP_PROJECT = "${params.ENVIRONMENT == 'prod' ? env.GCP_PROJECT_PROD : env.GCP_PROJECT_DEV}"
-        DB_SECRET_NAME = "${params.ENVIRONMENT}-database-url"
         VENV_PATH = "${WORKSPACE}/venv"
         PYTHONPATH = "${WORKSPACE}/scripts"
     }
@@ -43,7 +42,6 @@ pipeline {
                     echo "Environment: ${params.ENVIRONMENT}"
                     echo "Branch: ${params.BRANCH_NAME}"
                     echo "Action: ${params.MIGRATION_ACTION}"
-                    echo "GCP Project: ${env.GCP_PROJECT}"
                     echo "========================================="
 
                     // Validate parameters
@@ -104,24 +102,30 @@ pipeline {
         stage('Fetch Database Credentials') {
             steps {
                 script {
-                    echo "Fetching database URL from Secret Manager..."
+                    echo "Fetching database credentials from GCP Secret Manager..."
+                    echo "GCP Project: ${env.GCP_PROJECT}"
 
-                    withCredentials([file(credentialsId: 'gcp-service-account-key', variable: 'GCP_KEY_FILE')]) {
-                        sh """
-                            gcloud auth activate-service-account --key-file=\$GCP_KEY_FILE
-                            gcloud config set project ${env.GCP_PROJECT}
+                    sh """
+                        # Fetch secrets from GCP Secret Manager
+                        echo "Fetching DB credentials for environment: ${params.ENVIRONMENT}"
 
-                            echo "Fetching secret: ${env.DB_SECRET_NAME}"
-                            gcloud secrets versions access latest --secret="${env.DB_SECRET_NAME}" > ${WORKSPACE}/db_url.txt
+                        DB_NAME=\$(gcloud secrets versions access latest --secret="${params.ENVIRONMENT}-db-name" --project="${env.GCP_PROJECT}")
+                        DB_USER=\$(gcloud secrets versions access latest --secret="${params.ENVIRONMENT}-db-username" --project="${env.GCP_PROJECT}")
+                        DB_PASSWORD=\$(gcloud secrets versions access latest --secret="${params.ENVIRONMENT}-db-password" --project="${env.GCP_PROJECT}")
+                        DB_HOST=\$(gcloud secrets versions access latest --secret="${params.ENVIRONMENT}-db-host" --project="${env.GCP_PROJECT}")
 
-                            if [ -s ${WORKSPACE}/db_url.txt ]; then
-                                echo "✓ Database URL retrieved successfully"
-                            else
-                                echo "✗ Failed to retrieve database URL"
-                                exit 1
-                            fi
-                        """
-                    }
+                        # Build PostgreSQL connection URL
+                        # Format: postgresql://username:password@host:5432/database
+                        echo "postgresql://\${DB_USER}:\${DB_PASSWORD}@\${DB_HOST}:5432/\${DB_NAME}" > ${WORKSPACE}/db_url.txt
+
+                        if [ -s ${WORKSPACE}/db_url.txt ]; then
+                            echo "✓ Database URL constructed successfully"
+
+                        else
+                            echo "✗ Failed to construct database URL"
+                            exit 1
+                        fi
+                    """
                 }
             }
         }
