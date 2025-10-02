@@ -6,12 +6,6 @@ pipeline {
         }
     }
 
-    // Config parameters
-    parameters {
-        choice(name: 'Environment', defaultValue: 'dev', choices: ['dev', 'prod'], description: 'Environment')
-        string(name: 'BrandName', defaultValue: 'develop', description: 'Brand name for the application')
-    }
-
     environment {
         // GCP Configuration
         PROJECT_ID = 'health-management-app-473504'  // Replace with your GCP project ID
