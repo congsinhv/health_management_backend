@@ -32,7 +32,7 @@ resource "google_sql_database_instance" "instance" {
     ip_configuration {
       ipv4_enabled    = false
       private_network = "projects/${var.project_id}/global/networks/${var.vpc_network}"
-      require_ssl     = true
+      ssl_mode        = "ENCRYPTED_ONLY"
     }
 
     database_flags {

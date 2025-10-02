@@ -2,7 +2,8 @@
 resource "google_secret_manager_secret" "secrets" {
   for_each = var.secrets
 
-  secret_id = "${var.environment}-${each.key}"
+  # Replace underscores with hyphens for GCP naming requirements
+  secret_id = "${var.environment}-${replace(each.key, "_", "-")}"
 
   replication {
     auto {}

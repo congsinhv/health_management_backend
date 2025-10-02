@@ -15,10 +15,10 @@ output "secret_ids" {
 }
 
 output "secret_versions" {
-  description = "Map of secret keys to secret version IDs"
+  description = "Map of secret keys to secret IDs (for use in Cloud Run)"
   value = {
-    for key, version in google_secret_manager_secret_version.secret_versions :
-    key => version.name
+    for key, secret in google_secret_manager_secret.secrets :
+    key => secret.secret_id
   }
   sensitive = true
 }
