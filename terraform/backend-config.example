@@ -1,0 +1,18 @@
+# Terraform Backend Configuration
+# Copy this file to backend-config.dev or backend-config.prod
+# and fill in your actual values
+
+# GCS bucket for storing Terraform state
+bucket = "your-terraform-state-bucket"
+
+# Prefix for the state file path within the bucket
+prefix = "terraform/state/dev"
+
+# Optional: Project to use for state storage (if different from main project)
+# project = "your-project-id"
+
+# Optional: Location of the bucket (should match your region)
+# location = "us-central1"
+
+# Example usage:
+# terraform init -backend-config=backend-config.dev
