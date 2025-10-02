@@ -48,18 +48,89 @@ pipeline {
                 echo 'Setting up GCP authentication...'
                 withCredentials([file(credentialsId: 'gcp-key-json', variable: 'GCP_KEY_FILE')]) {
                     sh '''
-                        # Authenticate with GCP using service account key
-                        gcloud auth activate-service-account --key-file="$GCP_KEY_FILE"
+                        # Update CA certificates to fix SSL issues
+                        echo "Updating CA certificates..."
+                        if command -v apt-get >/dev/null 2>&1; then
+                            apt-get update -qq && apt-get install -y --no-install-recommends ca-certificates || true
+                            update-ca-certificates || true
+                        elif command -v yum >/dev/null 2>&1; then
+                            yum install -y ca-certificates || true
+                            update-ca-trust || true
+                        fi
+
+                        # Display network and SSL diagnostics
+                        echo "=== Network Diagnostics ==="
+                        echo "Testing connectivity to Google APIs..."
+                        curl -I --connect-timeout 10 https://www.googleapis.com/ || echo "Warning: Direct connection failed"
+                        echo "Python SSL version:"
+                        python3 -c "import ssl; print(ssl.OPENSSL_VERSION)" || true
+                        echo "=========================="
+
+                        # Function to authenticate with retry logic
+                        authenticate_gcp() {
+                            local max_attempts=5
+                            local attempt=1
+                            local wait_time=5
+
+                            while [ $attempt -le $max_attempts ]; do
+                                echo "Authentication attempt $attempt of $max_attempts..."
+                                
+                                if gcloud auth activate-service-account --key-file="$GCP_KEY_FILE" 2>&1; then
+                                    echo "Authentication successful!"
+                                    return 0
+                                else
+                                    echo "Authentication failed on attempt $attempt"
+                                    if [ $attempt -lt $max_attempts ]; then
+                                        echo "Waiting ${wait_time} seconds before retry..."
+                                        sleep $wait_time
+                                        wait_time=$((wait_time * 2))  # Exponential backoff
+                                    fi
+                                fi
+                                attempt=$((attempt + 1))
+                            done
+                            
+                            echo "ERROR: Failed to authenticate after $max_attempts attempts"
+                            return 1
+                        }
+
+                        # Authenticate with retry logic
+                        if ! authenticate_gcp; then
+                            echo "=== Troubleshooting Information ==="
+                            echo "Please check:"
+                            echo "1. Jenkins agent has internet connectivity"
+                            echo "2. Firewall/proxy settings allow connections to oauth2.googleapis.com"
+                            echo "3. SSL certificates are up to date on the Jenkins agent"
+                            echo "4. The service account key file is valid"
+                            echo "=================================="
+                            exit 1
+                        fi
 
                         # Set the project
                         gcloud config set project ${PROJECT_ID}
 
-                        # Configure Docker for Artifact Registry
-                        gcloud auth configure-docker ${REGISTRY_REGION}-docker.pkg.dev --quiet
+                        # Configure Docker for Artifact Registry with retry
+                        configure_docker_auth() {
+                            local max_attempts=3
+                            local attempt=1
+                            
+                            while [ $attempt -le $max_attempts ]; do
+                                echo "Configuring Docker authentication (attempt $attempt)..."
+                                if gcloud auth configure-docker ${REGISTRY_REGION}-docker.pkg.dev --quiet 2>&1; then
+                                    return 0
+                                fi
+                                attempt=$((attempt + 1))
+                                sleep 3
+                            done
+                            return 1
+                        }
+
+                        configure_docker_auth || exit 1
 
                         # Verify authentication
+                        echo "=== Authentication Status ==="
                         gcloud auth list
                         gcloud config list
+                        echo "============================="
                     '''
                 }
             }
