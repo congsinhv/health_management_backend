@@ -8,6 +8,11 @@ output "artifact_registry_url" {
   value       = module.artifact_registry.repository_url
 }
 
+output "cloud_run_service_account_email" {
+  description = "Cloud Run service account email"
+  value       = google_service_account.cloud_run_sa.email
+}
+
 output "vpc_connector_id" {
   description = "VPC connector ID"
   value       = module.vpc_connector.connector_id

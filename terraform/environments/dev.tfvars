@@ -7,7 +7,7 @@ environment = "dev"
 artifact_registry_repository_id = "health-management-dev"
 
 # VPC Connector
-vpc_connector_name      = "health-mgmt-vpc-connector-dev"
+vpc_connector_name      = "health-mgmt-vpc-conn-dev"
 vpc_network             = "default"
 vpc_connector_ip_range  = "10.8.0.0/28"
 vpc_connector_min_instances = 2

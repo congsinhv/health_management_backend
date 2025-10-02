@@ -28,5 +28,5 @@ resource "google_secret_manager_secret_iam_member" "secret_access" {
 
   secret_id = google_secret_manager_secret.secrets[each.key].id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${var.project_id}@appspot.gserviceaccount.com"
+  member    = "serviceAccount:${var.service_account_email}"
 }

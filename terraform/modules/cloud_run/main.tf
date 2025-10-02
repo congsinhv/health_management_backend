@@ -4,6 +4,8 @@ resource "google_cloud_run_v2_service" "service" {
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   template {
+    service_account = var.service_account_email
+    
     vpc_access {
       connector = var.vpc_connector_id
       egress    = "PRIVATE_RANGES_ONLY"

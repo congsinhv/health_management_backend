@@ -74,3 +74,8 @@ variable "env_vars" {
   type        = map(string)
   default     = {}
 }
+
+variable "service_account_email" {
+  description = "Service account email to use for Cloud Run service"
+  type        = string
+}

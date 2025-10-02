@@ -16,5 +16,5 @@ resource "google_artifact_registry_repository_iam_member" "cloud_run_pull" {
   location   = google_artifact_registry_repository.docker_repo.location
   repository = google_artifact_registry_repository.docker_repo.name
   role       = "roles/artifactregistry.reader"
-  member     = "serviceAccount:${var.project_id}@appspot.gserviceaccount.com"
+  member     = "serviceAccount:${var.service_account_email}"
 }

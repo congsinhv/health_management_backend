@@ -17,3 +17,8 @@ variable "environment" {
   description = "Environment name"
   type        = string
 }
+
+variable "service_account_email" {
+  description = "Service account email to grant access to the repository"
+  type        = string
+}

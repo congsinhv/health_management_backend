@@ -51,16 +51,38 @@ resource "google_project_service" "required_apis" {
   disable_on_destroy = false
 }
 
+# Create a dedicated service account for Cloud Run
+resource "google_service_account" "cloud_run_sa" {
+  account_id   = "cloud-run-${var.environment}"
+  display_name = "Cloud Run Service Account for ${var.environment}"
+  description  = "Service account used by Cloud Run services in ${var.environment} environment"
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Grant Cloud SQL Client role to the service account
+resource "google_project_iam_member" "cloud_run_sql_client" {
+  project = var.project_id
+  role    = "roles/cloudsql.client"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+
+  depends_on = [google_service_account.cloud_run_sa]
+}
+
 # Artifact Registry Module
 module "artifact_registry" {
   source = "./modules/artifact_registry"
 
-  project_id    = var.project_id
-  region        = var.region
-  repository_id = var.artifact_registry_repository_id
-  environment   = var.environment
+  project_id            = var.project_id
+  region                = var.region
+  repository_id         = var.artifact_registry_repository_id
+  environment           = var.environment
+  service_account_email = google_service_account.cloud_run_sa.email
 
-  depends_on = [google_project_service.required_apis]
+  depends_on = [
+    google_project_service.required_apis,
+    google_service_account.cloud_run_sa
+  ]
 }
 
 # VPC Connector Module
@@ -84,8 +106,9 @@ module "vpc_connector" {
 module "secret_manager" {
   source = "./modules/secret_manager"
 
-  project_id  = var.project_id
-  environment = var.environment
+  project_id            = var.project_id
+  environment           = var.environment
+  service_account_email = google_service_account.cloud_run_sa.email
   secrets = {
     database_url            = var.database_url
     secret_key             = var.secret_key
@@ -95,7 +118,10 @@ module "secret_manager" {
     mail_password          = var.mail_password
   }
 
-  depends_on = [google_project_service.required_apis]
+  depends_on = [
+    google_project_service.required_apis,
+    google_service_account.cloud_run_sa
+  ]
 }
 
 # Cloud SQL Module
@@ -131,6 +157,7 @@ module "cloud_run" {
   service_name              = var.cloud_run_service_name
   image                     = var.cloud_run_image
   environment               = var.environment
+  service_account_email     = google_service_account.cloud_run_sa.email
   vpc_connector_id          = module.vpc_connector.connector_id
   cloud_sql_connection_name = module.cloud_sql.connection_name
   
@@ -165,6 +192,7 @@ module "cloud_run" {
   }
 
   depends_on = [
+    google_service_account.cloud_run_sa,
     module.vpc_connector,
     module.cloud_sql,
     module.secret_manager,
