@@ -1,16 +1,38 @@
+
+@Field final String DEV_ENV = 'dev'
+@Field final String PROD_ENV = 'prod'
+@Field final String GCP_PROJECT_DEV = 'vhealth-dev'
+@Field final String GCP_PROJECT_PROD = 'vhealth-prod'
+
+
+String getGCPProject(String env_name) {
+  switch (env_name) {
+    case PROD_ENV:
+      return GCP_PROJECT_PROD
+    case DEV_ENV:
+      return GCP_PROJECT_DEV
+    default:
+      return null
+  }
+}
+
 pipeline {
     agent any
 
     parameters {
+        booleanParam(
+            name: 'REFRESH',
+            defaultValue: false,
+            description: 'Refresh parameters'
+        )
         choice(
             name: 'ENVIRONMENT',
-            choices: ['dev', 'prod'],
-            description: 'Target environment for migration'
+            choices: [DEV_ENV, PROD_ENV],
+            description: 'Target environment for migration',
         )
         string(
             name: 'BRANCH_NAME',
-            defaultValue: 'develop',
-            description: 'Git branch to checkout for migration scripts'
+            description: 'Git branch to checkout for migration scripts',
         )
         choice(
             name: 'MIGRATION_ACTION',
@@ -19,20 +41,31 @@ pipeline {
         )
         string(
             name: 'DOWNGRADE_REVISION',
-            defaultValue: '-1',
             description: 'Revision to downgrade to (only used if MIGRATION_ACTION is downgrade)'
         )
     }
 
     environment {
-        GCP_PROJECT_DEV = 'vhealth-dev'
-        GCP_PROJECT_PROD = 'vhealth-prod'
-        GCP_PROJECT = "${params.ENVIRONMENT == 'prod' ? env.GCP_PROJECT_PROD : env.GCP_PROJECT_DEV}"
+        GCP_PROJECT = "${getGCPProject(params.ENVIRONMENT)}"
         VENV_PATH = "${WORKSPACE}/venv"
         PYTHONPATH = "${WORKSPACE}/scripts"
     }
 
     stages {
+
+        stage('Parameterizing N Time') {
+            when {
+                expression { params.REFRESH == true }
+            }
+            steps {
+                script {
+                currentBuild.result = 'ABORTED'
+                currentBuild.displayName = "#${env.BUILD_NUMBER}  Parameters loading..."
+                error 'DRY RUN COMPLETED. JOB PARAMETERIZED.'
+                }
+            }
+        }
+
         stage('Initialize') {
             steps {
                 script {
@@ -45,12 +78,12 @@ pipeline {
                     echo "========================================="
 
                     // Validate parameters
-                    if (params.ENVIRONMENT != 'dev' && params.ENVIRONMENT != 'prod') {
+                    if (params.ENVIRONMENT != DEV_ENV && params.ENVIRONMENT != PROD_ENV) {
                         error("Invalid ENVIRONMENT: ${params.ENVIRONMENT}")
                     }
 
                     // Add manual approval for production
-                    if (params.ENVIRONMENT == 'prod') {
+                    if (params.ENVIRONMENT == PROD_ENV) {
                         timeout(time: 10, unit: 'MINUTES') {
                             input message: "⚠️ WARNING: You are about to run migrations on PRODUCTION. Continue?",
                                   ok: 'Yes, proceed with production migration',
@@ -109,10 +142,10 @@ pipeline {
                         # Fetch secrets from GCP Secret Manager
                         echo "Fetching DB credentials for environment: ${params.ENVIRONMENT}"
 
-                        DB_NAME=\$(gcloud secrets versions access latest --secret="${params.ENVIRONMENT}-db-name" --project="${env.GCP_PROJECT}")
-                        DB_USER=\$(gcloud secrets versions access latest --secret="${params.ENVIRONMENT}-db-username" --project="${env.GCP_PROJECT}")
-                        DB_PASSWORD=\$(gcloud secrets versions access latest --secret="${params.ENVIRONMENT}-db-password" --project="${env.GCP_PROJECT}")
-                        DB_HOST=\$(gcloud secrets versions access latest --secret="${params.ENVIRONMENT}-db-host" --project="${env.GCP_PROJECT}")
+                        DB_NAME=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-name" --project="${env.GCP_PROJECT}")
+                        DB_USER=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-username" --project="${env.GCP_PROJECT}")
+                        DB_PASSWORD=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-password" --project="${env.GCP_PROJECT}")
+                        DB_HOST=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-host" --project="${env.GCP_PROJECT}")
 
                         # Build PostgreSQL connection URL
                         # Format: postgresql://username:password@host:5432/database
