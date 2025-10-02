@@ -38,22 +38,6 @@ pipeline {
         disableConcurrentBuilds()
     }
 
-    def fetchSecret = { secretName, placeholder ->
-        try {
-            return sh(
-                script: """
-                    gcloud secrets versions access latest \
-                        --secret=${secretName}-${params.ENVIRONMENT} \
-                        --project=${GCP_PROJECT_ID} 2>/dev/null \
-                    || echo '${placeholder}'
-                """,
-                returnStdout: true
-            ).trim()
-        } catch (Exception e) {
-            return placeholder
-        }
-    }
-
     stages {
         stage('Initialize') {
             steps {
@@ -130,6 +114,22 @@ pipeline {
         stage('Fetch Secrets from GCP Secret Manager') {
             steps {
                 script {
+                    def fetchSecret = { secretName, placeholder ->
+                        try {
+                            return sh(
+                                script: """
+                                    gcloud secrets versions access latest \
+                                        --secret=${secretName}-${params.ENVIRONMENT} \
+                                        --project=${GCP_PROJECT_ID} 2>/dev/null \
+                                    || echo '${placeholder}'
+                                """,
+                                returnStdout: true
+                            ).trim()
+                        } catch (Exception e) {
+                            return placeholder
+                        }
+                    }
+
                     echo 'Fetching secrets from GCP Secret Manager...'
 
                     env.TF_VAR_secret_key = sh(
