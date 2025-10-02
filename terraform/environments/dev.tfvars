@@ -1,0 +1,54 @@
+# Project Configuration
+project_id  = "vhealth-dev"
+region      = "asia-southeast1"  # Singapore - closest to Vietnam (~1000km, ~10-20ms latency)
+environment = "dev"
+
+# Artifact Registry
+artifact_registry_repository_id = "health-management-dev"
+
+# VPC Connector
+vpc_connector_name      = "health-mgmt-vpc-connector-dev"
+vpc_network             = "default"
+vpc_connector_ip_range  = "10.8.0.0/28"
+vpc_connector_min_instances = 2
+vpc_connector_max_instances = 3
+vpc_connector_machine_type  = "e2-micro"
+
+# Cloud SQL
+cloud_sql_instance_name     = "health-management-db-dev"
+cloud_sql_database_version  = "POSTGRES_15"
+cloud_sql_tier             = "db-f1-micro"
+cloud_sql_availability_type = "ZONAL"
+cloud_sql_backup_enabled    = true
+cloud_sql_backup_start_time = "20:00"  # 3 AM Vietnam time (UTC+7)
+cloud_sql_database_name     = "health_management"
+cloud_sql_deletion_protection = false
+cloud_sql_private_ip_name   = "health-mgmt-sql-private-ip-dev"
+
+# Cloud Run
+cloud_run_service_name  = "health-management-api-dev"
+cloud_run_image         = "asia-southeast1-docker.pkg.dev/vhealth-dev/health-management-dev/health-api:latest"
+cloud_run_cpu_limit     = "1000m"
+cloud_run_memory_limit  = "512Mi"
+cloud_run_max_instances = 3
+cloud_run_min_instances = 0
+cloud_run_timeout_seconds = 300
+cloud_run_concurrency   = 80
+
+# Secret Manager (These should be provided via environment variables or secure injection)
+# database_url         = "postgresql://user:password@host:5432/dbname"
+# secret_key          = "your-jwt-secret-key"
+# google_client_id    = "your-google-oauth-client-id"
+# google_client_secret = "your-google-oauth-client-secret"
+# mail_username       = "your-email@gmail.com"
+# mail_password       = "your-email-password"
+
+# Application Settings
+debug       = "true"
+log_level   = "DEBUG"
+app_name    = "Health Management API - Development"
+app_version = "1.0.0-dev"
+mail_server = "smtp.gmail.com"
+mail_port   = "587"
+mail_from   = "noreply-dev@healthmanagement.com"
+webui_url   = "http://localhost:3000"
