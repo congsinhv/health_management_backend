@@ -17,9 +17,6 @@ terraform {
   }
 
   backend "gcs" {
-    # Backend configuration will be provided via backend-config file or CLI
-    # bucket = "your-terraform-state-bucket"
-    # prefix = "terraform/state"
   }
 }
 
@@ -33,7 +30,6 @@ provider "google-beta" {
   region  = var.region
 }
 
-# Enable required GCP APIs
 resource "google_project_service" "required_apis" {
   for_each = toset([
     "cloudresourcemanager.googleapis.com",
@@ -60,7 +56,6 @@ resource "google_service_account" "cloud_run_sa" {
   depends_on = [google_project_service.required_apis]
 }
 
-# Grant Cloud SQL Client role to the service account
 resource "google_project_iam_member" "cloud_run_sql_client" {
   project = var.project_id
   role    = "roles/cloudsql.client"
@@ -69,7 +64,6 @@ resource "google_project_iam_member" "cloud_run_sql_client" {
   depends_on = [google_service_account.cloud_run_sa]
 }
 
-# Artifact Registry Module
 module "artifact_registry" {
   source = "./modules/artifact_registry"
 
@@ -85,7 +79,6 @@ module "artifact_registry" {
   ]
 }
 
-# VPC Connector Module
 module "vpc_connector" {
   source = "./modules/vpc_connector"
 
@@ -102,7 +95,6 @@ module "vpc_connector" {
   depends_on = [google_project_service.required_apis]
 }
 
-# Secret Manager Module
 module "secret_manager" {
   source = "./modules/secret_manager"
 
@@ -124,7 +116,6 @@ module "secret_manager" {
   ]
 }
 
-# Cloud SQL Module
 module "cloud_sql" {
   source = "./modules/cloud_sql"
 
@@ -148,54 +139,3 @@ module "cloud_sql" {
   ]
 }
 
-# Cloud Run Module
-module "cloud_run" {
-  source = "./modules/cloud_run"
-
-  project_id                = var.project_id
-  region                    = var.region
-  service_name              = var.cloud_run_service_name
-  image                     = var.cloud_run_image
-  environment               = var.environment
-  service_account_email     = google_service_account.cloud_run_sa.email
-  vpc_connector_id          = module.vpc_connector.connector_id
-  cloud_sql_connection_name = module.cloud_sql.connection_name
-  
-  # Resource limits
-  cpu_limit                 = var.cloud_run_cpu_limit
-  memory_limit              = var.cloud_run_memory_limit
-  max_instances             = var.cloud_run_max_instances
-  min_instances             = var.cloud_run_min_instances
-  timeout_seconds           = var.cloud_run_timeout_seconds
-  concurrency               = var.cloud_run_concurrency
-  
-  # Environment variables from secrets
-  secret_env_vars = {
-    DATABASE_URL         = module.secret_manager.secret_versions["database_url"]
-    SECRET_KEY          = module.secret_manager.secret_versions["secret_key"]
-    GOOGLE_CLIENT_ID    = module.secret_manager.secret_versions["google_client_id"]
-    GOOGLE_CLIENT_SECRET = module.secret_manager.secret_versions["google_client_secret"]
-    MAIL_USERNAME       = module.secret_manager.secret_versions["mail_username"]
-    MAIL_PASSWORD       = module.secret_manager.secret_versions["mail_password"]
-  }
-
-  # Additional environment variables
-  env_vars = {
-    DEBUG                    = var.debug
-    LOG_LEVEL               = var.log_level
-    APP_NAME                = var.app_name
-    APP_VERSION             = var.app_version
-    MAIL_SERVER             = var.mail_server
-    MAIL_PORT               = var.mail_port
-    MAIL_FROM               = var.mail_from
-    WEBUI_URL               = var.webui_url
-  }
-
-  depends_on = [
-    google_service_account.cloud_run_sa,
-    module.vpc_connector,
-    module.cloud_sql,
-    module.secret_manager,
-    module.artifact_registry
-  ]
-}

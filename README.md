@@ -73,7 +73,7 @@ health_management/
    ```bash
    # Create PostgreSQL database
    createdb health_management
-   
+
    # Run initial schema
    psql health_management < scripts/init_db.sql
    ```

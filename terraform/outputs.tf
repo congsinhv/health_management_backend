@@ -45,18 +45,26 @@ output "cloud_sql_private_ip" {
 }
 
 output "cloud_run_service_name" {
-  description = "Cloud Run service name"
-  value       = module.cloud_run.service_name
+  description = "Expected Cloud Run service name (for Jenkins deployment)"
+  value       = var.cloud_run_service_name
 }
 
-output "cloud_run_service_url" {
-  description = "Cloud Run service URL"
-  value       = module.cloud_run.service_url
-}
-
-output "cloud_run_service_id" {
-  description = "Cloud Run service ID"
-  value       = module.cloud_run.service_id
+output "cloud_run_config" {
+  description = "Cloud Run configuration values for gcloud deployment"
+  value = {
+    service_name          = var.cloud_run_service_name
+    service_account_email = google_service_account.cloud_run_sa.email
+    vpc_connector_id      = module.vpc_connector.connector_id
+    sql_connection_name   = module.cloud_sql.connection_name
+    secrets = {
+      DATABASE_URL         = module.secret_manager.secret_versions["database_url"]
+      SECRET_KEY          = module.secret_manager.secret_versions["secret_key"]
+      GOOGLE_CLIENT_ID    = module.secret_manager.secret_versions["google_client_id"]
+      GOOGLE_CLIENT_SECRET = module.secret_manager.secret_versions["google_client_secret"]
+      MAIL_USERNAME       = module.secret_manager.secret_versions["mail_username"]
+      MAIL_PASSWORD       = module.secret_manager.secret_versions["mail_password"]
+    }
+  }
 }
 
 output "secret_manager_secrets" {
