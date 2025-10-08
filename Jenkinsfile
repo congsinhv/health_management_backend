@@ -20,7 +20,7 @@ pipeline {
         GCP_PROJECT_ID = "${params.ENVIRONMENT == 'prod' ? 'vhealth-prod' : 'vhealth-dev'}"
         TF_BACKEND_BUCKET = "${GCP_PROJECT_ID}-tfstate"
 
-        ARTIFACT_REGISTRY_REPO = "health-management-${params.ENVIRONMENT}"
+        ARTIFACT_REGISTRY_REPO = "vhealth-backend-${params.ENVIRONMENT}"
         IMAGE_NAME = "health-api"
         IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
         IMAGE_FULL = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -264,7 +264,7 @@ pipeline {
                             --project ${GCP_PROJECT_ID} \
                             --service-account ${serviceAccount} \
                             --vpc-connector ${vpcConnector} \
-                            --vpc-egress private-ranges-only \
+                            --vpc-egress all-traffic \
                             --set-env-vars "DEBUG=${params.ENVIRONMENT == 'dev' ? 'True' : 'False'}" \
                             --set-env-vars "LOG_LEVEL=INFO" \
                             --set-env-vars "APP_NAME=Health Management API" \

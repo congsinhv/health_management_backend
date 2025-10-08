@@ -4,10 +4,10 @@ region      = "asia-southeast1" # Singapore - closest to Vietnam (~1000km, ~10-2
 environment = "prod"
 
 # Artifact Registry
-artifact_registry_repository_id = "health-management-prod"
+artifact_registry_repository_id = "vhealth-backend-prod"
 
 # VPC Connector
-vpc_connector_name          = "health-mgmt-vpc-conn-prod"
+vpc_connector_name          = "vhealth-backend-vpc-conn-prod"
 vpc_network                 = "default"
 vpc_connector_ip_range      = "10.9.0.0/28"
 vpc_connector_min_instances = 2
@@ -15,7 +15,7 @@ vpc_connector_max_instances = 10
 vpc_connector_machine_type  = "e2-standard-4"
 
 # Cloud SQL (now uses public IP with restricted authorized networks recommended)
-cloud_sql_instance_name       = "health-management-db-prod"
+cloud_sql_instance_name       = "vhealth-backend-db-prod"
 cloud_sql_database_version    = "POSTGRES_15"
 cloud_sql_tier                = "db-custom-2-7680"
 cloud_sql_availability_type   = "REGIONAL" # Multi-zone in asia-southeast1 for high availability
@@ -27,8 +27,8 @@ cloud_sql_deletion_protection = true
 # IMPORTANT: For production, restrict authorized_networks in modules/cloud_sql/main.tf
 
 # Cloud Run
-cloud_run_service_name    = "health-management-api-prod"
-cloud_run_image           = "asia-southeast1-docker.pkg.dev/vhealth-prod/health-management-prod/health-api:latest"
+cloud_run_service_name    = "vhealth-backend-api-prod"
+cloud_run_image           = "asia-southeast1-docker.pkg.dev/vhealth-prod/vhealth-backend-prod/health-api:latest"
 cloud_run_cpu_limit       = "2000m"
 cloud_run_memory_limit    = "1Gi"
 cloud_run_max_instances   = 100
