@@ -119,7 +119,7 @@ pipeline {
                             return sh(
                                 script: """
                                     gcloud secrets versions access latest \
-                                        --secret=${secretName}-${params.ENVIRONMENT} \
+                                        --secret=vhealth-${params.ENVIRONMENT}-${secretName} \
                                         --project=${GCP_PROJECT_ID} 2>/dev/null \
                                     || echo '${placeholder}'
                                 """,

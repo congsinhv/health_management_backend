@@ -7,7 +7,7 @@ environment = "dev"
 artifact_registry_repository_id = "vhealth-backend-dev"
 
 # VPC Connector
-vpc_connector_name          = "vhealth-backend-vpc-conn-dev"
+vpc_connector_name          = "vhealth-vpc-conn-dev"
 vpc_network                 = "default"
 vpc_connector_ip_range      = "10.8.0.0/28"
 vpc_connector_min_instances = 2

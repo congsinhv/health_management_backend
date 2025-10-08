@@ -3,7 +3,7 @@ resource "google_secret_manager_secret" "secrets" {
   for_each = var.secrets
 
   # Replace underscores with hyphens for GCP naming requirements
-  secret_id = "${var.environment}-${replace(each.key, "_", "-")}"
+  secret_id = "vhealth-${var.environment}-${replace(each.key, "_", "-")}"
 
   replication {
     auto {}
