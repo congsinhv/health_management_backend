@@ -264,7 +264,7 @@ pipeline {
                             --project ${GCP_PROJECT_ID} \
                             --service-account ${serviceAccount} \
                             --vpc-connector ${vpcConnector} \
-                            --vpc-egress all-traffic \
+                            --vpc-egress private-ranges-only \
                             --set-env-vars "DEBUG=${params.ENVIRONMENT == 'dev' ? 'True' : 'False'}" \
                             --set-env-vars "LOG_LEVEL=INFO" \
                             --set-env-vars "APP_NAME=VHealth Backend" \

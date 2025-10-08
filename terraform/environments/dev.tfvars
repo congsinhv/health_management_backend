@@ -26,7 +26,7 @@ cloud_sql_deletion_protection = false
 # Note: cloud_sql_private_ip_name removed - using public IP now
 
 # Cloud Run
-cloud_run_service_name    = "vhealth-backend-api-dev"
+cloud_run_service_name    = "vhealth-backend-dev"
 cloud_run_image           = "asia-southeast1-docker.pkg.dev/vhealth-dev/vhealth-backend-dev/health-api:latest"
 cloud_run_cpu_limit       = "1000m"
 cloud_run_memory_limit    = "512Mi"

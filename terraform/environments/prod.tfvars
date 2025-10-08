@@ -27,7 +27,7 @@ cloud_sql_deletion_protection = true
 # IMPORTANT: For production, restrict authorized_networks in modules/cloud_sql/main.tf
 
 # Cloud Run
-cloud_run_service_name    = "vhealth-backend-api-prod"
+cloud_run_service_name    = "vhealth-backend-prod"
 cloud_run_image           = "asia-southeast1-docker.pkg.dev/vhealth-prod/vhealth-backend-prod/health-api:latest"
 cloud_run_cpu_limit       = "2000m"
 cloud_run_memory_limit    = "1Gi"
