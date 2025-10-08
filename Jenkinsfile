@@ -269,12 +269,12 @@ pipeline {
                             --set-env-vars "LOG_LEVEL=INFO" \
                             --set-env-vars "APP_NAME=VHealth Backend" \
                             --set-env-vars "ENVIRONMENT=${params.ENVIRONMENT}" \
-                            --set-secrets "DATABASE_URL=${params.ENVIRONMENT}-database-url:latest" \
-                            --set-secrets "SECRET_KEY=${params.ENVIRONMENT}-secret-key:latest" \
-                            --set-secrets "GOOGLE_CLIENT_ID=${params.ENVIRONMENT}-google-client-id:latest" \
-                            --set-secrets "GOOGLE_CLIENT_SECRET=${params.ENVIRONMENT}-google-client-secret:latest" \
-                            --set-secrets "MAIL_USERNAME=${params.ENVIRONMENT}-mail-username:latest" \
-                            --set-secrets "MAIL_PASSWORD=${params.ENVIRONMENT}-mail-password:latest" \
+                            --set-secrets "DATABASE_URL=vhealth-${params.ENVIRONMENT}-database-url:latest" \
+                            --set-secrets "SECRET_KEY=vhealth-${params.ENVIRONMENT}-secret-key:latest" \
+                            --set-secrets "GOOGLE_CLIENT_ID=vhealth-${params.ENVIRONMENT}-google-client-id:latest" \
+                            --set-secrets "GOOGLE_CLIENT_SECRET=vhealth-${params.ENVIRONMENT}-google-client-secret:latest" \
+                            --set-secrets "MAIL_USERNAME=vhealth-${params.ENVIRONMENT}-mail-username:latest" \
+                            --set-secrets "MAIL_PASSWORD=vhealth-${params.ENVIRONMENT}-mail-password:latest" \
                             --cpu 1 \
                             --memory 512Mi \
                             --min-instances 0 \
