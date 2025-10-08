@@ -18,10 +18,10 @@ pipeline {
         GCP_REGION = 'asia-southeast1'
         ENV = "${params.ENVIRONMENT}"
         GCP_PROJECT_ID = "${params.ENVIRONMENT == 'prod' ? 'vhealth-prod' : 'vhealth-dev'}"
-        TF_BACKEND_BUCKET = "${GCP_PROJECT_ID}-tfstate"
+        TF_BACKEND_BUCKET = "${GCP_PROJECT_ID}-backend-tfstate"
 
         ARTIFACT_REGISTRY_REPO = "vhealth-backend-${params.ENVIRONMENT}"
-        IMAGE_NAME = "health-api"
+        IMAGE_NAME = "vhealth-backend"
         IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
         IMAGE_FULL = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
         IMAGE_LATEST = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${IMAGE_NAME}:latest"
@@ -267,7 +267,7 @@ pipeline {
                             --vpc-egress all-traffic \
                             --set-env-vars "DEBUG=${params.ENVIRONMENT == 'dev' ? 'True' : 'False'}" \
                             --set-env-vars "LOG_LEVEL=INFO" \
-                            --set-env-vars "APP_NAME=Health Management API" \
+                            --set-env-vars "APP_NAME=VHealth Backend" \
                             --set-env-vars "ENVIRONMENT=${params.ENVIRONMENT}" \
                             --set-secrets "DATABASE_URL=${params.ENVIRONMENT}-database-url:latest" \
                             --set-secrets "SECRET_KEY=${params.ENVIRONMENT}-secret-key:latest" \

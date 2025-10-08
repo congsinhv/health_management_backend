@@ -49,8 +49,8 @@ resource "google_project_service" "required_apis" {
 
 # Create a dedicated service account for Cloud Run
 resource "google_service_account" "cloud_run_sa" {
-  account_id   = "cloud-run-${var.environment}"
-  display_name = "Cloud Run Service Account for ${var.environment}"
+  account_id   = "vhealth-backend-${var.environment}"
+  display_name = "Cloud Run Service Account for VHealth Backend - ${var.environment}"
   description  = "Service account used by Cloud Run services in ${var.environment} environment"
 
   depends_on = [google_project_service.required_apis]
