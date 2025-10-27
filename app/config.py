@@ -89,6 +89,48 @@ class Settings(BaseSettings):
 
     # Documentation settings
     docs_enabled: bool = True
+    # Q&A Service settings - THÊM MỚI
+    # ========================================
+    qa_model_path: str = Field(
+        default="./models/vietnamese-sbert",
+        description="Path to SBERT model directory"
+    )
+    qa_data_path: str = Field(
+        default="data.xlsx",
+        description="Path to Q&A dataset Excel file"
+    )
+    qa_vocab_path: str = Field(
+        default="tuvung.txt",
+        description="Path to Vietnamese vocabulary file"
+    )
+    qa_threshold: float = Field(
+        default=0.55,
+        ge=0.0,
+        le=1.0,
+        description="Minimum similarity threshold for answers"
+    )
+    qa_top_k: int = Field(
+        default=7,
+        ge=1,
+        le=20,
+        description="Maximum number of top results to return"
+    )
+    openrouter_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenRouter API key for AI summarization"
+    )
+    openrouter_model: str = Field(
+        default="openai/gpt-4o-mini",
+        description="OpenRouter model to use"
+    )
+    openrouter_timeout: int = Field(
+        default=30,
+        description="OpenRouter API timeout in seconds"
+    )
+    qa_enabled: bool = Field(
+        default=True,
+        description="Enable/disable Q&A service"
+    )
 
     class Config:
         env_file = ".env"
