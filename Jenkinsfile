@@ -278,7 +278,7 @@ pipeline {
                             --set-env-vars "QA_GCS_BUCKET=${qaBucket}" \
                             --set-env-vars "QA_MODEL_PATH=models/vietnamese-sbert" \
                             --set-env-vars "QA_DATA_PATH=data/data.xlsx" \
-                            --set-env-vars "QA_VOCAB_PATH=data/tuvung.txt" \
+                            --set-env-vars "QA_VOCAB_PATH=data/vocab.txt" \
                             --set-secrets "DATABASE_URL=vhealth-${params.ENVIRONMENT}-database-url:latest" \
                             --set-secrets "SECRET_KEY=vhealth-${params.ENVIRONMENT}-secret-key:latest" \
                             --set-secrets "GOOGLE_CLIENT_ID=vhealth-${params.ENVIRONMENT}-google-client-id:latest" \

@@ -103,7 +103,7 @@ class Settings(BaseSettings):
         default="data/data.xlsx", description="GCS path to Q&A dataset Excel file"
     )
     qa_vocab_path: str = Field(
-        default="data/tuvung.txt", description="GCS path to Vietnamese vocabulary file"
+        default="data/vocab.txt", description="GCS path to Vietnamese vocabulary file"
     )
 
     # Local cache directory for downloaded GCS files

@@ -167,4 +167,4 @@ logs/
 # Models and data are stored in GCS - exclude from git
 models/vietnamese-sbert/
 data.xlsx
-tuvung.txt
+vocab.txt

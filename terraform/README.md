@@ -228,7 +228,7 @@ gsutil -m cp -r ../models/vietnamese-sbert gs://${BUCKET_NAME}/models/
 
 # Upload dataset and vocabulary
 gsutil cp ../data.xlsx gs://${BUCKET_NAME}/data/data.xlsx
-gsutil cp ../tuvung.txt gs://${BUCKET_NAME}/data/tuvung.txt
+gsutil cp ../vocab.txt gs://${BUCKET_NAME}/data/vocab.txt
 
 # Verify uploads
 gsutil ls -r gs://${BUCKET_NAME}

@@ -282,7 +282,7 @@ variable "qa_data_gcs_path" {
 variable "qa_vocab_gcs_path" {
   description = "GCS path to Vietnamese vocabulary file"
   type        = string
-  default     = "data/tuvung.txt"
+  default     = "data/vocab.txt"
 }
 
 variable "openrouter_api_key" {

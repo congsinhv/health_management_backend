@@ -51,7 +51,7 @@ health_management/
 │   ├── init_db.sql             # Database initialization
 │   └── migrations/             # Database migration scripts
 ├── data.xlsx                   # Q&A dataset
-├── tuvung.txt                  # Vietnamese vocabulary
+├── vocab.txt                   # Vietnamese vocabulary
 ├── docker-compose.yml          # Development environment
 ├── Dockerfile                  # Application container
 ├── requirements.txt            # Python dependencies
@@ -210,7 +210,7 @@ Configuration is managed through environment variables. Key settings:
 - `QA_GCS_BUCKET` - GCS bucket name for Q&A files (required)
 - `QA_MODEL_PATH` - GCS path to SBERT model directory (default: models/vietnamese-sbert)
 - `QA_DATA_PATH` - GCS path to Q&A dataset Excel file (default: data/data.xlsx)
-- `QA_VOCAB_PATH` - GCS path to Vietnamese vocabulary file (default: data/tuvung.txt)
+- `QA_VOCAB_PATH` - GCS path to Vietnamese vocabulary file (default: data/vocab.txt)
 - `QA_LOCAL_CACHE_DIR` - Local cache directory for downloaded GCS files (default: /tmp/qa_cache)
 - `QA_THRESHOLD` - Minimum similarity threshold for answers (default: 0.55)
 - `QA_TOP_K` - Maximum number of top results to return (default: 7)
@@ -282,7 +282,7 @@ The Q&A service requires files to be stored in Google Cloud Storage (GCS).
    
    # Upload dataset and vocabulary
    gsutil cp data.xlsx gs://${BUCKET_NAME}/data/data.xlsx
-   gsutil cp tuvung.txt gs://${BUCKET_NAME}/data/tuvung.txt
+   gsutil cp vocab.txt gs://${BUCKET_NAME}/data/vocab.txt
    
    # Verify uploads
    gsutil ls -r gs://${BUCKET_NAME}
@@ -293,7 +293,7 @@ The Q&A service requires files to be stored in Google Cloud Storage (GCS).
    QA_GCS_BUCKET=vhealth-qa-storage-dev
    QA_MODEL_PATH=models/vietnamese-sbert
    QA_DATA_PATH=data/data.xlsx
-   QA_VOCAB_PATH=data/tuvung.txt
+   QA_VOCAB_PATH=data/vocab.txt
    ```
 
 4. **Run Database Migration**: Apply the Q&A conversations table migration:
