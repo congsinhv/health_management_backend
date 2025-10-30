@@ -67,6 +67,10 @@ class Settings(BaseSettings):
         "http://192.168.1.3:3000",
         "http://192.168.1.3:3001",
         "http://192.168.1.3:8080",
+        "https://dev.vhealth.io.vn",
+        "https://vhealth.io.vn",
+        "https://api.vhealth.io.vn",
+        "https://dev.api.vhealth.io.vn",
     ]
     cors_allow_credentials: bool = True
     cors_allow_methods: list[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]

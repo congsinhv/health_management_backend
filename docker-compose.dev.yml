@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # PostgreSQL Database for local development
@@ -43,25 +43,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development  # We'll add a dev stage
+      target: development # We'll add a dev stage
     ports:
       - "8080:8080"
     environment:
       # Database
       DATABASE_URL: postgresql://healthuser:devpassword@postgres:5432/healthdb
-      
+
       # Security
       SECRET_KEY: dev-secret-key-change-in-production
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
-      
+
       # App settings
       DEBUG: "true"
       LOG_LEVEL: DEBUG
-      
+
       # CORS settings for local development
-      CORS_ORIGINS: '["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"]'
-      
+      CORS_ORIGINS: '["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "https://dev.vhealth.io.vn", "https://vhealth.io.vn"]'
+
       # Email settings (optional, for testing)
       MAIL_SERVER: smtp.gmail.com
       MAIL_PORT: 587
@@ -70,24 +70,30 @@ services:
       MAIL_FROM: your-email@gmail.com
       MAIL_TLS: "true"
       WEBUI_URL: http://localhost:3000
-    
+
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    
+
     volumes:
-      - ./app:/home/appuser/app/app  # Hot reload for development
+      - ./app:/home/appuser/app/app # Hot reload for development
       - ./scripts/migrations:/home/appuser/app/migrations
-    
+
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import requests; requests.get('http://localhost:8080/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    
+
     networks:
       - health-network
 
