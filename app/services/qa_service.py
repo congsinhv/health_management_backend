@@ -90,18 +90,20 @@ class QAService:
             logger.info(f"Loading dataset from: {data_path}")
 
             df = pd.read_excel(data_path)
-            required_cols = ["Câu hỏi", "Câu trả lời", "Từ khóa", "Lĩnh vực"]
+            required_cols = ["Question", "Answer", "Keywords", "Field"]
 
             for col in required_cols:
                 if col not in df.columns:
                     raise ValueError(f"Column '{col}' not found in dataset")
 
             # Preprocess questions
-            df["Câu hỏi_clean"] = df["Câu hỏi"].astype(str).apply(self.preprocess_text)
+            df["question_clean"] = (
+                df["Question"].astype(str).apply(self.preprocess_text)
+            )
 
             logger.info(f"Creating embeddings for {len(df)} questions...")
             question_embeddings = self.model.encode(
-                df["Câu hỏi_clean"].tolist(),
+                df["question_clean"].tolist(),
                 convert_to_tensor=True,
                 show_progress_bar=True,
             )
@@ -129,11 +131,11 @@ class QAService:
     ) -> str:
         """Summarize answers using OpenRouter AI."""
         if not collected_answers:
-            return "Xin lỗi, chưa có dữ liệu để tóm tắt."
+            return "Sorry, no data available to summarize."
 
         if not self.openrouter_api_key:
             logger.warning("OpenRouter API key not configured")
-            return "AI summarization không khả dụng (thiếu API key)."
+            return "AI summarization is unavailable (missing API key)."
 
         headers = {
             "Authorization": f"Bearer {self.openrouter_api_key}",
@@ -141,10 +143,10 @@ class QAService:
         }
 
         prompt = (
-            f"Người dùng hỏi: {user_question}\n\n"
-            f"Các câu trả lời từ dữ liệu:\n- "
+            f"User question: {user_question}\n\n"
+            f"Answers from data:\n- "
             + "\n- ".join(collected_answers)
-            + "\n\nHãy tóm tắt ngắn gọn, dễ hiểu, giữ đúng thông tin quan trọng, bằng tiếng Việt."
+            + "\n\nPlease summarize concisely and clearly, keeping important information. Respond in Vietnamese."
         )
 
         payload = {
@@ -152,7 +154,7 @@ class QAService:
             "messages": [
                 {
                     "role": "system",
-                    "content": "Bạn là chuyên gia y tế, hãy diễn đạt lại câu trả lời sao cho dễ hiểu.",
+                    "content": "You are a healthcare expert. Please rephrase the answer in an easy-to-understand way. Always respond in Vietnamese.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -172,17 +174,17 @@ class QAService:
             return data["choices"][0]["message"]["content"].strip()
         except requests.exceptions.Timeout:
             logger.error("OpenRouter API timeout")
-            return "Không thể tóm tắt do timeout."
+            return "Unable to summarize due to timeout."
         except Exception as e:
             logger.error(f"Error calling AI: {e}")
-            return f"Lỗi khi tóm tắt: {str(e)}"
+            return f"Error during summarization: {str(e)}"
 
     def ask_question(
         self, user_question: str, threshold: float = None, top_k: int = None
     ) -> Dict:
         """Process user question and return relevant answers."""
         if not user_question.strip():
-            raise ValueError("Câu hỏi trống")
+            raise ValueError("Question is empty")
 
         # Use default values from settings if not provided
         if threshold is None:
@@ -209,9 +211,7 @@ class QAService:
             return {
                 "question": user_question,
                 "answers": {
-                    "Không tìm thấy": [
-                        "Xin lỗi, dữ liệu chưa được cập nhật cho câu hỏi này."
-                    ]
+                    "Not Found": ["Sorry, no data available for this question yet."]
                 },
                 "summary": "",
             }
@@ -222,14 +222,14 @@ class QAService:
 
         for idx, score in top_idx_scores:
             row = self.df.iloc[idx]
-            q_text = str(row["Câu hỏi"]).strip()
-            a_text = str(row["Câu trả lời"]).strip()
-            field = str(row["Lĩnh vực"]).strip()
+            q_text = str(row["Question"]).strip()
+            a_text = str(row["Answer"]).strip()
+            field = str(row["Field"]).strip()
 
             if not a_text or a_text.lower() == "nan":
                 continue
 
-            field_name = field if field and field.lower() != "nan" else "Chưa phân loại"
+            field_name = field if field and field.lower() != "nan" else "Uncategorized"
             full_text = f"Q: {q_text}\nA: {a_text} ({field_name})"
             collected_answers.append(a_text)
 

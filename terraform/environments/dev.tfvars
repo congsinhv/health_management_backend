@@ -60,7 +60,7 @@ api_subdomain        = "dev.api"  # This will create dev.api.vhealth.io.net
 enable_cdn           = true
 
 # Q&A Service Storage
-qa_storage_bucket_name = "vhealth-qa-storage-dev"
+qa_storage_bucket_name = "vhealth-qa-dev"
 qa_model_gcs_path      = "models/vietnamese-sbert"
 qa_data_gcs_path       = "data/data.xlsx"
 qa_vocab_gcs_path      = "data/tuvung.txt"

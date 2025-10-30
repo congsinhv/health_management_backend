@@ -105,7 +105,7 @@ class TestAskQuestionEndpoint:
     async def test_ask_question_empty_question(self, client, mock_qa_service):
         """Test question asking with empty question."""
         client.app.state.qa_service = mock_qa_service
-        mock_qa_service.ask_question = Mock(side_effect=ValueError("Câu hỏi trống"))
+        mock_qa_service.ask_question = Mock(side_effect=ValueError("Question is empty"))
 
         response = client.post("/api/v1/qa/ask", json={"question": ""})
 

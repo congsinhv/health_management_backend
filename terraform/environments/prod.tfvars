@@ -59,3 +59,8 @@ enable_custom_domain = true  # Set to true when ready to configure custom domain
 custom_domain        = "vhealth.io.net"
 api_subdomain        = "api"  # This will create api.vhealth.io.net
 enable_cdn           = true
+
+qa_storage_bucket_name = "vhealth-qa-prod"
+qa_model_gcs_path      = "models/vietnamese-sbert"
+qa_data_gcs_path       = "data/data.xlsx"
+qa_vocab_gcs_path      = "data/tuvung.txt"
