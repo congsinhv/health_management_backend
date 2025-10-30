@@ -202,6 +202,8 @@ pipeline {
                             --build-arg BUILD_DATE=\$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
                             --build-arg VERSION=${IMAGE_TAG} \
                             --build-arg GIT_COMMIT=${GIT_COMMIT} \
+                            --cache-from ${IMAGE_LATEST} \
+                            --build-arg BUILDKIT_INLINE_CACHE=1 \
                             -t ${IMAGE_FULL} \
                             -t ${IMAGE_LATEST} \
                             .
@@ -215,8 +217,9 @@ pipeline {
                 script {
                     echo 'Pushing image to Artifact Registry...'
                     sh """
-                        docker push ${IMAGE_FULL}
-                        docker push ${IMAGE_LATEST}
+                        docker push ${IMAGE_FULL} &
+                        docker push ${IMAGE_LATEST} &
+                        wait
                     """
                 }
             }
@@ -241,26 +244,13 @@ pipeline {
                 script {
                     echo 'Deploying to Cloud Run...'
 
-                    def cloudRunService = sh(
-                        script: 'cd terraform && terraform output -raw cloud_run_service_name',
-                        returnStdout: true
-                    ).trim()
+                    // Reuse cached Terraform outputs for better performance
+                    def tfOutputs = readJSON file: 'terraform/terraform_outputs.json'
 
-                    def serviceAccount = sh(
-                        script: 'cd terraform && terraform output -raw cloud_run_service_account_email',
-                        returnStdout: true
-                    ).trim()
-
-                    def vpcConnector = sh(
-                        script: 'cd terraform && terraform output -raw vpc_connector_id',
-                        returnStdout: true
-                    ).trim()
-
-                    // Get GCS bucket name from Terraform output
-                    def qaBucket = sh(
-                        script: 'cd terraform && terraform output -raw qa_storage_bucket_name',
-                        returnStdout: true
-                    ).trim()
+                    def cloudRunService = tfOutputs.cloud_run_service_name.value
+                    def serviceAccount = tfOutputs.cloud_run_service_account_email.value
+                    def vpcConnector = tfOutputs.vpc_connector_id.value
+                    def qaBucket = tfOutputs.qa_storage_bucket_name.value
 
                     sh """
                         gcloud run deploy ${cloudRunService} \
@@ -286,12 +276,12 @@ pipeline {
                             --set-secrets "MAIL_USERNAME=vhealth-${params.ENVIRONMENT}-mail-username:latest" \
                             --set-secrets "MAIL_PASSWORD=vhealth-${params.ENVIRONMENT}-mail-password:latest" \
                             --set-secrets "OPENROUTER_API_KEY=vhealth-${params.ENVIRONMENT}-openrouter-api-key:latest" \
-                            --cpu 1 \
-                            --memory 512Mi \
+                            --cpu 2 \
+                            --memory 2Gi \
                             --min-instances 0 \
                             --max-instances 10 \
                             --timeout 300 \
-                            --concurrency 80 \
+                            --concurrency 40 \
                             --allow-unauthenticated \
                             --quiet
                     """
@@ -314,10 +304,9 @@ pipeline {
                 script {
                     echo 'Running smoke tests...'
 
-                    def cloudRunService = sh(
-                        script: 'cd terraform && terraform output -raw cloud_run_service_name',
-                        returnStdout: true
-                    ).trim()
+                    // Reuse cached Terraform outputs
+                    def tfOutputs = readJSON file: 'terraform/terraform_outputs.json'
+                    def cloudRunService = tfOutputs.cloud_run_service_name.value
 
                     def serviceUrl = sh(
                         script: "gcloud run services describe ${cloudRunService} --region=${GCP_REGION} --project=${GCP_PROJECT_ID} --format='value(status.url)'",
