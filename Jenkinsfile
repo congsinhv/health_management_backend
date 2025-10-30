@@ -256,6 +256,12 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
+                    // Get GCS bucket name from Terraform output
+                    def qaBucket = sh(
+                        script: 'cd terraform && terraform output -raw qa_storage_bucket_name',
+                        returnStdout: true
+                    ).trim()
+
                     sh """
                         gcloud run deploy ${cloudRunService} \
                             --image ${IMAGE_FULL} \
@@ -269,12 +275,17 @@ pipeline {
                             --set-env-vars "LOG_LEVEL=INFO" \
                             --set-env-vars "APP_NAME=VHealth Backend" \
                             --set-env-vars "ENVIRONMENT=${params.ENVIRONMENT}" \
+                            --set-env-vars "QA_GCS_BUCKET=${qaBucket}" \
+                            --set-env-vars "QA_MODEL_PATH=models/vietnamese-sbert" \
+                            --set-env-vars "QA_DATA_PATH=data/data.xlsx" \
+                            --set-env-vars "QA_VOCAB_PATH=data/tuvung.txt" \
                             --set-secrets "DATABASE_URL=vhealth-${params.ENVIRONMENT}-database-url:latest" \
                             --set-secrets "SECRET_KEY=vhealth-${params.ENVIRONMENT}-secret-key:latest" \
                             --set-secrets "GOOGLE_CLIENT_ID=vhealth-${params.ENVIRONMENT}-google-client-id:latest" \
                             --set-secrets "GOOGLE_CLIENT_SECRET=vhealth-${params.ENVIRONMENT}-google-client-secret:latest" \
                             --set-secrets "MAIL_USERNAME=vhealth-${params.ENVIRONMENT}-mail-username:latest" \
                             --set-secrets "MAIL_PASSWORD=vhealth-${params.ENVIRONMENT}-mail-password:latest" \
+                            --set-secrets "OPENROUTER_API_KEY=vhealth-${params.ENVIRONMENT}-openrouter-api-key:latest" \
                             --cpu 1 \
                             --memory 512Mi \
                             --min-instances 0 \

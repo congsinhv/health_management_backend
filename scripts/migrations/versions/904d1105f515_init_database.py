@@ -5,10 +5,11 @@ Revises:
 Create Date: 2025-10-02 21:36:17.645623
 
 """
+
 from migrations.utils import database_connect
 
 # revision identifiers, used by Alembic.
-revision = '904d1105f515'
+revision = "904d1105f515"
 down_revision = None
 branch_labels = None
 depends_on = None

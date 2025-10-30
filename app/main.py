@@ -10,8 +10,8 @@ from app.config import settings
 from app.db.database import database
 from app.api.user import router as user_router
 from app.api.auth import router as auth_router
-from app.api.qa import router as qa_router  
-from app.services.qa_service import QAService  
+from app.api.qa import router as qa_router
+from app.services.qa_service import QAService
 
 # Configure logging
 logging.basicConfig(
@@ -27,11 +27,11 @@ qa_service = None  # ← THÊM
 async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
     global qa_service  # ← THÊM
-    
+
     # Startup
     logger.info("Starting up Health Management API")
     await database.connect()
-    
+
     # ← THÊM: Khởi tạo QA Service nếu được bật
     if settings.qa_enabled:
         try:
@@ -45,9 +45,9 @@ async def lifespan(app: FastAPI):
             qa_service = None
     else:
         logger.info("Q&A Service is disabled in settings")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Health Management API")
     await database.disconnect()
@@ -103,12 +103,14 @@ async def health_check():
         pool = database.get_pool()
         async with pool.acquire() as connection:
             await connection.fetchval("SELECT 1")
-        
+
         # ← THÊM: Kiểm tra QA service
-        qa_status = "initialized" if qa_service is not None else (
-            "disabled" if not settings.qa_enabled else "not initialized"
+        qa_status = (
+            "initialized"
+            if qa_service is not None
+            else ("disabled" if not settings.qa_enabled else "not initialized")
         )
-        
+
         return {
             "status": "healthy",
             "database": "connected",

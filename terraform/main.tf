@@ -41,6 +41,7 @@ resource "google_project_service" "required_apis" {
     "secretmanager.googleapis.com",
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
+    "storage.googleapis.com",
   ])
 
   service            = each.key
@@ -59,6 +60,15 @@ resource "google_service_account" "cloud_run_sa" {
 resource "google_project_iam_member" "cloud_run_sql_client" {
   project = var.project_id
   role    = "roles/cloudsql.client"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+
+  depends_on = [google_service_account.cloud_run_sa]
+}
+
+# Grant Storage Object Viewer role for Q&A service files
+resource "google_project_iam_member" "cloud_run_storage_viewer" {
+  project = var.project_id
+  role    = "roles/storage.objectViewer"
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 
   depends_on = [google_service_account.cloud_run_sa]
@@ -115,6 +125,7 @@ module "secret_manager" {
     google_client_secret = var.google_client_secret
     mail_username        = var.mail_username
     mail_password        = var.mail_password
+    openrouter_api_key   = var.openrouter_api_key
   }
 
   depends_on = [
@@ -140,5 +151,51 @@ module "cloud_sql" {
   environment         = var.environment
 
   depends_on = [google_project_service.required_apis]
+}
+
+# Storage bucket for Q&A service files (SBERT models, dataset, vocabulary)
+module "qa_storage" {
+  source = "./modules/storage_bucket"
+
+  project_id     = var.project_id
+  bucket_name    = var.qa_storage_bucket_name
+  location       = var.region
+  environment    = var.environment
+  storage_class  = "STANDARD"
+  versioning_enabled = true
+
+  # Lifecycle rules for old versions
+  lifecycle_rules = [
+    {
+      action = {
+        type = "Delete"
+        storage_class = null
+      }
+      condition = {
+        age                   = 90
+        created_before        = null
+        with_state            = "ARCHIVED"
+        matches_storage_class = null
+        num_newer_versions    = null
+      }
+    }
+  ]
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_service_account.cloud_run_sa
+  ]
+}
+
+# Grant Cloud Run service account access to Q&A storage bucket
+resource "google_storage_bucket_iam_member" "qa_bucket_viewer" {
+  bucket = module.qa_storage.bucket_name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+
+  depends_on = [
+    module.qa_storage,
+    google_service_account.cloud_run_sa
+  ]
 }
 

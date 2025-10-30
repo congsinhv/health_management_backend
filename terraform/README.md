@@ -158,6 +158,10 @@ Manages secrets in Google Cloud Secret Manager and IAM permissions.
 ### cloud_sql
 Provisions Cloud SQL PostgreSQL instance with public IP access.
 
+### storage_bucket
+Creates a GCS bucket for Q&A service files (SBERT models, datasets, vocabulary).
+Includes lifecycle rules, versioning, and IAM permissions for Cloud Run service account.
+
 ## Database Connection
 
 ### From Cloud Run
@@ -210,3 +214,24 @@ terraform destroy -var-file="dev.tfvars"
 - Verify IP range doesn't conflict with existing subnets
 - Check VPC Access API is enabled
 - Ensure sufficient IP addresses in the range (minimum /28)
+
+### Q&A Storage Setup
+
+After Terraform creates the GCS bucket, upload your Q&A service files:
+
+```bash
+# Get bucket name from Terraform output
+BUCKET_NAME=$(terraform output -raw qa_storage_bucket_name)
+
+# Upload SBERT model files (directory structure)
+gsutil -m cp -r ../models/vietnamese-sbert gs://${BUCKET_NAME}/models/
+
+# Upload dataset and vocabulary
+gsutil cp ../data.xlsx gs://${BUCKET_NAME}/data/data.xlsx
+gsutil cp ../tuvung.txt gs://${BUCKET_NAME}/data/tuvung.txt
+
+# Verify uploads
+gsutil ls -r gs://${BUCKET_NAME}
+```
+
+The Cloud Run service account automatically has read access to the bucket via the `roles/storage.objectViewer` IAM binding.

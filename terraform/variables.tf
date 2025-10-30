@@ -260,3 +260,34 @@ variable "enable_cdn" {
   type        = bool
   default     = true
 }
+
+# Q&A Service Storage Variables
+variable "qa_storage_bucket_name" {
+  description = "GCS bucket name for Q&A service files (models, datasets)"
+  type        = string
+}
+
+variable "qa_model_gcs_path" {
+  description = "GCS path to SBERT model directory"
+  type        = string
+  default     = "models/vietnamese-sbert"
+}
+
+variable "qa_data_gcs_path" {
+  description = "GCS path to Q&A dataset Excel file"
+  type        = string
+  default     = "data/data.xlsx"
+}
+
+variable "qa_vocab_gcs_path" {
+  description = "GCS path to Vietnamese vocabulary file"
+  type        = string
+  default     = "data/tuvung.txt"
+}
+
+variable "openrouter_api_key" {
+  description = "OpenRouter API key for AI summarization (will be stored in Secret Manager)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

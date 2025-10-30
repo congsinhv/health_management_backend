@@ -101,3 +101,14 @@ output "region" {
   description = "GCP region"
   value       = var.region
 }
+
+# Q&A Storage outputs
+output "qa_storage_bucket_name" {
+  description = "GCS bucket name for Q&A service files"
+  value       = module.qa_storage.bucket_name
+}
+
+output "qa_storage_bucket_url" {
+  description = "GCS bucket URL for Q&A service files"
+  value       = module.qa_storage.bucket_url
+}
