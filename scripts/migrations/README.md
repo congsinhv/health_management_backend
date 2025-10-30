@@ -5,8 +5,8 @@ This project contains scripts for manage database structure version. The framewo
 
 ### 1. Export below config in terminal
 ```bash
-export DATABASE_URI=postgresql://health_user:health_password@localhost:5432/health_management
-export PYTHONPATH=/path/to/health_management_backend/scripts
+set DATABASE_URI=postgresql://health_user:health_password@localhost:5432/health_management
+set PYTHONPATH=E:\Code\Project 1\be\health_management_backend\scripts
 ```
 
 ### 2. Install `python3.13`. [More details](https://www.python.org/downloads/release/python-3137/)
