@@ -3,18 +3,24 @@ FROM python:3.13-slim as builder
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PATH="/home/appuser/.local/bin:$PATH"
 
-RUN apt-get update && apt-get install -y \
+# Install build dependencies in a single layer
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN useradd --create-home --shell /bin/bash appuser
 USER appuser
 WORKDIR /home/appuser
 
+# Copy requirements and install packages
 COPY requirements-prod.txt .
-RUN pip install --user --no-cache-dir -r requirements-prod.txt
+RUN pip install --user --no-cache-dir -r requirements-prod.txt \
+    && find /home/appuser/.local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true \
+    && find /home/appuser/.local -type f -name "*.pyc" -delete \
+    && find /home/appuser/.local -type f -name "*.pyo" -delete
 
 FROM python:3.13-slim as production
 
@@ -23,16 +29,20 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/home/appuser/.local/bin:$PATH" \
     PORT=8080
 
-RUN apt-get update && apt-get install -y \
-    && rm -rf /var/lib/apt/lists/*
+# Minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN useradd --create-home --shell /bin/bash appuser
 
+# Copy installed packages from builder
 COPY --from=builder /home/appuser/.local /home/appuser/.local
 
 USER appuser
 WORKDIR /home/appuser/app
 
+# Copy application code
 COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser scripts/migrations/ ./migrations/
 

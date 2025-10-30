@@ -197,8 +197,15 @@ pipeline {
             steps {
                 script {
                     echo "Building Docker image: ${IMAGE_FULL}"
+                    
+                    // Clean up before build to free space
+                    sh 'docker system prune -f --volumes || true'
+                    
+                    // Pull latest image for caching
+                    sh "docker pull ${IMAGE_LATEST} || true"
+                    
                     sh """
-                        docker build \
+                        DOCKER_BUILDKIT=1 docker build \
                             --build-arg BUILD_DATE=\$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
                             --build-arg VERSION=${IMAGE_TAG} \
                             --build-arg GIT_COMMIT=${GIT_COMMIT} \
@@ -345,9 +352,22 @@ pipeline {
             echo '=========================================='
         }
         always {
-            sh '''
-                docker system prune -f || true
-            '''
+            script {
+                echo 'Cleaning up Docker resources...'
+                sh '''
+                    # Remove old images (keep last 3)
+                    docker images --format "{{.Repository}}:{{.Tag}}" | \
+                        grep "${IMAGE_NAME}" | \
+                        tail -n +4 | \
+                        xargs -r docker rmi -f || true
+                    
+                    # Aggressive cleanup
+                    docker system prune -af --volumes --filter "until=24h" || true
+                    
+                    # Show disk usage
+                    df -h | grep -E '^/dev/' || true
+                '''
+            }
         }
     }
 }
