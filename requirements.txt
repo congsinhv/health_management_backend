@@ -39,6 +39,7 @@ black==24.10.0
 isort==5.13.0
 flake8==7.1.0
 mypy==1.13.0
+
 # Q&A Service dependencies
 sentence-transformers==2.2.2
 pandas==2.0.3
