@@ -17,7 +17,8 @@ WORKDIR /home/appuser
 
 # Copy requirements and install packages
 COPY requirements-prod.txt .
-RUN pip install --user --no-cache-dir -r requirements-prod.txt \
+RUN pip install --user --no-cache-dir torch==2.9.0 --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --user --no-cache-dir -r requirements-prod.txt \
     && find /home/appuser/.local -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true \
     && find /home/appuser/.local -type f -name "*.pyc" -delete \
     && find /home/appuser/.local -type f -name "*.pyo" -delete
