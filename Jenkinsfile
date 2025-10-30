@@ -276,7 +276,6 @@ pipeline {
                             --set-env-vars "QA_MODEL_PATH=models/vietnamese-sbert" \
                             --set-env-vars "QA_DATA_PATH=data/data.xlsx" \
                             --set-env-vars "QA_VOCAB_PATH=data/vocab.txt" \
-                            --set-env-vars "CORS_ORIGINS=[\"https://dev.vhealth.io.vn\",\"https://vhealth.io.vn\",\"https://api.vhealth.io.vn\",\"https://dev.api.vhealth.io.vn\",\"http://localhost:3000\",\"http://localhost:3001\"]" \
                             --set-secrets "API_URL=vhealth-${params.ENVIRONMENT}-api-url:latest" \
                             --set-secrets "GOOGLE_REDIRECT_URI=vhealth-${params.ENVIRONMENT}-google-redirect-uri:latest" \
                             --set-secrets "DATABASE_URL=vhealth-${params.ENVIRONMENT}-database-url:latest" \
