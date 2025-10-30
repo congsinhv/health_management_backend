@@ -36,10 +36,10 @@ requests==2.32.3
 google-cloud-secret-manager==2.20.2
 
 # Q&A Service dependencies
-sentence-transformers==2.2.2
-pandas==2.0.3
-openpyxl==3.1.2
-torch==2.0.1
+sentence-transformers==5.1.2
+pandas==2.3.3
+openpyxl==3.1.5
+torch==2.9.0
 
 # Google Cloud Storage for Q&A files
 google-cloud-storage==2.10.0
