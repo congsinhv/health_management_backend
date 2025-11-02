@@ -96,7 +96,6 @@ pipeline {
                         script: "gsutil ls -b gs://${GCS_MODEL_BUCKET} 2>/dev/null || echo 'not_found'",
                         returnStdout: true
                     ).trim()
-
                     if (bucketExists.contains('not_found')) {
                         echo "Creating GCS bucket: ${GCS_MODEL_BUCKET}"
                         sh """
@@ -117,13 +116,11 @@ EOF
                     } else {
                         echo "GCS bucket already exists: ${GCS_MODEL_BUCKET}"
                     }
-
                     // Check if model files exist in bucket
                     def modelExists = sh(
                         script: "gsutil -q stat gs://${GCS_MODEL_BUCKET}/models/vietnamese-sbert/config.json || echo 'not_found'",
                         returnStdout: true
                     ).trim()
-
                     if (modelExists.contains('not_found')) {
                         echo """
 ========================================
@@ -140,13 +137,11 @@ The service will attempt to download from Hugging Face as fallback.
                     } else {
                         echo "Model files found in GCS bucket"
                     }
-
                     // Ensure OpenRouter API key secret exists
                     def secretExists = sh(
                         script: "gcloud secrets describe vhealth-${params.ENVIRONMENT}-openrouter-api-key --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'not_found'",
                         returnStdout: true
                     ).trim()
-
                     if (secretExists.contains('not_found')) {
                         echo """
 ========================================
