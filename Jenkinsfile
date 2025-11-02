@@ -12,6 +12,11 @@ pipeline {
             defaultValue: 'develop',
             description: 'Git branch to deploy'
         )
+        booleanParam(
+            name: 'REBUILD_BASE_IMAGE',
+            defaultValue: false,
+            description: 'Rebuild base image with dependencies (set to true when requirements-prod.txt changes)'
+        )
     }
 
     environment {
@@ -22,9 +27,11 @@ pipeline {
 
         ARTIFACT_REGISTRY_REPO = "vhealth-backend-${params.ENVIRONMENT}"
         IMAGE_NAME = "vhealth-backend"
+        BASE_IMAGE_NAME = "vhealth-backend-base"
         IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
         IMAGE_FULL = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
         IMAGE_LATEST = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${IMAGE_NAME}:latest"
+        BASE_IMAGE_LATEST = "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${BASE_IMAGE_NAME}:latest"
 
         TF_IN_AUTOMATION = 'true'
         TF_VAR_FILE = "terraform/environments/${params.ENVIRONMENT}.tfvars"
@@ -267,16 +274,61 @@ AI summarization will not be available without this secret.
             }
         }
 
+        stage('Build/Pull Base Image') {
+            steps {
+                script {
+                    echo "Base Image Strategy: ${params.REBUILD_BASE_IMAGE ? 'REBUILD' : 'USE EXISTING'}"
+
+                    def baseImageCheck = sh(
+                        script: "docker pull ${BASE_IMAGE_LATEST} 2>&1",
+                        returnStatus: true
+                    )
+
+                    def imageNotFound = (baseImageCheck != 0)
+
+                    if (params.REBUILD_BASE_IMAGE || imageNotFound) {
+                        if (imageNotFound && !params.REBUILD_BASE_IMAGE) {
+                            echo "Base image not found, auto-rebuilding (first build or missing image)..."
+                        } else {
+                            echo "Rebuilding base image with dependencies..."
+                        }
+
+                        def previousBaseImage = "${BASE_IMAGE_LATEST}"
+                        sh """
+                            docker pull ${previousBaseImage} || echo "No previous base image found"
+                        """
+                        sh """
+                            DOCKER_BUILDKIT=1 docker build \
+                                -f Dockerfile.base \
+                                --cache-from ${previousBaseImage} \
+                                --tag ${BASE_IMAGE_LATEST} \
+                                --progress=plain \
+                                .
+                        """
+                        sh """
+                            docker push ${BASE_IMAGE_LATEST}
+                        """
+                        echo "Base image rebuilt and pushed: ${BASE_IMAGE_LATEST}"
+                    } else {
+                        echo "Using existing base image: ${BASE_IMAGE_LATEST}"
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Building Docker image: ${IMAGE_FULL}"
+                    echo "Building application image: ${IMAGE_FULL}"
+                    echo "Using base image: ${BASE_IMAGE_LATEST}"
+
                     def previousImage = "${IMAGE_LATEST}"
                     sh """
                         docker pull ${previousImage} || echo "No previous image found, building from scratch"
                     """
                     sh """
                         DOCKER_BUILDKIT=1 docker build \
+                            --build-arg BASE_IMAGE=${BASE_IMAGE_LATEST} \
                             --build-arg BUILD_DATE=\$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
                             --build-arg VERSION=${IMAGE_TAG} \
                             --build-arg GIT_COMMIT=${GIT_COMMIT} \

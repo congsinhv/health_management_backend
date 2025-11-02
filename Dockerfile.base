@@ -1,0 +1,55 @@
+
+FROM python:3.13-slim AS builder
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=300 \
+    PIP_RETRIES=5 \
+    PIP_NO_CACHE_DIR=0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash appuser
+USER appuser
+WORKDIR /home/appuser
+
+COPY requirements-prod.txt .
+
+RUN --mount=type=cache,target=/home/appuser/.cache/pip,uid=1000,gid=1000 \
+    pip install --user \
+    --retries 10 \
+    --timeout 300 \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.9.0
+
+RUN --mount=type=cache,target=/home/appuser/.cache/pip,uid=1000,gid=1000 \
+    pip install --user \
+    --retries 5 \
+    --timeout 300 \
+    -r requirements-prod.txt
+
+FROM python:3.13-slim AS base
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/home/appuser/.local/bin:$PATH" \
+    PORT=8080 \
+    QA_MODEL_PATH=/home/appuser/.cache/models/vietnamese-sbert \
+    QA_DATA_PATH=/home/appuser/.cache/data/data.xlsx \
+    QA_VOCAB_PATH=/home/appuser/.cache/data/tuvung.txt
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash appuser
+
+COPY --from=builder /home/appuser/.local /home/appuser/.local
+
+USER appuser
+WORKDIR /home/appuser/app
+
+RUN mkdir -p /home/appuser/.cache/models/vietnamese-sbert && \
+    mkdir -p /home/appuser/.cache/data
