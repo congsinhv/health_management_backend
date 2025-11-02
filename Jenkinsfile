@@ -83,6 +83,91 @@ pipeline {
             }
         }
 
+        stage('Setup Q&A Models') {
+            steps {
+                script {
+                    echo 'Setting up Q&A model storage...'
+                    
+                    // Define GCS bucket for models
+                    env.GCS_MODEL_BUCKET = "vhealth-${params.ENVIRONMENT}-models"
+                    
+                    // Check if bucket exists, create if needed
+                    def bucketExists = sh(
+                        script: "gsutil ls -b gs://${GCS_MODEL_BUCKET} 2>/dev/null || echo 'not_found'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (bucketExists.contains('not_found')) {
+                        echo "Creating GCS bucket: ${GCS_MODEL_BUCKET}"
+                        sh """
+                            gsutil mb -p ${GCP_PROJECT_ID} -l ${GCP_REGION} gs://${GCS_MODEL_BUCKET}
+                            gsutil lifecycle set - gs://${GCS_MODEL_BUCKET} <<EOF
+{
+  "lifecycle": {
+    "rule": [
+      {
+        "action": {"type": "Delete"},
+        "condition": {"age": 90, "matchesPrefix": ["tmp/"]}
+      }
+    ]
+  }
+}
+EOF
+                        """
+                    } else {
+                        echo "GCS bucket already exists: ${GCS_MODEL_BUCKET}"
+                    }
+                    
+                    // Check if model files exist in bucket
+                    def modelExists = sh(
+                        script: "gsutil -q stat gs://${GCS_MODEL_BUCKET}/models/vietnamese-sbert/config.json || echo 'not_found'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (modelExists.contains('not_found')) {
+                        echo """
+========================================
+WARNING: Q&A model files not found in GCS!
+========================================
+To upload model files, run:
+  gsutil -m cp -r models/vietnamese-sbert gs://${GCS_MODEL_BUCKET}/models/
+  gsutil -m cp data.xlsx gs://${GCS_MODEL_BUCKET}/data/
+  gsutil -m cp tuvung.txt gs://${GCS_MODEL_BUCKET}/data/
+
+The service will attempt to download from Hugging Face as fallback.
+========================================
+                        """
+                    } else {
+                        echo "Model files found in GCS bucket"
+                    }
+                    
+                    // Ensure OpenRouter API key secret exists
+                    def secretExists = sh(
+                        script: "gcloud secrets describe vhealth-${params.ENVIRONMENT}-openrouter-api-key --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'not_found'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (secretExists.contains('not_found')) {
+                        echo """
+========================================
+WARNING: OpenRouter API key secret not found!
+========================================
+To create the secret, run:
+  echo -n 'your-api-key-here' | gcloud secrets create vhealth-${params.ENVIRONMENT}-openrouter-api-key \\
+    --project=${GCP_PROJECT_ID} \\
+    --data-file=- \\
+    --replication-policy=automatic
+
+AI summarization will not be available without this secret.
+========================================
+                        """
+                    } else {
+                        echo "OpenRouter API key secret exists"
+                    }
+                }
+            }
+        }
+
         stage('Terraform Init') {
             steps {
                 dir('terraform') {
@@ -269,14 +354,21 @@ pipeline {
                             --set-env-vars "LOG_LEVEL=INFO" \
                             --set-env-vars "APP_NAME=VHealth Backend" \
                             --set-env-vars "ENVIRONMENT=${params.ENVIRONMENT}" \
+                            --set-env-vars "QA_ENABLED=true" \
+                            --set-env-vars "GCP_PROJECT_ID=${GCP_PROJECT_ID}" \
+                            --set-env-vars "GCP_MODEL_BUCKET=vhealth-${params.ENVIRONMENT}-models" \
+                            --set-env-vars "MODEL_AUTO_DOWNLOAD=true" \
+                            --set-env-vars "GCP_MODEL_BLOB_PATH=models/vietnamese-sbert/" \
+                            --set-env-vars "GCP_DATA_BLOB_PATH=data/" \
                             --set-secrets "DATABASE_URL=vhealth-${params.ENVIRONMENT}-database-url:latest" \
                             --set-secrets "SECRET_KEY=vhealth-${params.ENVIRONMENT}-secret-key:latest" \
                             --set-secrets "GOOGLE_CLIENT_ID=vhealth-${params.ENVIRONMENT}-google-client-id:latest" \
                             --set-secrets "GOOGLE_CLIENT_SECRET=vhealth-${params.ENVIRONMENT}-google-client-secret:latest" \
                             --set-secrets "MAIL_USERNAME=vhealth-${params.ENVIRONMENT}-mail-username:latest" \
                             --set-secrets "MAIL_PASSWORD=vhealth-${params.ENVIRONMENT}-mail-password:latest" \
-                            --cpu 1 \
-                            --memory 512Mi \
+                            --set-secrets "OPENROUTER_API_KEY=vhealth-${params.ENVIRONMENT}-openrouter-api-key:latest" \
+                            --cpu 2 \
+                            --memory 1Gi \
                             --min-instances 0 \
                             --max-instances 10 \
                             --timeout 300 \
@@ -321,6 +413,9 @@ pipeline {
 
                         echo "Testing root endpoint..."
                         curl -f ${serviceUrl}/ || exit 1
+
+                        echo "Testing Q&A health endpoint..."
+                        curl -f ${serviceUrl}/api/v1/qa/health || exit 1
 
                         echo "All smoke tests passed!"
                     """

@@ -89,47 +89,86 @@ class Settings(BaseSettings):
 
     # Documentation settings
     docs_enabled: bool = True
-    # Q&A Service settings - THÊM MỚI
+    # Q&A Service settings
     # ========================================
+    qa_enabled: bool = Field(
+        default=True, description="Enable/disable Q&A service"
+    )
+
+    # Local paths (used as cache directory when downloading from GCS)
     qa_model_path: str = Field(
         default="./models/vietnamese-sbert",
-        description="Path to SBERT model directory"
+        description="Path to SBERT model directory (local cache)",
     )
     qa_data_path: str = Field(
-        default="data.xlsx",
-        description="Path to Q&A dataset Excel file"
+        default="data.xlsx", description="Path to Q&A dataset Excel file"
     )
     qa_vocab_path: str = Field(
-        default="tuvung.txt",
-        description="Path to Vietnamese vocabulary file"
+        default="tuvung.txt", description="Path to Vietnamese vocabulary file"
     )
+
+    # GCS Storage settings
+    gcp_project_id: Optional[str] = Field(
+        default=None, description="GCP project ID for GCS access"
+    )
+    gcp_model_bucket: Optional[str] = Field(
+        default=None,
+        description="GCS bucket name for models (e.g., vhealth-dev-models)",
+    )
+    gcp_model_blob_path: str = Field(
+        default="models/vietnamese-sbert/",
+        description="Path to model files within GCS bucket",
+    )
+    gcp_data_blob_path: str = Field(
+        default="data/", description="Path to data files within GCS bucket"
+    )
+    model_auto_download: bool = Field(
+        default=True, description="Automatically download models from GCS if not local"
+    )
+    model_download_timeout: int = Field(
+        default=600, description="Timeout for model download from GCS (seconds)"
+    )
+
+    # Q&A behavior settings
     qa_threshold: float = Field(
         default=0.55,
         ge=0.0,
         le=1.0,
-        description="Minimum similarity threshold for answers"
+        description="Minimum similarity threshold for answers",
     )
     qa_top_k: int = Field(
-        default=7,
-        ge=1,
-        le=20,
-        description="Maximum number of top results to return"
+        default=7, ge=1, le=20, description="Maximum number of top results to return"
     )
+    qa_max_per_field: int = Field(
+        default=5, ge=1, le=10, description="Maximum answers per field category"
+    )
+
+    # OpenRouter AI settings
     openrouter_api_key: Optional[str] = Field(
-        default=None,
-        description="OpenRouter API key for AI summarization"
+        default=None, description="OpenRouter API key for AI summarization"
     )
     openrouter_model: str = Field(
-        default="openai/gpt-4o-mini",
-        description="OpenRouter model to use"
+        default="openai/gpt-4o-mini", description="OpenRouter model to use"
     )
     openrouter_timeout: int = Field(
-        default=30,
-        description="OpenRouter API timeout in seconds"
+        default=30, description="OpenRouter API timeout in seconds"
     )
-    qa_enabled: bool = Field(
-        default=True,
-        description="Enable/disable Q&A service"
+    openrouter_temperature: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=2.0,
+        description="Temperature for OpenRouter AI responses",
+    )
+    openrouter_max_tokens: int = Field(
+        default=400, ge=1, le=4096, description="Maximum tokens for AI responses"
+    )
+
+    # Rate limiting (configuration only, implementation in future PR)
+    qa_rate_limit_requests: int = Field(
+        default=10, ge=1, description="Max requests per time window"
+    )
+    qa_rate_limit_window: int = Field(
+        default=60, ge=1, description="Rate limit time window in seconds"
     )
 
     class Config:
