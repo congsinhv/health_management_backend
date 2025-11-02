@@ -1,9 +1,10 @@
-FROM python:3.13-slim as builder
+FROM python:3.13-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=300 \
+    PIP_RETRIES=5
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -14,9 +15,22 @@ USER appuser
 WORKDIR /home/appuser
 
 COPY requirements-prod.txt .
-RUN pip install --user --no-cache-dir -r requirements-prod.txt
 
-FROM python:3.13-slim as production
+# Install torch separately first with aggressive retry settings to handle large download
+RUN --mount=type=cache,target=/home/appuser/.cache/pip,uid=1000,gid=1000 \
+    pip install --user \
+    --retries 10 \
+    --timeout 300 \
+    torch==2.9.0
+
+# Install remaining dependencies
+RUN --mount=type=cache,target=/home/appuser/.cache/pip,uid=1000,gid=1000 \
+    pip install --user \
+    --retries 5 \
+    --timeout 300 \
+    -r requirements-prod.txt
+
+FROM python:3.13-slim AS production
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -50,7 +64,7 @@ EXPOSE 8080
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
 
-FROM production as development
+FROM production AS development
 
 USER root
 RUN apt-get update && apt-get install -y \

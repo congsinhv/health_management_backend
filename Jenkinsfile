@@ -278,7 +278,7 @@ AI summarization will not be available without this secret.
                 script {
                     echo "Building Docker image: ${IMAGE_FULL}"
                     sh """
-                        docker build \
+                        DOCKER_BUILDKIT=1 docker build \
                             --build-arg BUILD_DATE=\$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
                             --build-arg VERSION=${IMAGE_TAG} \
                             --build-arg GIT_COMMIT=${GIT_COMMIT} \
