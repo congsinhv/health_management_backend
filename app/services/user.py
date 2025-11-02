@@ -19,7 +19,7 @@ from app.schemas.user import (
     EmailVerification,
     GoogleOAuthCallback,
 )
-from app.utils import (
+from app.helpers import (
     hash_password,
     verify_password,
     create_access_token,

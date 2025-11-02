@@ -7,7 +7,7 @@ from typing import Optional, Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import settings
-from app.utils import verify_access_token
+from app.helpers import verify_access_token
 from app.db.database import get_database_pool
 from app.services.user import UserService
 from app.schemas.user import UserInDB
