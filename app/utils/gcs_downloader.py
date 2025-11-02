@@ -61,9 +61,6 @@ class GCSDownloader:
             try:
                 client = self._get_client()
                 self._bucket = client.bucket(self.bucket_name)
-                # Verify bucket exists
-                if not self._bucket.exists():
-                    raise NotFound(f"Bucket '{self.bucket_name}' not found")
                 logger.info(f"Connected to GCS bucket: {self.bucket_name}")
             except Exception as e:
                 logger.error(f"Failed to access bucket '{self.bucket_name}': {e}")
