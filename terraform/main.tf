@@ -41,6 +41,7 @@ resource "google_project_service" "required_apis" {
     "secretmanager.googleapis.com",
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
+    "cloudscheduler.googleapis.com",
   ])
 
   service            = each.key
@@ -115,6 +116,8 @@ module "secret_manager" {
     google_client_secret = var.google_client_secret
     mail_username        = var.mail_username
     mail_password        = var.mail_password
+    # Scheduler endpoint URL - configure this to point to actual scheduled endpoint
+    scheduler_endpoint_url = var.scheduler_endpoint_url
   }
 
   depends_on = [
@@ -140,5 +143,52 @@ module "cloud_sql" {
   environment         = var.environment
 
   depends_on = [google_project_service.required_apis]
+}
+
+# Create a service account for Cloud Scheduler
+resource "google_service_account" "cloud_scheduler_sa" {
+  account_id   = "vhealth-scheduler-${var.environment}"
+  display_name = "Cloud Scheduler Service Account - ${var.environment}"
+  description  = "Service account used by Cloud Scheduler to invoke Cloud Run endpoints"
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Cloud Scheduler module for periodic tasks
+module "cloud_scheduler" {
+  source = "./modules/cloud_scheduler"
+
+  project_id     = var.project_id
+  region         = var.region
+  environment    = var.environment
+  job_name       = "vhealth-scheduler-${var.environment}"
+  description    = "Periodic task that runs every 30 minutes - ${var.environment}"
+  schedule       = var.scheduler_cron_schedule
+  time_zone      = var.scheduler_time_zone
+  http_target_uri = var.scheduler_endpoint_url
+  http_method    = "POST"
+  http_headers = {
+    "Content-Type" = "application/json"
+  }
+  
+  # Enable OIDC authentication if Cloud Run requires authentication
+  oidc_token            = var.scheduler_use_oidc_auth
+  service_account_email = var.scheduler_use_oidc_auth ? google_service_account.cloud_scheduler_sa.email : null
+  
+  # Retry configuration
+  retry_config = {
+    retry_count          = 3
+    max_retry_duration   = "0s"
+    min_backoff_duration = "5s"
+    max_backoff_duration = "3600s"
+    max_doublings        = 5
+  }
+  
+  paused = var.scheduler_paused
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_service_account.cloud_scheduler_sa
+  ]
 }
 

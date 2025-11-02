@@ -101,3 +101,34 @@ output "region" {
   description = "GCP region"
   value       = var.region
 }
+
+# Cloud Scheduler Outputs
+output "scheduler_job_name" {
+  description = "Cloud Scheduler job name"
+  value       = module.cloud_scheduler.job_name
+}
+
+output "scheduler_job_id" {
+  description = "Cloud Scheduler job ID"
+  value       = module.cloud_scheduler.job_id
+}
+
+output "scheduler_schedule" {
+  description = "Cloud Scheduler cron schedule"
+  value       = module.cloud_scheduler.schedule
+}
+
+output "scheduler_target_uri" {
+  description = "Cloud Scheduler HTTP target URI"
+  value       = module.cloud_scheduler.http_target_uri
+}
+
+output "scheduler_state" {
+  description = "Cloud Scheduler job state"
+  value       = module.cloud_scheduler.state
+}
+
+output "scheduler_service_account_email" {
+  description = "Cloud Scheduler service account email"
+  value       = google_service_account.cloud_scheduler_sa.email
+}
