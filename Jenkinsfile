@@ -363,7 +363,7 @@ AI summarization will not be available without this secret.
                             --set-secrets "MAIL_PASSWORD=vhealth-${params.ENVIRONMENT}-mail-password:latest" \
                             --set-secrets "OPENROUTER_API_KEY=vhealth-${params.ENVIRONMENT}-openrouter-api-key:latest" \
                             --cpu 2 \
-                            --memory 1Gi \
+                            --memory 2Gi \
                             --min-instances 0 \
                             --max-instances 10 \
                             --timeout 300 \
