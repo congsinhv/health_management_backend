@@ -43,8 +43,10 @@ async def lifespan(app: FastAPI):
             logger.error(f"Failed to initialize Q&A Service: {e}")
             logger.warning("Q&A Service will not be available")
             qa_service = None
+            app.state.qa_service = None
     else:
         logger.info("Q&A Service is disabled in settings")
+        app.state.qa_service = None
 
     yield
 

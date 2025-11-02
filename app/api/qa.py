@@ -37,7 +37,7 @@ async def ask_question(
     """
     try:
         # Get QA service from app state
-        qa_service = request.app.state.qa_service
+        qa_service = getattr(request.app.state, "qa_service", None)
 
         if qa_service is None:
             raise HTTPException(status_code=503, detail="Q&A service is not available")
@@ -85,7 +85,7 @@ async def ask_question(
 @router.get("/health", response_model=QAHealthResponse)
 async def qa_health_check(request: Request):
     """Check Q&A service health status."""
-    qa_service = request.app.state.qa_service
+    qa_service = getattr(request.app.state, "qa_service", None)
 
     if qa_service is None:
         return QAHealthResponse(
