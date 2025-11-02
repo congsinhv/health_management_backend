@@ -101,10 +101,24 @@ class QAService:
         if not model_dir.exists():
             return False
 
+        # Check for required config files
         for required_file in self.REQUIRED_MODEL_FILES:
             if not (model_dir / required_file).exists():
                 logger.debug(f"Missing required model file: {required_file}")
                 return False
+
+        # Check for model weights file (required for model to load)
+        # Modern models use model.safetensors, older ones use pytorch_model.bin
+        has_weights = (
+            (model_dir / "model.safetensors").exists()
+            or (model_dir / "pytorch_model.bin").exists()
+            or (model_dir / "1_Pooling" / "model.safetensors").exists()
+            or (model_dir / "1_Pooling" / "pytorch_model.bin").exists()
+        )
+
+        if not has_weights:
+            logger.debug("Missing model weights file (model.safetensors or pytorch_model.bin)")
+            return False
 
         return True
 
@@ -145,7 +159,22 @@ class QAService:
 
         # Validate model is complete
         if not self._is_model_complete():
-            raise RuntimeError("Downloaded model is incomplete")
+            model_dir = Path(self.model_path)
+            # Check which weight file is missing
+            missing_weights = []
+            if not (model_dir / "model.safetensors").exists():
+                missing_weights.append("model.safetensors")
+            if not (model_dir / "pytorch_model.bin").exists():
+                missing_weights.append("pytorch_model.bin")
+
+            error_msg = (
+                f"Downloaded model is incomplete - missing model weights file. "
+                f"Expected one of: model.safetensors or pytorch_model.bin. "
+                f"Please ensure the model weights file is uploaded to GCS bucket "
+                f"{self.settings.gcp_model_bucket} at path {self.settings.gcp_model_blob_path}"
+            )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
         # Download data files if configured
         if self.settings.gcp_data_blob_path:
