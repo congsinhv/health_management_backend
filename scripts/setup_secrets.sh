@@ -92,19 +92,30 @@ setup_environment_secrets() {
     # Set project
     gcloud config set project ${project}
     
-    # Define required secrets with their descriptions
-    declare -A secrets=(
-        ["vhealth-${env}-database-url"]="PostgreSQL connection string"
-        ["vhealth-${env}-secret-key"]="JWT secret key for token signing"
-        ["vhealth-${env}-google-client-id"]="Google OAuth 2.0 client ID"
-        ["vhealth-${env}-google-client-secret"]="Google OAuth 2.0 client secret"
-        ["vhealth-${env}-mail-username"]="SMTP email username"
-        ["vhealth-${env}-mail-password"]="SMTP email password"
+    # Define required secrets as parallel arrays (portable across bash/zsh)
+    local secret_names=(
+        "vhealth-${env}-database-url"
+        "vhealth-${env}-secret-key"
+        "vhealth-${env}-google-client-id"
+        "vhealth-${env}-google-client-secret"
+        "vhealth-${env}-mail-username"
+        "vhealth-${env}-mail-password"
+    )
+    
+    local secret_descriptions=(
+        "PostgreSQL connection string"
+        "JWT secret key for token signing"
+        "Google OAuth 2.0 client ID"
+        "Google OAuth 2.0 client secret"
+        "SMTP email username"
+        "SMTP email password"
     )
     
     # Check each secret
-    for secret_name in "${!secrets[@]}"; do
-        description="${secrets[$secret_name]}"
+    local idx=0
+    for secret_name in "${secret_names[@]}"; do
+        description="${secret_descriptions[$idx]}"
+        idx=$((idx + 1))
         
         echo -e "${YELLOW}Checking: ${secret_name}${NC}"
         echo -e "${BLUE}  Description: ${description}${NC}"
