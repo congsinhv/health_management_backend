@@ -4,9 +4,10 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_DEFAULT_TIMEOUT=300 \
-    PIP_RETRIES=5
+    PIP_RETRIES=5 \
+    PIP_NO_CACHE_DIR=0
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -42,7 +43,7 @@ ENV PYTHONUNBUFFERED=1 \
     QA_DATA_PATH=/home/appuser/.cache/data/data.xlsx \
     QA_VOCAB_PATH=/home/appuser/.cache/data/tuvung.txt
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --shell /bin/bash appuser
