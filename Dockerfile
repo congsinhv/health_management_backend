@@ -21,7 +21,10 @@ FROM python:3.13-slim as production
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/home/appuser/.local/bin:$PATH" \
-    PORT=8080
+    PORT=8080 \
+    QA_MODEL_PATH=/home/appuser/.cache/models/vietnamese-sbert \
+    QA_DATA_PATH=/home/appuser/.cache/data/data.xlsx \
+    QA_VOCAB_PATH=/home/appuser/.cache/data/tuvung.txt
 
 RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
@@ -32,6 +35,10 @@ COPY --from=builder /home/appuser/.local /home/appuser/.local
 
 USER appuser
 WORKDIR /home/appuser/app
+
+# Create cache directories for Q&A models and data
+RUN mkdir -p /home/appuser/.cache/models/vietnamese-sbert && \
+    mkdir -p /home/appuser/.cache/data
 
 COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser scripts/migrations/ ./migrations/
