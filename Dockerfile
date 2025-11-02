@@ -17,10 +17,12 @@ WORKDIR /home/appuser
 COPY requirements-prod.txt .
 
 # Install torch separately first with aggressive retry settings to handle large download
+# Using CPU-only version to reduce image size from ~3.5GB to ~200MB
 RUN --mount=type=cache,target=/home/appuser/.cache/pip,uid=1000,gid=1000 \
     pip install --user \
     --retries 10 \
     --timeout 300 \
+    --index-url https://download.pytorch.org/whl/cpu \
     torch==2.9.0
 
 # Install remaining dependencies
