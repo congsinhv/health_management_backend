@@ -106,11 +106,6 @@ class GCSUploader:
                 content_type=content_type,
             )
 
-            # Make blob publicly accessible if requested
-            if make_public:
-                blob.make_public()
-
-            # Get public URL
             public_url = blob.public_url
 
             logger.info(f"Successfully uploaded file to {blob_path}, URL: {public_url}")
