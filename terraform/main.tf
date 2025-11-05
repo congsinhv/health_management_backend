@@ -42,6 +42,7 @@ resource "google_project_service" "required_apis" {
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
     "cloudscheduler.googleapis.com",
+    "storage.googleapis.com",
   ])
 
   service            = each.key
@@ -63,6 +64,17 @@ resource "google_project_iam_member" "cloud_run_sql_client" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 
   depends_on = [google_service_account.cloud_run_sa]
+}
+
+resource "google_storage_bucket_iam_member" "cloud_run_storage_writer" {
+  bucket = "vhealth-${var.environment}-public"
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+
+  depends_on = [
+    google_service_account.cloud_run_sa,
+    google_project_service.required_apis
+  ]
 }
 
 module "artifact_registry" {
