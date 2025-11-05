@@ -140,6 +140,10 @@ class Settings(BaseSettings):
     model_download_timeout: int = Field(
         default=600, description="Timeout for model download from GCS (seconds)"
     )
+    gcp_public_bucket: Optional[str] = Field(
+        default="vhealth-dev-public",
+        description="GCS bucket name for public file uploads (e.g., vhealth-dev-public)",
+    )
 
     # Q&A behavior settings
     qa_threshold: float = Field(

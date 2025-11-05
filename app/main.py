@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.qa import router as qa_router
 from app.api.user import router as user_router
+from app.api.upload import router as upload_router
 from app.config import settings
 from app.db.database import database
 from app.services.qa_service import QAService
@@ -79,6 +80,9 @@ app.include_router(
     auth_router, prefix=f"{settings.api_v1_prefix}/auth", tags=["authentication"]
 )
 app.include_router(qa_router, prefix=f"{settings.api_v1_prefix}/qa", tags=["Q&A"])
+app.include_router(
+    upload_router, prefix=f"{settings.api_v1_prefix}/upload", tags=["upload"]
+)
 
 
 @app.get("/")
