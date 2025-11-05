@@ -3,10 +3,11 @@ User business logic and services.
 """
 
 import asyncpg
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import timedelta, datetime, timezone
 from app.constants import UserProviders
 from app.db.user import UserRepository
+from app.db.user_profile import UserProfileRepository
 from app.schemas.user import (
     UserCreate,
     UserUpdate,
@@ -20,6 +21,7 @@ from app.schemas.user import (
     EmailVerification,
     GoogleOAuthCallback,
 )
+from app.schemas.user_profile import UserProfileCreate, UserProfileResponse
 from app.helpers import (
     hash_password,
     verify_password,
@@ -39,6 +41,57 @@ class UserService:
 
     def __init__(self, db_pool: asyncpg.Pool):
         self.user_repo = UserRepository(db_pool)
+        self.profile_repo = UserProfileRepository(db_pool)
+
+    def _transform_user_record(self, record: asyncpg.Record) -> Dict[str, Any]:
+        """Transform database record to UserResponse format."""
+        user_data = {
+            "id": record["id"],
+            "email": record["email"],
+            "is_active": record["is_active"],
+            "provider": record["provider"],
+            "email_verified": record["email_verified"],
+            "created_at": record["created_at"],
+            "updated_at": record["updated_at"],
+        }
+
+        # Include password_hash for UserInDB if present
+        if "password_hash" in record:
+            user_data["password_hash"] = record["password_hash"]
+
+        # Include other auth fields if present
+        for field in [
+            "google_id",
+            "email_verification_token",
+            "email_verification_sent_at",
+            "password_reset_token",
+            "password_reset_sent_at",
+        ]:
+            if field in record:
+                user_data[field] = record[field]
+
+        # Build profile if profile data exists
+        if record.get("profile_id") is not None:
+            profile_data = {
+                "id": record["profile_id"],
+                "user_id": record["id"],
+                "first_name": record.get("first_name"),
+                "last_name": record.get("last_name"),
+                "avatar_url": record.get("avatar_url"),
+                "gender": record.get("gender"),
+                "height_cm": record.get("height_cm"),
+                "weight_kg": record.get("weight_kg"),
+                "date_of_birth": record.get("date_of_birth"),
+                "family_medical_history": record.get("family_medical_history"),
+                "goal": record.get("goal"),
+                "created_at": record.get("profile_created_at"),
+                "updated_at": record.get("profile_updated_at"),
+            }
+            user_data["profile"] = UserProfileResponse(**profile_data)
+        else:
+            user_data["profile"] = None
+
+        return user_data
 
     async def create_user(
         self, user_data: UserCreate, send_verification: bool = True
@@ -69,17 +122,30 @@ class UserService:
         if not user_record:
             raise RuntimeError("Failed to create user")
 
+        # Create profile if profile fields are provided
+        if user_data.first_name or user_data.last_name or user_data.avatar_url:
+            profile_create = UserProfileCreate(
+                user_id=user_record["id"],
+                first_name=user_data.first_name,
+                last_name=user_data.last_name,
+                avatar_url=user_data.avatar_url,
+            )
+            await self.profile_repo.create_profile(profile_create)
+            # Re-fetch user with profile
+            user_record = await self.user_repo.get_user_by_id(user_record["id"])
+
         # Send email verification for portal accounts (OAuth users are pre-verified)
         if (
             send_verification
             and user_data.provider == UserProviders.PORTAL
             and not user_data.email_verified
         ):
+            first_name = user_data.first_name or "User"
             await self._send_email_verification(
-                user_record["id"], user_data.email, user_data.first_name
+                user_record["id"], user_data.email, first_name
             )
 
-        return UserResponse(**dict(user_record))
+        return UserResponse(**self._transform_user_record(user_record))
 
     async def get_user_by_id(self, user_id: int) -> Optional[UserResponse]:
         """Get user by ID."""
@@ -87,7 +153,7 @@ class UserService:
         if not user_record:
             return None
 
-        return UserResponse(**dict(user_record))
+        return UserResponse(**self._transform_user_record(user_record))
 
     async def get_user_by_email(self, email: str) -> Optional[UserInDB]:
         """Get user by email (includes password hash for authentication)."""
@@ -95,17 +161,20 @@ class UserService:
         if not user_record:
             return None
 
-        return UserInDB(**dict(user_record))
+        return UserInDB(**self._transform_user_record(user_record))
 
     async def get_users(self, limit: int = 100, offset: int = 0) -> List[UserResponse]:
         """Get all users with pagination."""
         user_records = await self.user_repo.get_users(limit, offset)
-        return [UserResponse(**dict(record)) for record in user_records]
+        return [
+            UserResponse(**self._transform_user_record(record))
+            for record in user_records
+        ]
 
     async def update_user(
         self, user_id: int, user_data: UserUpdate
     ) -> Optional[UserResponse]:
-        """Update user information."""
+        """Update user information and profile."""
         # Check if user exists
         existing_user = await self.user_repo.get_user_by_id(user_id)
         if not existing_user:
@@ -117,12 +186,50 @@ class UserService:
             if email_user:
                 raise ValueError("Email is already taken")
 
-        # Update user
+        # Extract profile fields
+        profile_fields = {
+            "first_name": user_data.first_name,
+            "last_name": user_data.last_name,
+            "avatar_url": user_data.avatar_url,
+            "gender": user_data.gender,
+            "height_cm": user_data.height_cm,
+            "weight_kg": user_data.weight_kg,
+            "date_of_birth": user_data.date_of_birth,
+            "family_medical_history": user_data.family_medical_history,
+            "goal": user_data.goal,
+        }
+
+        # Check if any profile fields are being updated
+        has_profile_updates = any(
+            value is not None for value in profile_fields.values()
+        )
+
+        # Update user (only email and is_active are used by UserRepository)
         user_record = await self.user_repo.update_user(user_id, user_data)
         if not user_record:
             return None
 
-        return UserResponse(**dict(user_record))
+        # Update or create profile if profile fields are provided
+        if has_profile_updates:
+            # Check if profile exists
+            existing_profile = await self.profile_repo.get_profile_by_user_id(user_id)
+
+            if existing_profile:
+                # Update existing profile
+                from app.schemas.user_profile import UserProfileUpdate
+
+                profile_update = UserProfileUpdate(**profile_fields)
+                await self.profile_repo.update_profile(user_id, profile_update)
+            else:
+                # Create new profile
+                from app.schemas.user_profile import UserProfileCreate
+
+                profile_create = UserProfileCreate(user_id=user_id, **profile_fields)
+                await self.profile_repo.create_profile(profile_create)
+
+        # Re-fetch user with profile
+        user_record = await self.user_repo.get_user_by_id(user_id)
+        return UserResponse(**self._transform_user_record(user_record))
 
     async def delete_user(self, user_id: int) -> bool:
         """Delete user (soft delete)."""
@@ -204,8 +311,9 @@ class UserService:
         await self.user_repo.set_password_reset_token(reset_request.email, reset_token)
 
         # Send reset email
+        first_name = user.get("first_name") or "User"  # Profile field if exists
         return await email_service.send_password_reset(
-            reset_request.email, user["first_name"], reset_token
+            reset_request.email, first_name, reset_token
         )
 
     async def reset_password(self, reset_data: PasswordReset) -> bool:
@@ -246,7 +354,7 @@ class UserService:
         user_record = await self.user_repo.get_user_by_id(user_id)
         if not user_record:
             return None
-        return UserInDB(**dict(user_record))
+        return UserInDB(**self._transform_user_record(user_record))
 
     # OAuth Methods
 
@@ -273,7 +381,7 @@ class UserService:
         user_record = await self.user_repo.get_user_by_google_id(oauth_data.id)
 
         if user_record:
-            return UserInDB(**dict(user_record))
+            return UserInDB(**self._transform_user_record(user_record))
 
         # Try to find user by email
         user_record = await self.user_repo.get_user_by_email(oauth_data.email)
@@ -285,12 +393,12 @@ class UserService:
             )
             # Get updated user record
             user_record = await self.user_repo.get_user_by_id(user_record["id"])
-            return UserInDB(**dict(user_record))
+            return UserInDB(**self._transform_user_record(user_record))
 
         # Create new user
         user_response = await self.create_oauth_user(oauth_data)
         user_record = await self.user_repo.get_user_by_id(user_response.id)
-        return UserInDB(**dict(user_record))
+        return UserInDB(**self._transform_user_record(user_record))
 
     async def login_with_oauth(self, oauth_data: GoogleOAuthCallback) -> TokenPair:
         """Login user with OAuth and return token pair."""

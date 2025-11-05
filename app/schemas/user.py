@@ -2,28 +2,23 @@
 User-related Pydantic schemas.
 """
 
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
+from decimal import Decimal
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 from app.schemas.base import BaseSchema, TimestampMixin, IDMixin
+from app.schemas.user_profile import UserProfileResponse
 
 
 class UserBase(BaseSchema):
     """Base user schema with common fields."""
 
     email: EmailStr = Field(..., description="User email address")
-    first_name: str = Field(
-        ..., min_length=1, max_length=50, description="User first name"
-    )
-    last_name: str = Field(
-        ..., min_length=1, max_length=50, description="User last name"
-    )
     is_active: bool = Field(
         default=True, description="Whether the user account is active"
     )
     provider: str = Field(default="local", description="Authentication provider")
-    avatar_url: Optional[str] = Field(None, description="User avatar URL")
     email_verified: bool = Field(default=False, description="Email verification status")
 
 
@@ -34,21 +29,53 @@ class UserCreate(UserBase):
         None, min_length=8, max_length=128, description="User password"
     )
     google_id: Optional[str] = Field(None, description="Google OAuth ID")
+    # Profile fields for initial creation
+    first_name: Optional[str] = Field(
+        None, min_length=1, max_length=50, description="User first name"
+    )
+    last_name: Optional[str] = Field(
+        None, min_length=1, max_length=50, description="User last name"
+    )
+    avatar_url: Optional[str] = Field(
+        None, max_length=500, description="User avatar URL"
+    )
 
 
 class UserUpdate(BaseSchema):
     """Schema for updating user information."""
 
     email: Optional[EmailStr] = None
-    first_name: Optional[str] = Field(None, min_length=1, max_length=50)
-    last_name: Optional[str] = Field(None, min_length=1, max_length=50)
     is_active: Optional[bool] = None
+    # Profile fields for updating profile
+    first_name: Optional[str] = Field(
+        None, min_length=1, max_length=50, description="User first name"
+    )
+    last_name: Optional[str] = Field(
+        None, min_length=1, max_length=50, description="User last name"
+    )
+    avatar_url: Optional[str] = Field(
+        None, max_length=500, description="User avatar URL"
+    )
+    gender: Optional[str] = Field(None, max_length=20, description="User gender")
+    height_cm: Optional[Decimal] = Field(
+        None, ge=0, le=300, description="User height in centimeters"
+    )
+    weight_kg: Optional[Decimal] = Field(
+        None, ge=0, le=500, description="User weight in kilograms"
+    )
+    date_of_birth: Optional[date] = Field(None, description="User date of birth")
+    family_medical_history: Optional[str] = Field(
+        None, description="Family medical history"
+    )
+    goal: Optional[str] = Field(None, max_length=255, description="User health goal")
 
 
 class UserResponse(UserBase, IDMixin, TimestampMixin):
     """Schema for user response."""
 
-    pass
+    profile: Optional[UserProfileResponse] = Field(
+        None, description="User profile information"
+    )
 
 
 class UserInDB(UserResponse):

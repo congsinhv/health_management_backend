@@ -140,8 +140,9 @@ async def resend_email_verification(
         if current_user.email_verified:
             return {"message": "Email is already verified"}
 
+        first_name = current_user.profile.first_name if current_user.profile else "User"
         await user_service._send_email_verification(
-            current_user.id, current_user.email, current_user.first_name
+            current_user.id, current_user.email, first_name
         )
         await auth_log_service.log_email_verification_requested(
             request, current_user.id

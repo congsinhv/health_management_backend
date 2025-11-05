@@ -19,23 +19,20 @@ class UserRepository(BaseRepository):
         now = datetime.utcnow()
         query = """
             INSERT INTO users (
-                email, first_name, last_name, password_hash, is_active, 
-                provider, google_id, avatar_url, email_verified, created_at, updated_at
+                email, password_hash, is_active, 
+                provider, google_id, email_verified, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
-            RETURNING id, email, first_name, last_name, is_active, provider, 
-                      google_id, avatar_url, email_verified, created_at, updated_at
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+            RETURNING id, email, is_active, provider, 
+                      google_id, email_verified, created_at, updated_at
         """
         return await self.fetch_one(
             query,
             user_data.email,
-            user_data.first_name,
-            user_data.last_name,
             password_hash,
             user_data.is_active,
             user_data.provider,
             user_data.google_id,
-            user_data.avatar_url,
             user_data.email_verified,
             now,
         )
@@ -43,24 +40,34 @@ class UserRepository(BaseRepository):
     async def get_user_by_id(self, user_id: int) -> Optional[asyncpg.Record]:
         """Get user by ID."""
         query = """
-            SELECT id, email, first_name, last_name, password_hash, is_active, provider,
-                   google_id, avatar_url, email_verified, email_verification_token,
-                   email_verification_sent_at, password_reset_token, password_reset_sent_at,
-                   created_at, updated_at
-            FROM users
-            WHERE id = $1 AND deleted_at IS NULL
+            SELECT u.id, u.email, u.password_hash, u.is_active, u.provider,
+                   u.google_id, u.email_verified, u.email_verification_token,
+                   u.email_verification_sent_at, u.password_reset_token, u.password_reset_sent_at,
+                   u.created_at, u.updated_at,
+                   up.id as profile_id, up.first_name, up.last_name, up.avatar_url,
+                   up.gender, up.height_cm, up.weight_kg, up.date_of_birth,
+                   up.family_medical_history, up.goal, up.created_at as profile_created_at,
+                   up.updated_at as profile_updated_at
+            FROM users u
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            WHERE u.id = $1 AND u.deleted_at IS NULL
         """
         return await self.fetch_one(query, user_id)
 
     async def get_user_by_email(self, email: str) -> Optional[asyncpg.Record]:
         """Get user by email."""
         query = """
-            SELECT id, email, first_name, last_name, password_hash, is_active, provider,
-                   google_id, avatar_url, email_verified, email_verification_token,
-                   email_verification_sent_at, password_reset_token, password_reset_sent_at,
-                   created_at, updated_at
-            FROM users
-            WHERE email = $1 AND deleted_at IS NULL
+            SELECT u.id, u.email, u.password_hash, u.is_active, u.provider,
+                   u.google_id, u.email_verified, u.email_verification_token,
+                   u.email_verification_sent_at, u.password_reset_token, u.password_reset_sent_at,
+                   u.created_at, u.updated_at,
+                   up.id as profile_id, up.first_name, up.last_name, up.avatar_url,
+                   up.gender, up.height_cm, up.weight_kg, up.date_of_birth,
+                   up.family_medical_history, up.goal, up.created_at as profile_created_at,
+                   up.updated_at as profile_updated_at
+            FROM users u
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            WHERE u.email = $1 AND u.deleted_at IS NULL
         """
         return await self.fetch_one(query, email)
 
@@ -69,11 +76,16 @@ class UserRepository(BaseRepository):
     ) -> List[asyncpg.Record]:
         """Get all users with pagination."""
         query = """
-            SELECT id, email, first_name, last_name, is_active, provider,
-                   avatar_url, email_verified, created_at, updated_at
-            FROM users
-            WHERE deleted_at IS NULL
-            ORDER BY created_at DESC
+            SELECT u.id, u.email, u.is_active, u.provider,
+                   u.email_verified, u.created_at, u.updated_at,
+                   up.id as profile_id, up.first_name, up.last_name, up.avatar_url,
+                   up.gender, up.height_cm, up.weight_kg, up.date_of_birth,
+                   up.family_medical_history, up.goal, up.created_at as profile_created_at,
+                   up.updated_at as profile_updated_at
+            FROM users u
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            WHERE u.deleted_at IS NULL
+            ORDER BY u.created_at DESC
             LIMIT $1 OFFSET $2
         """
         return await self.fetch_many(query, limit, offset)
@@ -86,19 +98,15 @@ class UserRepository(BaseRepository):
         query = """
             UPDATE users
             SET email = COALESCE($2, email),
-                first_name = COALESCE($3, first_name),
-                last_name = COALESCE($4, last_name),
-                is_active = COALESCE($5, is_active),
-                updated_at = $6
+                is_active = COALESCE($3, is_active),
+                updated_at = $4
             WHERE id = $1 AND deleted_at IS NULL
-            RETURNING id, email, first_name, last_name, is_active, created_at, updated_at
+            RETURNING id, email, is_active, created_at, updated_at
         """
         return await self.fetch_one(
             query,
             user_id,
             user_data.email,
-            user_data.first_name,
-            user_data.last_name,
             user_data.is_active,
             now,
         )
@@ -127,10 +135,15 @@ class UserRepository(BaseRepository):
     async def get_user_by_google_id(self, google_id: str) -> Optional[asyncpg.Record]:
         """Get user by Google ID."""
         query = """
-            SELECT id, email, first_name, last_name, password_hash, is_active, provider,
-                   google_id, avatar_url, email_verified, created_at, updated_at
-            FROM users
-            WHERE google_id = $1 AND deleted_at IS NULL
+            SELECT u.id, u.email, u.password_hash, u.is_active, u.provider,
+                   u.google_id, u.email_verified, u.created_at, u.updated_at,
+                   up.id as profile_id, up.first_name, up.last_name, up.avatar_url,
+                   up.gender, up.height_cm, up.weight_kg, up.date_of_birth,
+                   up.family_medical_history, up.goal, up.created_at as profile_created_at,
+                   up.updated_at as profile_updated_at
+            FROM users u
+            LEFT JOIN user_profiles up ON u.id = up.user_id
+            WHERE u.google_id = $1 AND u.deleted_at IS NULL
         """
         return await self.fetch_one(query, google_id)
 
@@ -157,7 +170,7 @@ class UserRepository(BaseRepository):
                 email_verification_sent_at = NULL,
                 updated_at = $2
             WHERE email_verification_token = $1 AND deleted_at IS NULL
-            RETURNING id, email, first_name, last_name
+            RETURNING id, email
         """
         return await self.fetch_one(query, token, now)
 
@@ -186,7 +199,7 @@ class UserRepository(BaseRepository):
                 password_reset_sent_at = NULL,
                 updated_at = $3
             WHERE password_reset_token = $1 AND deleted_at IS NULL
-            RETURNING id, email, first_name, last_name
+            RETURNING id, email
         """
         return await self.fetch_one(query, token, password_hash, now)
 
@@ -206,12 +219,24 @@ class UserRepository(BaseRepository):
     ) -> bool:
         """Link Google account to existing user."""
         now = datetime.utcnow()
+        # Update users table
         query = """
             UPDATE users
-            SET google_id = $2, avatar_url = COALESCE($3, avatar_url), updated_at = $4
+            SET google_id = $2, updated_at = $3
             WHERE id = $1 AND deleted_at IS NULL
         """
-        result = await self.execute(query, user_id, google_id, avatar_url, now)
+        result = await self.execute(query, user_id, google_id, now)
+
+        # Update avatar_url in user_profiles if provided
+        if avatar_url:
+            profile_query = """
+                INSERT INTO user_profiles (user_id, avatar_url, created_at, updated_at)
+                VALUES ($1, $2, $3, $3)
+                ON CONFLICT (user_id) DO UPDATE
+                SET avatar_url = $2, updated_at = $3
+            """
+            await self.execute(profile_query, user_id, avatar_url, now)
+
         return "UPDATE 1" in result
 
     # Refresh Token methods
