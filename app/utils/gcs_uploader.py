@@ -9,7 +9,6 @@ from typing import Optional
 from datetime import datetime
 
 from google.cloud import storage
-from google.api_core import retry
 from google.api_core.exceptions import GoogleAPIError
 
 logger = logging.getLogger(__name__)
@@ -105,7 +104,6 @@ class GCSUploader:
             blob.upload_from_string(
                 file_content,
                 content_type=content_type,
-                retry=retry.DEFAULT_RETRY,
             )
 
             # Make blob publicly accessible if requested
