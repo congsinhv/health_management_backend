@@ -6,7 +6,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from google.cloud import storage
 from google.api_core import retry
@@ -135,7 +135,7 @@ class GCSDownloader:
 
     def download_directory(
         self, blob_prefix: str, local_dir: str, force: bool = False
-    ) -> tuple[int, int]:
+    ) -> Tuple[int, int]:
         """
         Download all files with a given prefix from GCS.
 

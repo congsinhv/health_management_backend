@@ -6,7 +6,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
 import requests
@@ -295,7 +295,7 @@ class QAService:
             logger.error(f"Error loading model: {e}")
             raise RuntimeError(f"Failed to load Q&A model: {e}") from e
 
-    def _load_data(self) -> tuple[pd.DataFrame, any]:
+    def _load_data(self) -> Tuple[pd.DataFrame, Any]:
         """
         Load and preprocess dataset.
 
@@ -429,6 +429,99 @@ class QAService:
         except (KeyError, IndexError) as e:
             logger.error(f"Unexpected API response format: {e}")
             return QAMessages.AI_RESPONSE_ERROR
+
+    def generate_conversation_title(
+        self, question: str, answer_summary: str = ""
+    ) -> str:
+        """
+        Generate conversation title from first Q&A pair using OpenRouter AI.
+
+        Args:
+            question: The user's first question
+            answer_summary: Summary of the answer (optional)
+
+        Returns:
+            Generated title (max 60 characters)
+        """
+        if not self.openrouter_api_key:
+            logger.warning("OpenRouter API key not configured for title generation")
+            # Fallback to using first few words of question
+            return question[:57] + "..." if len(question) > 60 else question
+
+        headers = {
+            "Authorization": f"Bearer {self.openrouter_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        # Build prompt for title generation
+        if answer_summary:
+            prompt = f"""Tạo tiêu đề ngắn gọn (tối đa 60 ký tự) cho cuộc hội thoại này:
+
+Câu hỏi: {question}
+Tóm tắt câu trả lời: {answer_summary}
+
+Yêu cầu:
+- Ngắn gọn, súc tích, dễ hiểu
+- Bằng tiếng Việt
+- Không dùng dấu ngoặc kép hay định dạng đặc biệt
+- Nắm bắt chủ đề chính
+- Dưới 60 ký tự
+
+Tiêu đề:"""
+        else:
+            prompt = f"""Tạo tiêu đề ngắn gọn (tối đa 60 ký tự) cho câu hỏi này:
+
+Câu hỏi: {question}
+
+Yêu cầu:
+- Ngắn gọn, súc tích, dễ hiểu
+- Bằng tiếng Việt
+- Không dùng dấu ngoặc kép hay định dạng đặc biệt
+- Nắm bắt chủ đề chính
+- Dưới 60 ký tự
+
+Tiêu đề:"""
+
+        payload = {
+            "model": self.openrouter_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Bạn là chuyên gia tạo tiêu đề cho cuộc hội thoại y tế. Hãy tạo tiêu đề ngắn gọn, súc tích, dễ hiểu.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.3,  # Lower temperature for more consistent titles
+            "max_tokens": 100,  # Shorter limit for titles
+        }
+
+        try:
+            response = requests.post(
+                self.openrouter_url,
+                headers=headers,
+                json=payload,
+                timeout=self.openrouter_timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+            title = data["choices"][0]["message"]["content"].strip()
+
+            # Clean up and limit length
+            title = title.strip('"\n\r\t ')
+            title = title[:57] + "..." if len(title) > 60 else title
+
+            return title
+
+        except requests.exceptions.Timeout:
+            logger.error("OpenRouter API timeout for title generation")
+            # Fallback to using first few words of question
+            return question[:57] + "..." if len(question) > 60 else question
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error calling OpenRouter API for title generation: {e}")
+            return question[:57] + "..." if len(question) > 60 else question
+        except (KeyError, IndexError) as e:
+            logger.error(f"Unexpected API response format for title generation: {e}")
+            return question[:57] + "..." if len(question) > 60 else question
 
     def ask_question(
         self,

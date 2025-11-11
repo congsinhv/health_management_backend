@@ -2,7 +2,7 @@
 Utility functions for the application.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Any, Dict
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -15,12 +15,33 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
+    import bcrypt
+
+    # Ensure password fits bcrypt's 72-byte limit
+    password_bytes = password.encode("utf-8")
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]
+
+    # Generate salt and hash
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    import bcrypt
+
+    try:
+        # Ensure password fits bcrypt's 72-byte limit
+        password_bytes = plain_password.encode("utf-8")
+        if len(password_bytes) > 72:
+            password_bytes = password_bytes[:72]
+
+        hashed_bytes = hashed_password.encode("utf-8")
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
+    except Exception:
+        return False
 
 
 def create_access_token(
@@ -29,9 +50,9 @@ def create_access_token(
     """Create a JWT access token."""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.access_token_expire_minutes
         )
 
@@ -59,9 +80,11 @@ def create_refresh_token(
     """Create a JWT refresh token."""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=settings.refresh_token_expire_days
+        )
 
     to_encode.update({"exp": expire, "type": "refresh"})
     encoded_jwt = jwt.encode(
@@ -105,7 +128,7 @@ def create_verification_token(
         else settings.password_reset_expire_minutes
     )
 
-    expire = datetime.utcnow() + timedelta(minutes=expire_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expire_minutes)
     to_encode = {
         "sub": email,
         "exp": expire,

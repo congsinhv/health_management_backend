@@ -2,7 +2,7 @@
 Enhanced Authentication API endpoints.
 """
 
-from typing import Annotated
+from typing_extensions import Annotated
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import RedirectResponse

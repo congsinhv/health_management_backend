@@ -26,7 +26,10 @@ class UserCreate(UserBase):
     """Schema for creating a new user."""
 
     password: Optional[str] = Field(
-        None, min_length=8, max_length=128, description="User password"
+        None,
+        min_length=8,
+        max_length=72,
+        description="User password (max 72 characters for bcrypt compatibility)",
     )
     google_id: Optional[str] = Field(None, description="Google OAuth ID")
     # Profile fields for initial creation
@@ -82,6 +85,9 @@ class UserInDB(UserResponse):
     """Schema for user data stored in database."""
 
     password_hash: Optional[str] = Field(None, description="Hashed password")
+    is_superuser: bool = Field(
+        default=False, description="User has superuser privileges"
+    )
     google_id: Optional[str] = Field(None, description="Google OAuth ID")
     email_verification_token: Optional[str] = Field(
         None, description="Email verification token"

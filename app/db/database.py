@@ -4,7 +4,7 @@ Database connection pool setup using asyncpg.
 
 import asyncpg
 import logging
-from typing import Optional
+from typing import Optional, List
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class BaseRepository:
         async with self.pool.acquire() as connection:
             return await connection.fetchrow(query, *args)
 
-    async def fetch_many(self, query: str, *args) -> list[asyncpg.Record]:
+    async def fetch_many(self, query: str, *args) -> List[asyncpg.Record]:
         """Execute query and return multiple records."""
         async with self.pool.acquire() as connection:
             return await connection.fetch(query, *args)
@@ -76,7 +76,7 @@ class BaseRepository:
         async with self.pool.acquire() as connection:
             return await connection.execute(query, *args)
 
-    async def execute_transaction(self, queries: list[tuple[str, tuple]]) -> None:
+    async def execute_transaction(self, queries: List[tuple]) -> None:
         """Execute multiple queries in a transaction."""
         async with self.pool.acquire() as connection:
             async with connection.transaction():

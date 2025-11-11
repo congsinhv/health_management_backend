@@ -3,7 +3,12 @@ Authentication dependencies for protected routes.
 """
 
 import asyncpg
-from typing import Optional, Annotated
+from typing import Optional
+
+try:
+    from typing import Annotated
+except ImportError:
+    from typing_extensions import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import settings
@@ -75,6 +80,31 @@ async def get_current_active_user(
     current_user: Annotated[UserInDB, Depends(get_current_user)]
 ) -> UserInDB:
     """Get current active user."""
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Inactive user",
+        )
+    return current_user
+
+
+async def _check_superuser_permissions(current_user: UserInDB) -> UserInDB:
+    """Check if user has superuser permissions."""
+    # First check if user is active
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Inactive user",
+        )
+
+    # Check both email and is_superuser field for robustness
+    if current_user.email != "admin@health.com" and not getattr(
+        current_user, "is_superuser", False
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user doesn't have enough privileges",
+        )
     return current_user
 
 
@@ -82,14 +112,7 @@ async def get_current_active_superuser(
     current_user: Annotated[UserInDB, Depends(get_current_active_user)]
 ) -> UserInDB:
     """Get current active superuser."""
-    # For now, we'll implement a simple superuser check based on email
-    # In a real application, you might have a separate is_superuser field
-    if current_user.email != "admin@health.com":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="The user doesn't have enough privileges",
-        )
-    return current_user
+    return await _check_superuser_permissions(current_user)
 
 
 # Optional user dependency for routes that work with or without authentication

@@ -4,7 +4,7 @@ User profile database operations using raw SQL queries.
 
 import asyncpg
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from app.db.database import BaseRepository
 from app.schemas.user_profile import UserProfileCreate, UserProfileUpdate
@@ -17,7 +17,7 @@ class UserProfileRepository(BaseRepository):
         self, profile_data: UserProfileCreate
     ) -> Optional[asyncpg.Record]:
         """Create a new user profile."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             INSERT INTO user_profiles (
                 user_id, first_name, last_name, avatar_url, gender, height_cm,
@@ -59,7 +59,7 @@ class UserProfileRepository(BaseRepository):
         self, user_id: int, profile_data: UserProfileUpdate
     ) -> Optional[asyncpg.Record]:
         """Update user profile information."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE user_profiles
             SET first_name = COALESCE($2, first_name),

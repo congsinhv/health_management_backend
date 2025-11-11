@@ -12,6 +12,11 @@ from app.api.auth import router as auth_router
 from app.api.qa import router as qa_router
 from app.api.user import router as user_router
 from app.api.upload import router as upload_router
+from app.api.conversation import router as conversation_router
+from app.api.message import router as message_router
+from app.api.performance import router as performance_router
+from app.api.branching import router as branching_router
+from app.api.version import router as version_router
 from app.config import settings
 from app.db.database import database
 from app.services.qa_service import QAService
@@ -82,6 +87,25 @@ app.include_router(
 app.include_router(qa_router, prefix=f"{settings.api_v1_prefix}/qa", tags=["Q&A"])
 app.include_router(
     upload_router, prefix=f"{settings.api_v1_prefix}/upload", tags=["upload"]
+)
+app.include_router(
+    conversation_router,
+    prefix=f"{settings.api_v1_prefix}/conversations",
+    tags=["conversations"],
+)
+app.include_router(
+    message_router, prefix=f"{settings.api_v1_prefix}/conversations", tags=["messages"]
+)
+app.include_router(
+    performance_router, prefix=f"{settings.api_v1_prefix}", tags=["performance"]
+)
+app.include_router(
+    branching_router,
+    prefix=f"{settings.api_v1_prefix}/conversations",
+    tags=["branching"],
+)
+app.include_router(
+    version_router, prefix=f"{settings.api_v1_prefix}/conversations", tags=["versions"]
 )
 
 

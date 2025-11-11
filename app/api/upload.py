@@ -3,7 +3,12 @@ File upload API endpoints.
 """
 
 import logging
-from typing import Annotated, Optional
+from typing import Optional, Tuple
+
+try:
+    from typing import Annotated
+except ImportError:
+    from typing_extensions import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from app.auth.dependencies import get_current_active_user
 from app.schemas.user import UserInDB
@@ -50,7 +55,7 @@ def get_gcs_uploader() -> GCSUploader:
     )
 
 
-def validate_image_file(file: UploadFile) -> tuple[str, bytes]:
+def validate_image_file(file: UploadFile) -> Tuple[str, bytes]:
     """
     Validate and read image file.
 
@@ -126,12 +131,15 @@ def validate_image_file(file: UploadFile) -> tuple[str, bytes]:
     return content_type, file_content
 
 
-@router.post("/image", response_model=UploadImageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/image", response_model=UploadImageResponse, status_code=status.HTTP_201_CREATED
+)
 async def upload_image(
     current_user: Annotated[UserInDB, Depends(get_current_active_user)],
     file: UploadFile = File(..., description="Image file to upload"),
     folder: Optional[str] = Form(
-        None, description="Optional folder path in the bucket (e.g., 'avatars', 'profile-pictures')"
+        None,
+        description="Optional folder path in the bucket (e.g., 'avatars', 'profile-pictures')",
     ),
     uploader: GCSUploader = Depends(get_gcs_uploader),
 ):
@@ -184,9 +192,10 @@ async def upload_image(
         # Re-raise HTTP exceptions (validation errors)
         raise
     except Exception as e:
-        logger.error(f"Error uploading image for user {current_user.id}: {e}", exc_info=True)
+        logger.error(
+            f"Error uploading image for user {current_user.id}: {e}", exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to upload image",
         )
-

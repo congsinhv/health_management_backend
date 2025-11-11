@@ -4,7 +4,7 @@ User database operations using raw SQL queries.
 
 import asyncpg
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.db.database import BaseRepository
 from app.schemas.user import UserCreate, UserUpdate
 
@@ -16,7 +16,7 @@ class UserRepository(BaseRepository):
         self, user_data: UserCreate, password_hash: Optional[str] = None
     ) -> Optional[asyncpg.Record]:
         """Create a new user."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             INSERT INTO users (
                 email, password_hash, is_active, 
@@ -94,7 +94,7 @@ class UserRepository(BaseRepository):
         self, user_id: int, user_data: UserUpdate
     ) -> Optional[asyncpg.Record]:
         """Update user information."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE users
             SET email = COALESCE($2, email),
@@ -113,7 +113,7 @@ class UserRepository(BaseRepository):
 
     async def delete_user(self, user_id: int) -> Optional[asyncpg.Record]:
         """Soft delete user."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE users
             SET deleted_at = $2, updated_at = $2
@@ -149,7 +149,7 @@ class UserRepository(BaseRepository):
 
     async def set_email_verification_token(self, user_id: int, token: str) -> bool:
         """Set email verification token for user."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE users
             SET email_verification_token = $2,
@@ -162,7 +162,7 @@ class UserRepository(BaseRepository):
 
     async def verify_email(self, token: str) -> Optional[asyncpg.Record]:
         """Verify email using token."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE users
             SET email_verified = TRUE,
@@ -176,7 +176,7 @@ class UserRepository(BaseRepository):
 
     async def set_password_reset_token(self, email: str, token: str) -> bool:
         """Set password reset token for user."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE users
             SET password_reset_token = $2,
@@ -191,7 +191,7 @@ class UserRepository(BaseRepository):
         self, token: str, password_hash: str
     ) -> Optional[asyncpg.Record]:
         """Reset password using token."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE users
             SET password_hash = $2,
@@ -205,7 +205,7 @@ class UserRepository(BaseRepository):
 
     async def update_password(self, user_id: int, password_hash: str) -> bool:
         """Update user password."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE users
             SET password_hash = $2, updated_at = $3
@@ -218,7 +218,7 @@ class UserRepository(BaseRepository):
         self, user_id: int, google_id: str, avatar_url: Optional[str] = None
     ) -> bool:
         """Link Google account to existing user."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         # Update users table
         query = """
             UPDATE users
@@ -265,7 +265,7 @@ class UserRepository(BaseRepository):
 
     async def revoke_refresh_token(self, token_hash: str) -> bool:
         """Revoke a refresh token by marking it as revoked."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE refresh_tokens
             SET revoked = TRUE, updated_at = $2
@@ -276,7 +276,7 @@ class UserRepository(BaseRepository):
 
     async def revoke_all_user_refresh_tokens(self, user_id: int) -> bool:
         """Revoke all refresh tokens for a user."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         query = """
             UPDATE refresh_tokens
             SET revoked = TRUE, updated_at = $2

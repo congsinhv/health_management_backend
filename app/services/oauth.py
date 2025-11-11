@@ -3,7 +3,7 @@ OAuth service for handling Google OAuth authentication.
 """
 
 import secrets
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from google.auth.transport import requests
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
@@ -29,7 +29,7 @@ class GoogleOAuthService:
             ]
         )
 
-    def get_authorization_url(self, state: Optional[str] = None) -> tuple[str, str]:
+    def get_authorization_url(self, state: Optional[str] = None) -> Tuple[str, str]:
         """Generate Google OAuth authorization URL."""
         if not self.is_configured():
             raise ValueError("Google OAuth is not configured")

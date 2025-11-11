@@ -34,6 +34,7 @@ from app.helpers import (
 )
 from app.config import settings
 from app.services.email import email_service
+from fastapi import HTTPException, status
 
 
 class UserService:
@@ -43,49 +44,61 @@ class UserService:
         self.user_repo = UserRepository(db_pool)
         self.profile_repo = UserProfileRepository(db_pool)
 
-    def _transform_user_record(self, record: asyncpg.Record) -> Dict[str, Any]:
-        """Transform database record to UserResponse format."""
+    def _transform_user_record(self, record) -> Dict[str, Any]:
+        """Transform database record or UserInDB object to UserResponse format."""
+        # Handle both dict-like records (asyncpg.Record) and UserInDB Pydantic objects
+        if hasattr(record, "dict") or hasattr(record, "model_dump"):
+            # It's a Pydantic model (UserInDB or similar)
+            if hasattr(record, "model_dump"):
+                source_data = record.model_dump()
+            else:
+                source_data = record.dict()
+        else:
+            # It's a database record (asyncpg.Record or similar)
+            source_data = record
+
         user_data = {
-            "id": record["id"],
-            "email": record["email"],
-            "is_active": record["is_active"],
-            "provider": record["provider"],
-            "email_verified": record["email_verified"],
-            "created_at": record["created_at"],
-            "updated_at": record["updated_at"],
+            "id": source_data["id"],
+            "email": source_data["email"],
+            "is_active": source_data["is_active"],
+            "provider": source_data["provider"],
+            "email_verified": source_data["email_verified"],
+            "created_at": source_data["created_at"],
+            "updated_at": source_data["updated_at"],
         }
 
         # Include password_hash for UserInDB if present
-        if "password_hash" in record:
-            user_data["password_hash"] = record["password_hash"]
+        if "password_hash" in source_data:
+            user_data["password_hash"] = source_data["password_hash"]
 
         # Include other auth fields if present
         for field in [
+            "is_superuser",
             "google_id",
             "email_verification_token",
             "email_verification_sent_at",
             "password_reset_token",
             "password_reset_sent_at",
         ]:
-            if field in record:
-                user_data[field] = record[field]
+            if field in source_data:
+                user_data[field] = source_data[field]
 
         # Build profile if profile data exists
-        if record.get("profile_id") is not None:
+        if source_data.get("profile_id") is not None:
             profile_data = {
-                "id": record["profile_id"],
-                "user_id": record["id"],
-                "first_name": record.get("first_name"),
-                "last_name": record.get("last_name"),
-                "avatar_url": record.get("avatar_url"),
-                "gender": record.get("gender"),
-                "height_cm": record.get("height_cm"),
-                "weight_kg": record.get("weight_kg"),
-                "date_of_birth": record.get("date_of_birth"),
-                "family_medical_history": record.get("family_medical_history"),
-                "goal": record.get("goal"),
-                "created_at": record.get("profile_created_at"),
-                "updated_at": record.get("profile_updated_at"),
+                "id": source_data["profile_id"],
+                "user_id": source_data["id"],
+                "first_name": source_data.get("first_name"),
+                "last_name": source_data.get("last_name"),
+                "avatar_url": source_data.get("avatar_url"),
+                "gender": source_data.get("gender"),
+                "height_cm": source_data.get("height_cm"),
+                "weight_kg": source_data.get("weight_kg"),
+                "date_of_birth": source_data.get("date_of_birth"),
+                "family_medical_history": source_data.get("family_medical_history"),
+                "goal": source_data.get("goal"),
+                "created_at": source_data.get("profile_created_at"),
+                "updated_at": source_data.get("profile_updated_at"),
             }
             user_data["profile"] = UserProfileResponse(**profile_data)
         else:
@@ -100,7 +113,10 @@ class UserService:
         # Check if user already exists
         existing_user = await self.user_repo.get_user_by_email(user_data.email)
         if existing_user:
-            raise ValueError("User with this email already exists")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
 
         # For OAuth users, check if Google ID already exists
         if user_data.google_id:
@@ -147,11 +163,13 @@ class UserService:
 
         return UserResponse(**self._transform_user_record(user_record))
 
-    async def get_user_by_id(self, user_id: int) -> Optional[UserResponse]:
+    async def get_user_by_id(self, user_id: int) -> UserResponse:
         """Get user by ID."""
         user_record = await self.user_repo.get_user_by_id(user_id)
         if not user_record:
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
 
         return UserResponse(**self._transform_user_record(user_record))
 
@@ -171,14 +189,14 @@ class UserService:
             for record in user_records
         ]
 
-    async def update_user(
-        self, user_id: int, user_data: UserUpdate
-    ) -> Optional[UserResponse]:
+    async def update_user(self, user_id: int, user_data: UserUpdate) -> UserResponse:
         """Update user information and profile."""
         # Check if user exists
         existing_user = await self.user_repo.get_user_by_id(user_id)
         if not existing_user:
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
 
         # Check if email is being changed and if it's already taken
         if user_data.email and user_data.email != existing_user["email"]:
@@ -207,7 +225,10 @@ class UserService:
         # Update user (only email and is_active are used by UserRepository)
         user_record = await self.user_repo.update_user(user_id, user_data)
         if not user_record:
-            return None
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update user",
+            )
 
         # Update or create profile if profile fields are provided
         if has_profile_updates:
@@ -233,6 +254,13 @@ class UserService:
 
     async def delete_user(self, user_id: int) -> bool:
         """Delete user (soft delete)."""
+        # Check if user exists
+        existing_user = await self.user_repo.get_user_by_id(user_id)
+        if not existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+
         result = await self.user_repo.delete_user(user_id)
         return result is not None
 
@@ -304,6 +332,11 @@ class UserService:
             # Don't reveal if email exists or not
             return True
 
+        # Check if user is active
+        if not user.get("is_active", True):
+            # Don't reveal if user is inactive or not
+            return True
+
         # Generate reset token
         reset_token = create_verification_token(reset_request.email, "password_reset")
 
@@ -337,7 +370,10 @@ class UserService:
         # Get current user
         user = await self.get_user_by_email_with_password(user_id)
         if not user or not user.password_hash:
-            raise ValueError("User not found or has no password")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found or has no password",
+            )
 
         # Verify old password
         if not verify_password(old_password, user.password_hash):
@@ -423,7 +459,7 @@ class UserService:
 
         # Store refresh token in database
         token_hash = hash_refresh_token(refresh_token)
-        expires_at = datetime.utcnow() + refresh_token_expires
+        expires_at = datetime.now(timezone.utc) + refresh_token_expires
         await self.user_repo.store_refresh_token(user.id, token_hash, expires_at)
 
         return TokenPair(access_token=access_token, refresh_token=refresh_token)
@@ -451,7 +487,7 @@ class UserService:
 
         # Store refresh token in database
         token_hash = hash_refresh_token(refresh_token)
-        expires_at = datetime.utcnow() + refresh_token_expires
+        expires_at = datetime.now(timezone.utc) + refresh_token_expires
         await self.user_repo.store_refresh_token(user.id, token_hash, expires_at)
 
         return TokenPair(access_token=access_token, refresh_token=refresh_token)
@@ -472,14 +508,14 @@ class UserService:
 
         # Check if token is expired (handle timezone-aware comparison)
         expires_at = token_record["expires_at"]
-        if isinstance(expires_at, datetime) and expires_at.tzinfo is not None:
-            # Database returns timezone-aware datetime
-            if datetime.now(timezone.utc) > expires_at:
-                raise ValueError("Refresh token has expired")
-        else:
-            # Fallback for timezone-naive datetime
-            if datetime.utcnow() > expires_at:
-                raise ValueError("Refresh token has expired")
+        if not isinstance(expires_at, datetime):
+            raise ValueError("Invalid token expiry data")
+
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        if datetime.now(timezone.utc) > expires_at:
+            raise ValueError("Refresh token has expired")
 
         # Get user
         user_id = payload.get("user_id")
@@ -509,7 +545,7 @@ class UserService:
 
         # Store new refresh token in database
         new_token_hash = hash_refresh_token(new_refresh_token)
-        expires_at = datetime.utcnow() + refresh_token_expires
+        expires_at = datetime.now(timezone.utc) + refresh_token_expires
         await self.user_repo.store_refresh_token(user.id, new_token_hash, expires_at)
 
         return TokenPair(access_token=access_token, refresh_token=new_refresh_token)

@@ -2,13 +2,20 @@
 Configuration settings for the Health Management application.
 """
 
-from typing import Optional
-from pydantic import Field, model_validator
+from typing import Optional, List
+from pydantic import Field, model_validator, ConfigDict
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        protected_namespaces=("settings_",),
+    )
 
     # Application settings
     app_name: str = "Health Management API"
@@ -54,12 +61,12 @@ class Settings(BaseSettings):
 
     # API settings
     api_v1_prefix: str = "/api/v1"
-    allowed_hosts: list[str] = ["*"]
+    allowed_hosts: List[str] = ["*"]
 
     custom_domain: Optional[str] = Field(None, description="Custom domain")
 
     # CORS settings
-    cors_origins: list[str] = Field(
+    cors_origins: List[str] = Field(
         default_factory=lambda: [
             "http://localhost:3000",
             "http://localhost:3001",
@@ -83,8 +90,8 @@ class Settings(BaseSettings):
         return self
 
     cors_allow_credentials: bool = True
-    cors_allow_methods: list[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
-    cors_allow_headers: list[str] = [
+    cors_allow_methods: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+    cors_allow_headers: List[str] = [
         "Accept",
         "Accept-Language",
         "Content-Language",
@@ -187,10 +194,59 @@ class Settings(BaseSettings):
         default=60, ge=1, description="Rate limit time window in seconds"
     )
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    # Conversation Features settings
+    # ========================================
+    conversation_max_pinned: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum number of pinned conversations per user",
+    )
+    conversation_auto_title: bool = Field(
+        default=True, description="Auto-generate titles from first Q&A"
+    )
+    conversation_title_max_length: int = Field(
+        default=60,
+        ge=10,
+        le=255,
+        description="Maximum characters for auto-generated title",
+    )
+
+    # Search Configuration
+    search_results_per_page: int = Field(
+        default=20, ge=1, le=100, description="Number of search results per page"
+    )
+    search_max_results: int = Field(
+        default=100, ge=1, le=1000, description="Maximum search results to return"
+    )
+    search_cache_ttl: int = Field(
+        default=180, ge=0, description="Search cache TTL in seconds"
+    )
+
+    # Performance settings
+    enable_redis_cache: bool = Field(
+        default=False, description="Enable Redis caching for performance"
+    )
+    redis_url: str = Field(
+        default="redis://localhost:6379/0", description="Redis connection URL"
+    )
+    cache_conversation_list_ttl: int = Field(
+        default=300, ge=0, description="Cache TTL for conversation list (seconds)"
+    )
+    cache_conversation_detail_ttl: int = Field(
+        default=600, ge=0, description="Cache TTL for conversation detail (seconds)"
+    )
+    cache_search_results_ttl: int = Field(
+        default=180, ge=0, description="Cache TTL for search results (seconds)"
+    )
+
+    # Version History settings
+    message_version_limit: int = Field(
+        default=50, ge=1, le=100, description="Maximum versions per message"
+    )
+    auto_version_on_edit: bool = Field(
+        default=True, description="Track edits automatically as versions"
+    )
 
 
 # Global settings instance
