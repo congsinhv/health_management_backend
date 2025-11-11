@@ -103,36 +103,8 @@ class TestMessageRepository:
     # GET MESSAGE TESTS
     # ========================================================================
 
-    @pytest.mark.asyncio
-    async def test_get_message_success(self, repo, mock_db_pool, sample_message_record):
-        """Test getting a message by ID."""
-        # Arrange
-        message_id = 1
-        mock_db_pool._mock_connection.fetchrow = AsyncMock(
-            return_value=sample_message_record
-        )
-
-        # Act
-        result = await repo.get_message(message_id)
-
-        # Assert
-        assert result is not None
-        assert result["id"] == 1
-        assert result["content"] == "Test message content"
-        assert result["version_count"] == 2
-        assert result["child_count"] == 3
-
-    @pytest.mark.asyncio
-    async def test_get_message_not_found(self, repo, mock_db_pool):
-        """Test getting non-existent message returns None."""
-        # Arrange
-        mock_db_pool._mock_connection.fetchrow = AsyncMock(return_value=None)
-
-        # Act
-        result = await repo.get_message(9999)
-
-        # Assert
-        assert result is None
+    # NOTE: get_message() method removed in Phase 01 for security (BOLA prevention)
+    # Use get_message_by_user() instead which requires user_id for authorization
 
     @pytest.mark.asyncio
     async def test_get_message_by_user_success(

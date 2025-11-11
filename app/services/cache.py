@@ -4,7 +4,7 @@ Redis caching service for performance optimization.
 
 import json
 import logging
-from typing import Optional, Any, Union, List
+from typing import Optional, Any, Union, List, TypeVar, Generic, Dict
 import pickle
 from datetime import datetime, timedelta
 
@@ -18,6 +18,32 @@ except ImportError:
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Generic type for cache values
+T = TypeVar("T")
+
+
+class TypedCache(Generic[T]):
+    """Typed cache interface for better type safety."""
+
+    def __init__(self, cache_service: "CacheService", key_prefix: str):
+        self.cache_service = cache_service
+        self.key_prefix = key_prefix
+
+    def get(self, key: str, default: Optional[T] = None) -> Optional[T]:
+        """Get typed value from cache."""
+        full_key = f"{self.key_prefix}:{key}"
+        return self.cache_service.get(full_key, default)
+
+    def set(self, key: str, value: T, ttl: Optional[int] = None) -> bool:
+        """Set typed value in cache."""
+        full_key = f"{self.key_prefix}:{key}"
+        return self.cache_service.set(full_key, value, ttl)
+
+    def delete(self, key: str) -> bool:
+        """Delete key from cache."""
+        full_key = f"{self.key_prefix}:{key}"
+        return self.cache_service.delete(full_key)
 
 
 class CacheService:
@@ -49,8 +75,17 @@ class CacheService:
             else:
                 logger.info("Redis caching disabled in settings")
 
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get value from cache."""
+    def get(self, key: str, default: Optional[T] = None) -> Optional[T]:
+        """
+        Get typed value from cache.
+
+        Args:
+            key: Cache key
+            default: Default value if key not found
+
+        Returns:
+            Cached value or default
+        """
         if not self.enabled or not self.redis_client:
             return default
 
@@ -71,19 +106,35 @@ class CacheService:
             logger.error(f"Cache get error for key {key}: {e}")
             return default
 
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
-        """Set value in cache with optional TTL."""
+    def set(self, key: str, value: T, ttl: Optional[int] = None) -> bool:
+        """
+        Set typed value in cache with optional TTL.
+
+        Args:
+            key: Cache key
+            value: Value to cache (typed)
+            ttl: Time to live in seconds
+
+        Returns:
+            True if successful, False otherwise
+        """
         if not self.enabled or not self.redis_client:
             return False
 
         try:
-            # Serialize value
+            # Serialize value based on type
             if isinstance(value, (dict, list, tuple)) or value is None:
+                # JSON-serializable types
                 serialized = json.dumps(value, default=str)
+            elif isinstance(value, (str, int, float, bool)):
+                # Simple types - JSON serialize for consistency
+                serialized = json.dumps(value)
             else:
+                # Complex objects - use pickle
                 try:
                     serialized = pickle.dumps(value)
                 except (pickle.PickleError, TypeError):
+                    # Fallback to string representation
                     serialized = str(value).encode("utf-8")
 
             # Set with TTL
@@ -191,6 +242,34 @@ class CacheService:
         except Exception as e:
             logger.error(f"Error flushing Redis database: {e}")
             return False
+
+    def create_typed_cache(self, key_prefix: str) -> TypedCache[T]:
+        """
+        Create a typed cache instance for better type safety.
+
+        Args:
+            key_prefix: Prefix for cache keys
+
+        Returns:
+            Typed cache instance
+        """
+        return TypedCache(self, key_prefix)
+
+    def get_string_cache(self, key_prefix: str) -> TypedCache[str]:
+        """Create a typed cache for string values."""
+        return self.create_typed_cache(key_prefix)
+
+    def get_dict_cache(self, key_prefix: str) -> TypedCache[Dict]:
+        """Create a typed cache for dictionary values."""
+        return self.create_typed_cache(key_prefix)
+
+    def get_list_cache(self, key_prefix: str) -> TypedCache[List]:
+        """Create a typed cache for list values."""
+        return self.create_typed_cache(key_prefix)
+
+    def get_int_cache(self, key_prefix: str) -> TypedCache[int]:
+        """Create a typed cache for integer values."""
+        return self.create_typed_cache(key_prefix)
 
 
 class ConversationCacheService:

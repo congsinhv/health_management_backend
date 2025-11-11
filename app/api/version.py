@@ -4,6 +4,7 @@ API endpoints for message version comparison and management.
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
+import logging
 
 import asyncpg
 from app.db.database import get_database_pool
@@ -23,6 +24,8 @@ from app.schemas.version import (
     VersionExport,
 )
 from app.schemas.base import StandardResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -49,6 +52,7 @@ async def get_message_versions(
         )
 
     except Exception as e:
+        logger.error(f"Failed to retrieve message versions: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve message versions",
@@ -107,6 +111,7 @@ async def get_version_detail(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Failed to retrieve version detail: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve version detail",
@@ -139,6 +144,7 @@ async def compare_versions(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logger.error(f"Failed to compare versions: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to compare versions",
@@ -166,6 +172,7 @@ async def get_version_timeline(
         )
 
     except Exception as e:
+        logger.error(f"Failed to retrieve version timeline: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve version timeline",
@@ -207,6 +214,7 @@ async def restore_version(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logger.error(f"Failed to restore version: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to restore version",
@@ -240,6 +248,7 @@ async def export_versions(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logger.error(f"Failed to export versions: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to export versions",
@@ -281,6 +290,7 @@ async def delete_version_history(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logger.error(f"Failed to delete version history: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete version history",
@@ -327,6 +337,7 @@ async def get_latest_version(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Failed to retrieve latest version: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve latest version",

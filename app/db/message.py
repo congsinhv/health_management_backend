@@ -41,21 +41,16 @@ class MessageRepository(BaseRepository):
         )
         return result["id"] if result else None
 
-    async def get_message(self, message_id: int) -> Optional[asyncpg.Record]:
-        """Get message by ID."""
+    async def verify_conversation_ownership(
+        self, conversation_id: int, user_id: int
+    ) -> bool:
+        """CRITICAL FIX: Verify user owns the conversation before message operations."""
         query = """
-            SELECT m.*,
-                   c.user_id,
-                   COUNT(v.id) as version_count,
-                   COUNT(child.id) as child_count
-            FROM qa_messages m
-            JOIN qa_conversations c ON m.conversation_id = c.id
-            LEFT JOIN qa_message_versions v ON m.id = v.message_id
-            LEFT JOIN qa_messages child ON m.id = child.parent_message_id AND child.deleted_at IS NULL
-            WHERE m.id = $1 AND m.deleted_at IS NULL AND c.deleted_at IS NULL
-            GROUP BY m.id, c.user_id
+            SELECT id FROM qa_conversations
+            WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
         """
-        return await self.fetch_one(query, message_id)
+        result = await self.fetch_one(query, conversation_id, user_id)
+        return result is not None
 
     async def get_message_by_user(
         self, message_id: int, user_id: int
@@ -83,10 +78,12 @@ class MessageRepository(BaseRepository):
         order_by: str = "created_at",
     ) -> List[asyncpg.Record]:
         """Get messages for a conversation with pagination."""
-        # Validate order_by
-        valid_order_fields = ["created_at", "updated_at"]
-        if order_by not in valid_order_fields:
+        # CRITICAL FIX: Safe field mapping to prevent SQL injection
+        safe_order_fields = {"created_at": "m.created_at", "updated_at": "m.updated_at"}
+        if order_by not in safe_order_fields:
             order_by = "created_at"
+
+        safe_order_field = safe_order_fields[order_by]
 
         query = f"""
             SELECT m.*,
@@ -99,7 +96,7 @@ class MessageRepository(BaseRepository):
             WHERE m.conversation_id = $1 AND c.user_id = $2
                 AND m.deleted_at IS NULL AND c.deleted_at IS NULL
             GROUP BY m.id
-            ORDER BY m.{order_by} ASC
+            ORDER BY {safe_order_field} ASC
             LIMIT $3 OFFSET $4
         """
         return await self.fetch_many(query, conversation_id, user_id, limit, skip)
@@ -394,11 +391,22 @@ class MessageRepository(BaseRepository):
             params.append(cursor_data.get(order_by))
             param_index += 1
 
-        # Build ORDER BY
-        if direction == "backward":
-            order_clause = f"m.{order_by} DESC"
-        else:
-            order_clause = f"m.{order_by} ASC"
+        # CRITICAL FIX: Safe ORDER BY mapping to prevent SQL injection
+        safe_message_orders = {
+            "backward_created_at": "m.created_at DESC",
+            "backward_updated_at": "m.updated_at DESC",
+            "forward_created_at": "m.created_at ASC",
+            "forward_updated_at": "m.updated_at ASC",
+        }
+
+        # Validate order_by field
+        if order_by not in ["created_at", "updated_at"]:
+            order_by = "created_at"
+
+        order_key = f"{direction}_{order_by}"
+        order_clause = safe_message_orders.get(
+            order_key, safe_message_orders["forward_created_at"]
+        )
 
         # Build query
         query = f"""

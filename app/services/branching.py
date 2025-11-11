@@ -302,21 +302,31 @@ class BranchingService:
                 conversation_id, user_id
             )
 
-            # Count messages at each level
+            # O(n) OPTIMIZATION: Build parent-child relationships and depth in one pass
             level_counts = {}
             parent_children = {}
             id_to_parent: Dict[int, Optional[int]] = {}
+            message_depths: Dict[int, int] = {}
 
+            # Build lookup maps
+            msg_lookup = {msg["id"]: msg for msg in messages}
+
+            # Calculate depths efficiently using memoization (O(n) instead of O(n²))
             for msg in messages:
-                level = len(self._get_ancestors(msg["id"], messages))
-                level_counts[level] = level_counts.get(level, 0) + 1
-
                 parent_id = msg.get("parent_message_id")
                 id_to_parent[msg["id"]] = parent_id
+
+                # Count children
                 if parent_id:
                     if parent_id not in parent_children:
                         parent_children[parent_id] = 0
                     parent_children[parent_id] += 1
+
+                # Get depth using memoization to avoid O(n²) complexity
+                depth = self._get_message_depth_memoized(
+                    msg["id"], id_to_parent, message_depths, msg_lookup
+                )
+                level_counts[depth] = level_counts.get(depth, 0) + 1
 
             # Calculate statistics
             total_messages = len(messages)
@@ -355,6 +365,55 @@ class BranchingService:
         except Exception as e:
             logger.error(f"Error getting branch statistics: {e}")
             raise
+
+    def _get_message_depth_memoized(
+        self,
+        message_id: int,
+        id_to_parent: Dict[int, Optional[int]],
+        depth_cache: Dict[int, int],
+        msg_lookup: Dict[int, asyncpg.Record],
+    ) -> int:
+        """
+        O(n) OPTIMIZATION: Get message depth using memoization to avoid O(n²) complexity.
+
+        This method calculates the depth of a message in the conversation tree by
+        recursively traversing parent relationships with memoization, reducing
+        complexity from O(n²) to O(n) for the entire tree.
+
+        Args:
+            message_id: ID of the message
+            id_to_parent: Map of message ID to parent ID
+            depth_cache: Cache for memoizing calculated depths
+            msg_lookup: Lookup map of message ID to message record
+
+        Returns:
+            Depth level of the message (root = 0)
+        """
+        if message_id in depth_cache:
+            return depth_cache[message_id]
+
+        msg = msg_lookup.get(message_id)
+        if not msg:
+            # Message not found, assume depth 0
+            depth_cache[message_id] = 0
+            return 0
+
+        parent_id = msg.get("parent_message_id")
+        if parent_id is None:
+            # Root message
+            depth_cache[message_id] = 0
+            return 0
+
+        # Recursively calculate parent depth with memoization
+        parent_depth = self._get_message_depth_memoized(
+            parent_id, id_to_parent, depth_cache, msg_lookup
+        )
+
+        # Current depth is parent depth + 1
+        current_depth = parent_depth + 1
+        depth_cache[message_id] = current_depth
+
+        return current_depth
 
     def _get_ancestors(
         self, message_id: int, all_messages: List[asyncpg.Record]

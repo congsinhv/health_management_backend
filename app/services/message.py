@@ -54,6 +54,17 @@ class MessageService:
             if len(content) > 5000:
                 raise ValueError("Message content too long")
 
+            # CRITICAL FIX: Validate conversation ownership before creating message
+            conversation_exists = await self.message_repo.verify_conversation_ownership(
+                conversation_id, user_id
+            )
+            if not conversation_exists:
+                logger.error(
+                    f"Security: User {user_id} attempted to add message to conversation {conversation_id} "
+                    f"without ownership"
+                )
+                raise ValueError("Conversation not found or access denied")
+
             # Create message
             message_id = await self.message_repo.create_message(
                 conversation_id=conversation_id,

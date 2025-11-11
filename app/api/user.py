@@ -3,6 +3,7 @@ User API endpoints.
 """
 
 import asyncpg
+import logging
 from typing import List
 
 try:
@@ -22,6 +23,8 @@ from app.schemas.user import (
     Token,
     UserInDB,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -51,6 +54,7 @@ async def create_user(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logger.error(f"Failed to create user: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create user",
@@ -69,6 +73,7 @@ async def get_users(
         users = await user_service.get_users(limit=limit, offset=offset)
         return users
     except Exception as e:
+        logger.error(f"Failed to fetch users: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch users",
@@ -88,6 +93,7 @@ async def get_user(user_id: int, user_service: UserService = Depends(get_user_se
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Failed to fetch user: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch user",
@@ -113,6 +119,7 @@ async def update_user(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Failed to update user: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update user",
@@ -133,6 +140,7 @@ async def delete_user(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Failed to delete user: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete user",
@@ -188,6 +196,7 @@ async def get_user_count(
         count = await user_service.count_users()
         return {"total_users": count}
     except Exception as e:
+        logger.error(f"Failed to get user count: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get user count",

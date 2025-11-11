@@ -4,6 +4,7 @@ Enhanced Authentication API endpoints.
 
 from typing_extensions import Annotated
 import asyncpg
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import RedirectResponse
 from app.services.user import UserService
@@ -23,6 +24,8 @@ from app.schemas.user import (
     GoogleOAuthRequest,
     UserLogin,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -149,6 +152,7 @@ async def resend_email_verification(
         )
         return {"message": "Verification email sent"}
     except Exception as e:
+        logger.error(f"Failed to send verification email: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to send verification email",
@@ -171,6 +175,7 @@ async def request_password_reset(
         # Always return success to avoid email enumeration
         return {"message": "If the email exists, a password reset link has been sent"}
     except Exception as e:
+        logger.error(f"Password reset request failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Password reset request failed",
@@ -247,6 +252,7 @@ async def change_password(
             detail=str(e),
         )
     except Exception as e:
+        logger.error(f"Password change failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Password change failed",
@@ -282,6 +288,7 @@ async def google_login(
             "redirect_url": redirect_url,
         }
     except Exception as e:
+        logger.error(f"Failed to initiate Google OAuth: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to initiate Google OAuth",
@@ -338,13 +345,13 @@ async def google_callback(
             detail=str(e),
         )
     except Exception as e:
+        logger.error(f"OAuth authentication failed: {e}")
         await auth_log_service.log_oauth_login_failed(
             request, provider="google", reason=str(e)
         )
-        print(f"OAuth authentication failed {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OAuth authentication failed {e}",
+            detail="OAuth authentication failed",
         )
 
 
@@ -481,6 +488,7 @@ async def logout(
             detail=str(e),
         )
     except Exception as e:
+        logger.error(f"Failed to logout: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to logout",
@@ -500,6 +508,7 @@ async def logout_all(
         await auth_log_service.log_logout_all(request, current_user.id)
         return {"message": "Logged out from all devices successfully"}
     except Exception as e:
+        logger.error(f"Failed to logout: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to logout",

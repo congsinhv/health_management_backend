@@ -110,8 +110,13 @@ class ConversationRepository(BaseRepository):
         sort_order: str = "desc",
     ) -> List[asyncpg.Record]:
         """Get user conversations with pagination."""
-        # Validate sort_by
-        valid_sort_fields = ["created_at", "updated_at", "title", "message_count"]
+        # CRITICAL FIX: Safe field mapping to prevent SQL injection
+        valid_sort_fields = {
+            "created_at": "c.created_at",
+            "updated_at": "c.updated_at",
+            "title": "c.title",
+            "message_count": "COUNT(m.id)",
+        }
         if sort_by not in valid_sort_fields:
             sort_by = "updated_at"
 
@@ -143,7 +148,7 @@ class ConversationRepository(BaseRepository):
             LEFT JOIN qa_messages m ON c.id = m.conversation_id AND m.deleted_at IS NULL
             WHERE {' AND '.join(where_conditions)}
             GROUP BY c.id
-            ORDER BY c.is_pinned DESC, c.{sort_by} {sort_order.upper()}
+            ORDER BY c.is_pinned DESC, {valid_sort_fields[sort_by]} {sort_order.upper()}
             LIMIT ${param_index} OFFSET ${param_index + 1}
         """
         params.extend([limit, skip])
@@ -245,20 +250,33 @@ class ConversationRepository(BaseRepository):
             params.append(filters["date_to"])
             param_index += 1
 
-        # Build ORDER BY based on sort preference
+        # CRITICAL FIX: Safe ORDER BY mapping to prevent SQL injection
         sort_by = filters.get("sort_by", "relevance")
         sort_order = filters.get("sort_order", "desc")
 
+        # Safe order clause mapping
+        safe_order_clauses = {
+            "relevance_desc": "cs.is_pinned DESC, rank DESC, cs.updated_at DESC",
+            "relevance_asc": "cs.is_pinned DESC, rank ASC, cs.updated_at ASC",
+            "updated_at_desc": "cs.is_pinned DESC, cs.updated_at DESC",
+            "updated_at_asc": "cs.is_pinned DESC, cs.updated_at ASC",
+            "created_at_desc": "cs.is_pinned DESC, cs.created_at DESC",
+            "created_at_asc": "cs.is_pinned DESC, cs.created_at ASC",
+            "title_desc": "cs.is_pinned DESC, cs.title DESC",
+            "title_asc": "cs.is_pinned DESC, cs.title ASC",
+        }
+
+        # Build safe order key
         if sort_by == "relevance":
-            order_clause = "cs.is_pinned DESC, rank DESC, cs.updated_at DESC"
-        elif sort_by == "updated_at":
-            order_clause = f"cs.is_pinned DESC, cs.updated_at {sort_order.upper()}"
-        elif sort_by == "created_at":
-            order_clause = f"cs.is_pinned DESC, cs.created_at {sort_order.upper()}"
-        elif sort_by == "title":
-            order_clause = f"cs.is_pinned DESC, cs.title {sort_order.upper()}"
+            order_key = f"relevance_{sort_order}"
+        elif sort_by in ["updated_at", "created_at", "title"]:
+            order_key = f"{sort_by}_{sort_order}"
         else:
-            order_clause = "cs.is_pinned DESC, rank DESC, cs.updated_at DESC"
+            order_key = "relevance_desc"
+
+        order_clause = safe_order_clauses.get(
+            order_key, safe_order_clauses["relevance_desc"]
+        )
 
         # Search query
         search_query = f"""
@@ -406,13 +424,32 @@ class ConversationRepository(BaseRepository):
         if not include_pinned:
             where_conditions.append("c.is_pinned = FALSE")
 
-        # Build ORDER BY
+        # CRITICAL FIX: Safe ORDER BY mapping for cursor pagination
+        safe_cursor_orders = {
+            "forward_created_at_desc": "c.is_pinned DESC, c.created_at DESC",
+            "forward_created_at_asc": "c.is_pinned DESC, c.created_at ASC",
+            "forward_updated_at_desc": "c.is_pinned DESC, c.updated_at DESC",
+            "forward_updated_at_asc": "c.is_pinned DESC, c.updated_at ASC",
+            "forward_title_desc": "c.is_pinned DESC, c.title DESC",
+            "forward_title_asc": "c.is_pinned DESC, c.title ASC",
+            "backward_created_at_desc": "c.is_pinned DESC, c.created_at ASC",
+            "backward_created_at_asc": "c.is_pinned DESC, c.created_at DESC",
+            "backward_updated_at_desc": "c.is_pinned DESC, c.updated_at ASC",
+            "backward_updated_at_asc": "c.is_pinned DESC, c.updated_at DESC",
+            "backward_title_desc": "c.is_pinned DESC, c.title ASC",
+            "backward_title_asc": "c.is_pinned DESC, c.title DESC",
+        }
+
+        # Build safe order key
         if direction == "forward":
-            order_clause = f"c.is_pinned DESC, c.{sort_by} {sort_order.upper()}"
+            order_key = f"forward_{sort_by}_{sort_order}"
         else:  # backward
-            # Reverse order for backward pagination
             reverse_order = "asc" if sort_order == "desc" else "desc"
-            order_clause = f"c.is_pinned DESC, c.{sort_by} {reverse_order}"
+            order_key = f"backward_{sort_by}_{reverse_order}"
+
+        order_clause = safe_cursor_orders.get(
+            order_key, safe_cursor_orders["forward_updated_at_desc"]
+        )
 
         # Build query
         query = f"""

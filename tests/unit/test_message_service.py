@@ -55,6 +55,9 @@ class TestMessageService:
     async def test_add_message_success(self, service, test_user_id, mock_message_data):
         """Test adding message successfully."""
         # Arrange
+        service.message_repo.verify_conversation_ownership = AsyncMock(
+            return_value=True
+        )
         service.message_repo.create_message = AsyncMock(return_value=1)
         service.message_repo.update_conversation_timestamp = AsyncMock()
         service.message_repo.get_message_by_user = AsyncMock(
@@ -72,6 +75,9 @@ class TestMessageService:
         # Assert
         assert isinstance(result, MessageDetail)
         assert result.content == "Test message"
+        service.message_repo.verify_conversation_ownership.assert_called_once_with(
+            1, test_user_id
+        )
         service.message_repo.create_message.assert_called_once()
         service.message_repo.update_conversation_timestamp.assert_called_once_with(
             1, test_user_id
@@ -83,6 +89,9 @@ class TestMessageService:
     ):
         """Test adding message with parent (branching)."""
         # Arrange
+        service.message_repo.verify_conversation_ownership = AsyncMock(
+            return_value=True
+        )
         service.message_repo.create_message = AsyncMock(return_value=2)
         service.message_repo.update_conversation_timestamp = AsyncMock()
         service.message_repo.get_message_by_user = AsyncMock(
@@ -133,6 +142,9 @@ class TestMessageService:
     async def test_add_message_creation_failure(self, service, test_user_id):
         """Test handling message creation failure."""
         # Arrange
+        service.message_repo.verify_conversation_ownership = AsyncMock(
+            return_value=True
+        )
         service.message_repo.create_message = AsyncMock(return_value=1)
         service.message_repo.update_conversation_timestamp = AsyncMock()
         service.message_repo.get_message_by_user = AsyncMock(return_value=None)
@@ -606,6 +618,9 @@ class TestMessageService:
         """Test adding message with special characters."""
         # Arrange
         special_content = "Test 中文 émojis 🎉 <script>alert('xss')</script>"
+        service.message_repo.verify_conversation_ownership = AsyncMock(
+            return_value=True
+        )
         service.message_repo.create_message = AsyncMock(return_value=1)
         service.message_repo.update_conversation_timestamp = AsyncMock()
         service.message_repo.get_message_by_user = AsyncMock(
@@ -631,6 +646,9 @@ class TestMessageService:
         """Test adding message at maximum allowed length."""
         # Arrange
         max_content = "x" * 5000
+        service.message_repo.verify_conversation_ownership = AsyncMock(
+            return_value=True
+        )
         service.message_repo.create_message = AsyncMock(return_value=1)
         service.message_repo.update_conversation_timestamp = AsyncMock()
         service.message_repo.get_message_by_user = AsyncMock(

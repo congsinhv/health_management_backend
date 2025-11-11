@@ -396,7 +396,6 @@ class UserService:
 
     async def create_oauth_user(self, oauth_data: GoogleOAuthCallback) -> UserResponse:
         """Create user from OAuth data."""
-        print(oauth_data)
         user_data = UserCreate(
             email=oauth_data.email,
             first_name=oauth_data.given_name or "User",

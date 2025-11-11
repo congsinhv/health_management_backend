@@ -4,6 +4,7 @@ Message API endpoints.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from typing import Optional, List
+import logging
 
 from app.auth.dependencies import get_current_active_user
 from app.db.database import get_database_pool
@@ -26,6 +27,8 @@ from app.schemas.message import (
 from app.services.message import MessageService
 from app.services.message_version import MessageVersionService
 import asyncpg
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -77,6 +80,7 @@ async def add_message(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logger.error(f"Failed to add message: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to add message",
@@ -112,6 +116,7 @@ async def list_messages(
         )
         return messages
     except Exception as e:
+        logger.error(f"Failed to list messages: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list messages",
@@ -139,6 +144,7 @@ async def get_message(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Failed to get message: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get message",
@@ -173,6 +179,7 @@ async def update_message(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logger.error(f"Failed to update message: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update message",
