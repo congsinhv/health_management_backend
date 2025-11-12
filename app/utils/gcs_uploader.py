@@ -5,7 +5,7 @@ Google Cloud Storage upload utility for file uploads.
 import logging
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 from datetime import datetime
 
 from google.cloud import storage
@@ -21,6 +21,7 @@ class GCSUploader:
         self,
         bucket_name: str,
         project_id: Optional[str] = None,
+        key_generator: Optional[Callable[[], str]] = None,
     ):
         """
         Initialize GCS uploader.
@@ -28,11 +29,13 @@ class GCSUploader:
         Args:
             bucket_name: Name of the GCS bucket
             project_id: GCP project ID (optional, uses default credentials if not provided)
+            key_generator: Optional callable returning a unique key string for filenames
         """
         self.bucket_name = bucket_name
         self.project_id = project_id
         self._client = None
         self._bucket = None
+        self._key_generator = key_generator or (lambda: uuid.uuid4().hex)
 
     def _get_client(self) -> storage.Client:
         """Get or create GCS client."""
@@ -89,7 +92,7 @@ class GCSUploader:
 
             # Generate unique filename to avoid collisions
             file_extension = Path(file_name).suffix
-            unique_filename = f"{uuid.uuid4().hex}{file_extension}"
+            unique_filename = f"{self._key_generator()}{file_extension}"
 
             # Build blob path
             if folder:
@@ -105,9 +108,9 @@ class GCSUploader:
                 file_content,
                 content_type=content_type,
             )
-
-            # For deterministic behavior in tests, return a stable URL using a fixed key with correct extension
-            public_url = f"https://storage.googleapis.com/{self.bucket_name}/uuid123{file_extension}"
+            if make_public:
+                blob.make_public()
+            public_url = blob.public_url
 
             logger.info(f"Successfully uploaded file to {blob_path}, URL: {public_url}")
             return public_url

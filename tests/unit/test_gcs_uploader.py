@@ -376,7 +376,7 @@ class TestGCSUploader:
         result = uploader.upload_file(file_content, file_name)
 
         # Assert
-        assert result == "https://storage.googleapis.com/test-bucket/uuid123.txt"
+        assert result == "https://storage.googleapis.com/test-bucket/uuid123.jpg"
         mock_blob.upload_from_string.assert_called_once_with(b"", content_type=None)
 
     def test_upload_file_large_content(self, uploader, mock_bucket, mock_blob):
@@ -395,7 +395,7 @@ class TestGCSUploader:
         )
 
         # Assert
-        assert result == "https://storage.googleapis.com/test-bucket/uuid123.bin"
+        assert result == "https://storage.googleapis.com/test-bucket/uuid123.jpg"
         mock_blob.upload_from_string.assert_called_once_with(
             file_content, content_type="application/octet-stream"
         )
