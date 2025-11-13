@@ -5,8 +5,9 @@ FastAPI application entrypoint for Health Management API.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.qa import router as qa_router
@@ -27,6 +28,32 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+class ForwardedProtoMiddleware(BaseHTTPMiddleware):
+    """Middleware to handle X-Forwarded-Proto header correctly."""
+
+    async def dispatch(self, request: Request, call_next):
+        # Check for X-Forwarded-Proto header (set by load balancer/proxy)
+        forwarded_proto = request.headers.get("x-forwarded-proto")
+        if forwarded_proto:
+            # Update the request scope to use the correct protocol
+            request.scope["scheme"] = forwarded_proto.lower()
+            request.scope["type"] = "http"
+
+        # Also handle X-Forwarded-Host if present
+        forwarded_host = request.headers.get("x-forwarded-host")
+        if forwarded_host:
+            request.scope["server"] = (forwarded_host, 443 if forwarded_proto == "https" else 80)
+
+        # Handle X-Forwarded-Port if present
+        forwarded_port = request.headers.get("x-forwarded-port")
+        if forwarded_port:
+            host, _ = request.scope["server"]
+            request.scope["server"] = (host, int(forwarded_port))
+
+        response = await call_next(request)
+        return response
 
 
 @asynccontextmanager
@@ -67,6 +94,9 @@ app = FastAPI(
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
 )
+
+# Add forwarded proto middleware first (to handle load balancer headers)
+app.add_middleware(ForwardedProtoMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
