@@ -33,7 +33,6 @@ class ConversationBase(BaseModel):
     user_id: int
     title: Optional[str]
     question: Optional[str]
-    answer: Optional[str] = None  # Answers are now stored in messages, not conversations
     is_pinned: bool = False
     tags: List[str] = []
     created_at: datetime

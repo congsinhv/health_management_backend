@@ -3,6 +3,7 @@ Conversation repository for database operations.
 """
 
 import asyncpg
+import json
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from app.db.database import BaseRepository
@@ -27,7 +28,7 @@ class ConversationRepository(BaseRepository):
             RETURNING id
         """
         result = await self.fetch_one(
-            query, user_id, title, question, tags or [], metadata or {}
+            query, user_id, title, question, json.dumps(tags or []), json.dumps(metadata or {})
         )
         return result["id"] if result else None
 

@@ -682,7 +682,6 @@ class ConversationService:
             user_id=record["user_id"],
             title=record.get("title"),
             question=record.get("question"),
-            answer=None,  # Answers are now stored in messages, not conversations
             is_pinned=record.get("is_pinned", False),
             tags=record.get("tags", []),
             created_at=record["created_at"],
@@ -702,7 +701,6 @@ class ConversationService:
             user_id=record["user_id"],
             title=record.get("title"),
             question=record.get("question"),
-            answer=None,  # Answers are now stored in messages, not conversations
             is_pinned=record.get("is_pinned", False),
             tags=record.get("tags", []),
             created_at=record["created_at"],
