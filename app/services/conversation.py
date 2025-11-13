@@ -2,6 +2,7 @@
 Conversation service for business logic.
 """
 
+import json
 import asyncpg
 import logging
 from typing import Optional, List, Dict, Any, Tuple
@@ -178,6 +179,7 @@ class ConversationService:
                 user_id, page, page_size, filters
             )
             if cached:
+                logger.info("Returning cached conversations")
                 return ConversationListResponse(**cached)
 
             skip = (page - 1) * page_size
@@ -198,6 +200,7 @@ class ConversationService:
             )
 
             # Convert to response format
+            logger.info(f"Conversations: {conversations}")
             conversation_items = [
                 self._convert_to_conversation_list_item(conv) for conv in conversations
             ]
@@ -677,19 +680,20 @@ class ConversationService:
         self, record: asyncpg.Record
     ) -> ConversationDetail:
         """Convert database record to ConversationDetail."""
+        logger.info(record)
         return ConversationDetail(
             id=record["id"],
             user_id=record["user_id"],
             title=record.get("title"),
             question=record.get("question"),
             is_pinned=record.get("is_pinned", False),
-            tags=record.get("tags", []),
+            tags=json.loads(record.get("tags", [])),
             created_at=record["created_at"],
             updated_at=record.get("updated_at", record["created_at"]),
             deleted_at=record.get("deleted_at"),
             message_count=record.get("message_count", 0),
             last_message_at=record.get("last_message_at"),
-            metadata=record.get("metadata", {}),
+            metadata=json.loads(record.get("metadata", {})),
         )
 
     def _convert_to_conversation_list_item(
@@ -702,12 +706,12 @@ class ConversationService:
             title=record.get("title"),
             question=record.get("question"),
             is_pinned=record.get("is_pinned", False),
-            tags=record.get("tags", []),
+            tags=json.loads(record.get("tags", [])),
             created_at=record["created_at"],
             updated_at=record.get("updated_at", record["created_at"]),
             deleted_at=record.get("deleted_at"),
             message_count=record.get("message_count", 0),
             last_message_preview=record.get("last_message_preview"),
             last_message_at=record.get("last_message_at"),
-            metadata=record.get("metadata", {}),
+            metadata=json.loads(record.get("metadata", {})),
         )

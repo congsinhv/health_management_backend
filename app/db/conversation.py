@@ -27,7 +27,7 @@ class ConversationRepository(BaseRepository):
             RETURNING id
         """
         result = await self.fetch_one(
-            query, user_id, title, question or '', json.dumps(tags or []), json.dumps(metadata or {})
+            query, user_id, title, question or '', tags or [], metadata or {}
         )
         return result["id"] if result else None
 
