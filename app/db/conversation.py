@@ -16,19 +16,18 @@ class ConversationRepository(BaseRepository):
         user_id: int,
         title: Optional[str] = None,
         question: Optional[str] = None,
-        answer: Optional[str] = None,
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> int:
         """Create a new conversation."""
         query = """
             INSERT INTO qa_conversations (
-                user_id, title, question, answer, tags, metadata, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+                user_id, title, question, tags, metadata, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
             RETURNING id
         """
         result = await self.fetch_one(
-            query, user_id, title, question, answer, tags or [], metadata or {}
+            query, user_id, title, question, tags or [], metadata or {}
         )
         return result["id"] if result else None
 

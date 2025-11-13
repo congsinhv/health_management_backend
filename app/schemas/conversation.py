@@ -13,7 +13,6 @@ class ConversationCreate(BaseModel):
 
     title: Optional[str] = Field(None, max_length=255)
     question: Optional[str] = Field(None, max_length=1000)
-    answer: Optional[str] = Field(None, max_length=2000)
     tags: List[str] = Field(default_factory=list, max_length=10)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -34,7 +33,7 @@ class ConversationBase(BaseModel):
     user_id: int
     title: Optional[str]
     question: Optional[str]
-    answer: Optional[str]
+    answer: Optional[str] = None  # Answers are now stored in messages, not conversations
     is_pinned: bool = False
     tags: List[str] = []
     created_at: datetime

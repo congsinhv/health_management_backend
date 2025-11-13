@@ -39,7 +39,6 @@ class ConversationService:
         user_id: int,
         title: Optional[str] = None,
         question: Optional[str] = None,
-        answer: Optional[str] = None,
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         first_message: Optional[str] = None,
@@ -51,7 +50,6 @@ class ConversationService:
                 user_id=user_id,
                 title=title,
                 question=question,
-                answer=answer,
                 tags=tags or [],
                 metadata=metadata or {},
             )
@@ -684,7 +682,7 @@ class ConversationService:
             user_id=record["user_id"],
             title=record.get("title"),
             question=record.get("question"),
-            answer=record.get("answer"),
+            answer=None,  # Answers are now stored in messages, not conversations
             is_pinned=record.get("is_pinned", False),
             tags=record.get("tags", []),
             created_at=record["created_at"],
@@ -704,7 +702,7 @@ class ConversationService:
             user_id=record["user_id"],
             title=record.get("title"),
             question=record.get("question"),
-            answer=record.get("answer"),
+            answer=None,  # Answers are now stored in messages, not conversations
             is_pinned=record.get("is_pinned", False),
             tags=record.get("tags", []),
             created_at=record["created_at"],

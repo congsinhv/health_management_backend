@@ -64,7 +64,6 @@ async def create_conversation(
 
     - **title**: Optional custom title for the conversation
     - **question**: Initial question (optional)
-    - **answer**: Initial answer (optional)
     - **tags**: List of tags for categorization
     - **metadata**: Additional metadata
     """
@@ -73,7 +72,6 @@ async def create_conversation(
             user_id=current_user.id,
             title=conversation.title,
             question=conversation.question,
-            answer=conversation.answer,
             tags=conversation.tags,
             metadata=conversation.metadata,
         )

@@ -53,7 +53,6 @@ class TestConversationRepository:
         user_id = 123
         title = "Test Conversation"
         question = "What is this?"
-        answer = "A test"
         tags = ["test", "example"]
         metadata = {"key": "value"}
 
@@ -64,7 +63,6 @@ class TestConversationRepository:
             user_id=user_id,
             title=title,
             question=question,
-            answer=answer,
             tags=tags,
             metadata=metadata,
         )
