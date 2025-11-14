@@ -10,7 +10,9 @@ class UploadImageResponse(BaseModel):
 
     url: str = Field(..., description="Public URL of the uploaded image")
     filename: str = Field(..., description="Filename of the uploaded image")
-    folder: str | None = Field(None, description="Folder path where the image was uploaded")
+    folder: str | None = Field(
+        None, description="Folder path where the image was uploaded"
+    )
 
     class Config:
         json_schema_extra = {
@@ -20,4 +22,3 @@ class UploadImageResponse(BaseModel):
                 "folder": "avatars",
             }
         }
-

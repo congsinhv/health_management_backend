@@ -117,4 +117,3 @@ class GCSUploader:
         except Exception as e:
             logger.error(f"Error uploading file {file_name}: {e}")
             raise Exception(f"Failed to upload file: {str(e)}")
-

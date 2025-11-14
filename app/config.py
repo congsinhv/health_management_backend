@@ -5,6 +5,9 @@ Configuration settings for the Health Management application.
 from typing import Optional
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
