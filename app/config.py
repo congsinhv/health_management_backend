@@ -138,7 +138,7 @@ class Settings(BaseSettings):
         default="data/", description="Path to data files within GCS bucket"
     )
     model_auto_download: bool = Field(
-        default=True, description="Automatically download models from GCS if not local"
+        default=False, description="Automatically download models from GCS if not local"
     )
     model_download_timeout: int = Field(
         default=600, description="Timeout for model download from GCS (seconds)"

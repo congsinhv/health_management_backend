@@ -48,9 +48,23 @@ async def lifespan(app: FastAPI):
     if settings.qa_enabled:
         try:
             logger.info("Initializing Q&A Service...")
-            qa_service = QAService(settings)
+            # Add timeout protection for QA service initialization
+            import asyncio
+            qa_init_timeout = getattr(settings, 'model_download_timeout', 300)  # Default 5 minutes
+
+            async def init_qa_service_with_timeout():
+                return await asyncio.wait_for(
+                    asyncio.to_thread(QAService, settings),
+                    timeout=qa_init_timeout
+                )
+
+            qa_service = await init_qa_service_with_timeout()
             app.state.qa_service = qa_service
             logger.info("Q&A Service initialized successfully")
+        except asyncio.TimeoutError:
+            logger.error(f"Q&A Service initialization timed out after {qa_init_timeout} seconds")
+            logger.warning("Q&A Service will not be available - continuing startup")
+            app.state.qa_service = None
         except Exception as e:
             logger.error(f"Failed to initialize Q&A Service: {e}")
             logger.warning("Q&A Service will not be available")
