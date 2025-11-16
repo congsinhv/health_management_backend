@@ -17,6 +17,8 @@ from app.api.messages import router as messages_router
 from app.api.websocket import router as websocket_router
 from app.config import settings
 from app.db.database import database
+from app.middleware.rate_limit import init_rate_limiter
+from app.middleware.security import SecurityHeadersMiddleware
 from app.services.qa_service import QAService
 
 # Configure logging
@@ -33,6 +35,14 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up Health Management API")
     await database.connect()
+
+    # Initialize rate limiter
+    try:
+        redis_url = getattr(settings, "redis_url", None)
+        rate_limiter = init_rate_limiter(redis_url=redis_url)
+        logger.info("Rate limiter initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize rate limiter: {e}")
 
     # Initialize Q&A Service if enabled
     if settings.qa_enabled:
@@ -97,6 +107,9 @@ app.add_middleware(
     allow_methods=settings.cors_allow_methods,
     allow_headers=settings.cors_allow_headers,
 )
+
+# Add security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Include routers
 app.include_router(

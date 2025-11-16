@@ -5,8 +5,10 @@ Pytest configuration and fixtures for chat system tests.
 import pytest
 import asyncio
 import asyncpg
+from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timezone
+from app.main import app
 
 
 @pytest.fixture(scope="session")
@@ -108,3 +110,61 @@ def create_asyncpg_record(data_dict):
 def asyncpg_record_factory():
     """Factory for creating asyncpg.Record objects."""
     return create_asyncpg_record
+
+
+# SSE Streaming fixtures
+@pytest.fixture
+def async_client():
+    """Create AsyncClient for testing SSE endpoints."""
+    return AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    )
+
+
+@pytest.fixture
+def mock_qa_service():
+    """Mock Q&A service for testing."""
+    service = AsyncMock()
+    service.model = MagicMock()
+    service.question_embeddings = MagicMock()
+    service.openai_client = MagicMock()
+    service.df = MagicMock()
+    return service
+
+
+@pytest.fixture
+def sample_question_request():
+    """Sample question request data."""
+    return {
+        "question": "Làm sao để khỏe mạnh?",
+        "threshold": 0.55,
+        "top_k": 7
+    }
+
+
+@pytest.fixture
+def mock_openai_stream():
+    """Create mock OpenAI streaming responses."""
+    def create_mock_stream(content_chunks):
+        """Create a mock stream with given content chunks."""
+        mock_chunks = []
+        for chunk in content_chunks:
+            mock_choice = MagicMock()
+            mock_choice.delta.content = chunk
+            mock_chunk = MagicMock()
+            mock_chunk.choices = [mock_choice]
+            mock_chunks.append(mock_chunk)
+
+        # Add final chunk with None content (end signal)
+        mock_choice = MagicMock()
+        mock_choice.delta.content = None
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [mock_choice]
+        mock_chunks.append(mock_chunk)
+
+        mock_stream = MagicMock()
+        mock_stream.__iter__.return_value = iter(mock_chunks)
+        return mock_stream
+
+    return create_mock_stream

@@ -5,13 +5,21 @@ Q&A Service using SBERT and OpenRouter AI.
 import logging
 import os
 import re
+import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import AsyncGenerator, Dict, List, Optional, Set
 
 import pandas as pd
 import requests
 from sentence_transformers import SentenceTransformer, util
 
+from app.schemas.qa import (
+    AnswersFoundEvent,
+    QuestionReceivedEvent,
+    StreamCompleteEvent,
+    StreamErrorEvent,
+    SummaryChunkEvent,
+)
 from app.utils.gcs_downloader import GCSDownloader
 from openai import OpenAI
 
@@ -389,30 +397,24 @@ class QAService:
         Phản hồi:"""
 
         try:
-            logger.info(f"Calling OpenRouter API for AI summary. Prompt: {prompt}")
-            response = self.openai_client.responses.create(
-                model="gpt-5-nano",
-                reasoning={"effort": "low"},
-                input=[
+            logger.info("Calling OpenAI API for AI summary")
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
                     {
                         "role": "system",
                         "content": "Bạn là chuyên gia y tế, hãy diễn đạt lại câu trả lời sao cho dễ hiểu.",
                     },
                     {"role": "user", "content": prompt},
                 ],
-                store=True,
+                temperature=0.7,
+                max_tokens=2000,
             )
 
-            return response.output_text
-        except requests.exceptions.Timeout:
-            logger.error("OpenRouter API timeout")
-            return QAMessages.SUMMARIZE_TIMEOUT
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error calling OpenRouter API: {e}")
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Error calling OpenAI API: {e}")
             return QAMessages.SUMMARIZE_ERROR.format(error=str(e))
-        except (KeyError, IndexError) as e:
-            logger.error(f"Unexpected API response format: {e}")
-            return QAMessages.AI_RESPONSE_ERROR
 
     def ask_question(
         self,
@@ -502,3 +504,153 @@ class QAService:
         summary = self.summarize_with_ai(user_question, collected_answers)
 
         return {"question": user_question, "answers": result, "summary": summary}
+
+    async def stream_ask_question(
+        self,
+        question: str,
+        threshold: float = None,
+        top_k: int = None,
+    ) -> AsyncGenerator[str, None]:
+        """Stream complete Q&A response with progressive events."""
+
+        start_time = time.time()
+        threshold = threshold or 0.55  # Default threshold
+        top_k = top_k or 7  # Default top_k
+
+        # Event 1: Question Received (immediate)
+        event = QuestionReceivedEvent(data={"question": question})
+        yield f"event: {event.event_type}\ndata: {event.model_dump_json()}\n\n"
+
+        try:
+            # Phase 1: Semantic search (existing logic, async-safe)
+            question_normalized = self.preprocess_text(question)
+            question_embedding = self.model.encode(question_normalized, convert_to_tensor=True)
+            similarities = util.cos_sim(question_embedding, self.question_embeddings)[0]
+
+            # Get top results
+            top_results = []
+            for idx, score in enumerate(similarities):
+                if score >= threshold:
+                    top_results.append((idx, float(score)))
+
+            top_results.sort(key=lambda x: x[1], reverse=True)
+            top_results = top_results[:top_k]
+
+            # Group by field
+            grouped_answers = {}
+            for idx, score in top_results:
+                row = self.df.iloc[idx]
+                field = str(row[QAColumns.FIELD]).strip()
+                answer = str(row[QAColumns.ANSWER]).strip()
+
+                if not answer or answer.lower() == "nan":
+                    continue
+
+                field_name = (
+                    field
+                    if field and field.lower() != "nan"
+                    else QAMessages.UNCLASSIFIED_FIELD
+                )
+
+                if field_name not in grouped_answers:
+                    grouped_answers[field_name] = []
+
+                if len(grouped_answers[field_name]) < self.max_per_field:
+                    grouped_answers[field_name].append(answer)
+
+            # Event 2: Answers Found
+            event = AnswersFoundEvent(
+                data={
+                    "answers": grouped_answers,
+                    "count": sum(len(v) for v in grouped_answers.values()),
+                }
+            )
+            yield f"event: {event.event_type}\ndata: {event.model_dump_json()}\n\n"
+
+            # Phase 2: Stream AI summary (delegates to stream_summarize_with_ai)
+            async for sse_event in self.stream_summarize_with_ai(
+                question, grouped_answers
+            ):
+                yield sse_event
+
+        except Exception as e:
+            logger.error(f"Error in stream_ask_question: {e}")
+            error_event = StreamErrorEvent(
+                data={"error": "Failed to process question", "code": "processing_error"}
+            )
+            yield f"event: {error_event.event_type}\ndata: {error_event.model_dump_json()}\n\n"
+
+    async def stream_summarize_with_ai(
+        self, question: str, grouped_answers: Dict[str, List[str]]
+    ) -> AsyncGenerator[str, None]:
+        """Stream AI summary generation token by token via OpenAI API."""
+
+        # Build prompt using existing logic
+        prompt = self._build_summary_prompt(question, grouped_answers)
+
+        accumulated_tokens = 0
+        accumulated_content = []
+
+        try:
+            # Use OpenAI SDK streaming
+            stream = self.openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Bạn là chuyên gia y tế, hãy diễn đạt lại câu trả lời sao cho dễ hiểu.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                stream=True,  # Enable streaming
+                temperature=0.7,
+                max_tokens=2000,
+            )
+
+            # Iterate over streaming chunks
+            for chunk in stream:
+                # Extract token from delta
+                if chunk.choices and chunk.choices[0].delta.content:
+                    token = chunk.choices[0].delta.content
+                    accumulated_content.append(token)
+                    accumulated_tokens += 1
+
+                    event = SummaryChunkEvent(
+                        data={"chunk": token, "token_count": accumulated_tokens}
+                    )
+                    yield f"event: {event.event_type}\ndata: {event.model_dump_json()}\n\n"
+
+            # Stream complete
+            event = StreamCompleteEvent(
+                data={
+                    "total_tokens": accumulated_tokens,
+                    "summary": "".join(accumulated_content),
+                }
+            )
+            yield f"event: {event.event_type}\ndata: {event.model_dump_json()}\n\n"
+
+        except Exception as e:
+            # Handle OpenAI API errors
+            logger.error(f"OpenAI API error in streaming: {e}")
+            error_event = StreamErrorEvent(
+                data={"error": f"OpenAI API error: {str(e)}", "code": "api_error"}
+            )
+            yield f"event: {error_event.event_type}\ndata: {error_event.model_dump_json()}\n\n"
+
+    def _build_summary_prompt(
+        self, question: str, grouped_answers: Dict[str, List[str]]
+    ) -> str:
+        """Build Vietnamese prompt for AI summarization."""
+        prompt_parts = [f"Câu hỏi: {question}\n\nThông tin tham khảo:"]
+
+        for field, answers in grouped_answers.items():
+            prompt_parts.append(f"\n{field}:")
+            for answer in answers:
+                prompt_parts.append(f"- {answer}")
+
+        prompt_parts.append(
+            "\nHãy tổng hợp thông tin trên thành câu trả lời ngắn gọn, "
+            "dễ hiểu bằng tiếng Việt."
+        )
+
+        return "\n".join(prompt_parts)
