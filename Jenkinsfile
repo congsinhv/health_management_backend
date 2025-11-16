@@ -408,7 +408,7 @@ AI summarization will not be available without this secret.
                             --set-env-vars "QA_ENABLED=true" \
                             --set-env-vars "GCP_PROJECT_ID=${GCP_PROJECT_ID}" \
                             --set-env-vars "GCP_MODEL_BUCKET=vhealth-${params.ENVIRONMENT}-models" \
-                            --set-env-vars "MODEL_AUTO_DOWNLOAD=true" \
+                            --set-env-vars "MODEL_AUTO_DOWNLOAD=false" \
                             --set-env-vars "GCP_MODEL_BLOB_PATH=models/vietnamese-sbert/" \
                             --set-env-vars "GCP_DATA_BLOB_PATH=data/" \
                             --set-env-vars "CUSTOM_DOMAIN=${params.ENVIRONMENT == 'prod' ? 'portal' : params.ENVIRONMENT}.vhealth.io.vn" \
