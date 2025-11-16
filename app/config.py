@@ -149,6 +149,9 @@ class Settings(BaseSettings):
     )
 
     # Q&A behavior settings
+    openai_api_key: str = Field(
+        default="openai_api_key", description="OpenAI API key for AI summarization"
+    )
     qa_threshold: float = Field(
         default=0.55,
         ge=0.0,
@@ -160,34 +163,6 @@ class Settings(BaseSettings):
     )
     qa_max_per_field: int = Field(
         default=5, ge=1, le=10, description="Maximum answers per field category"
-    )
-
-    # OpenRouter AI settings
-    openrouter_api_key: Optional[str] = Field(
-        default=None, description="OpenRouter API key for AI summarization"
-    )
-    openrouter_model: str = Field(
-        default="openai/gpt-4o-mini", description="OpenRouter model to use"
-    )
-    openrouter_timeout: int = Field(
-        default=30, description="OpenRouter API timeout in seconds"
-    )
-    openrouter_temperature: float = Field(
-        default=0.5,
-        ge=0.0,
-        le=2.0,
-        description="Temperature for OpenRouter AI responses",
-    )
-    openrouter_max_tokens: int = Field(
-        default=400, ge=1, le=4096, description="Maximum tokens for AI responses"
-    )
-
-    # Rate limiting (configuration only, implementation in future PR)
-    qa_rate_limit_requests: int = Field(
-        default=10, ge=1, description="Max requests per time window"
-    )
-    qa_rate_limit_window: int = Field(
-        default=60, ge=1, description="Rate limit time window in seconds"
     )
 
     class Config:

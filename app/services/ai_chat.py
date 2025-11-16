@@ -7,7 +7,6 @@ import asyncpg
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
-
 from app.services.qa_service import QAService
 from app.db.message import MessageRepository
 from app.db.conversation import ConversationRepository
@@ -29,6 +28,7 @@ class AIChatService:
         self.message_repo = MessageRepository(db_pool)
         self.conversation_repo = ConversationRepository(db_pool)
         self.qa_service = qa_service
+        self.openai_client = qa_service.openai_client
 
     async def generate_ai_response(
         self, user_id: int, request: AIPromptRequest
@@ -430,31 +430,20 @@ class AIChatService:
         try:
             import requests
 
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.qa_service.openrouter_api_key}",
-            }
-            payload = {
-                "model": self.qa_service.openrouter_model,
-                "messages": [
+            response = self.openai_client.responses.create(
+                model="gpt-5-nano",
+                reasoning={"effort": "low"},
+                input=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {
                         "role": "user",
                         "content": f"Tạo tiêu đề cho cuộc trò chuyện: {message}. Output should be a single line of text with no additional information and without any markdown formatting or any additional information (Using Vietnamese).",
                     },
                 ],
-                "temperature": self.qa_service.openrouter_temperature,
-                "max_tokens": self.qa_service.openrouter_max_tokens,
-            }
-            response = requests.post(
-                self.qa_service.openrouter_url,
-                headers=headers,
-                json=payload,
-                timeout=self.qa_service.openrouter_timeout,
+                store=True,
             )
-            response.raise_for_status()
-            data = response.json()
-            return data["choices"][0]["message"]["content"].strip()
+
+            return response.output_text
 
         except Exception as e:
             logger.error(f"Error calling OpenRouter API: {e}")

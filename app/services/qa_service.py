@@ -13,6 +13,7 @@ import requests
 from sentence_transformers import SentenceTransformer, util
 
 from app.utils.gcs_downloader import GCSDownloader
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -84,22 +85,9 @@ class QAService:
         self.model = self._load_model()
         self.df, self.question_embeddings = self._load_data()
 
-        # OpenRouter configuration
-        # Note: Only use from settings, don't fallback to os.getenv for security
-        self.openrouter_api_key = settings.openrouter_api_key
-        if not self.openrouter_api_key:
-            logger.warning(
-                "OpenRouter API key not configured - AI summarization will not be available"
-            )
-
-        self.openrouter_model = settings.openrouter_model
-        self.openrouter_timeout = settings.openrouter_timeout
-        self.openrouter_temperature = settings.openrouter_temperature
-        self.openrouter_max_tokens = settings.openrouter_max_tokens
-        self.openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
-
         # Q&A behavior settings
         self.max_per_field = settings.qa_max_per_field
+        self.openai_client = OpenAI(api_key=settings.openai_api_key)
 
     def _ensure_model_and_data_exist(self) -> None:
         """
@@ -381,45 +369,41 @@ class QAService:
         if not collected_answers:
             return QAMessages.NO_DATA_TO_SUMMARIZE
 
-        if not self.openrouter_api_key:
-            logger.warning("OpenRouter API key not configured")
-            return QAMessages.AI_NOT_AVAILABLE
+        prompt = f"""Vai trò: Bạn là trợ lý AI chuyên tổng hợp thông tin.
 
-        headers = {
-            "Authorization": f"Bearer {self.openrouter_api_key}",
-            "Content-Type": "application/json",
-        }
+        Câu hỏi từ người dùng: {user_question}
 
-        prompt = (
-            f"Người dùng hỏi: {user_question}\n\n"
-            f"Các câu trả lời từ dữ liệu:\n- "
-            + "\n- ".join(collected_answers)
-            + "\n\nHãy tóm tắt ngắn gọn, dễ hiểu, giữ đúng thông tin quan trọng, bằng tiếng Việt."
-        )
+        Dữ liệu tham khảo:
+        {chr(10).join(f"- {answer}" for answer in collected_answers)}
 
-        payload = {
-            "model": self.openrouter_model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "Bạn là chuyên gia y tế, hãy diễn đạt lại câu trả lời sao cho dễ hiểu.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": self.openrouter_temperature,
-            "max_tokens": self.openrouter_max_tokens,
-        }
+        Yêu cầu:
+        1. Tổng hợp các câu trả lời trên thành MỘT phản hồi thống nhất và mạch lạc
+        2. Ưu tiên thông tin quan trọng và phù hợp nhất với câu hỏi
+        3. Loại bỏ thông tin trùng lặp hoặc mâu thuẫn (nếu có)
+        4. Trình bày rõ ràng, súc tích, ngắn gọn nhất nhưng đầy đủ nhất
+        5. Giữ nguyên các con số, tên riêng, thuật ngữ chuyên môn quan trọng
+        6. Sử dụng tiếng Việt tự nhiên, dễ hiểu
+
+        Định dạng: Trả lời trực tiếp, không cần mở đầu như "Dựa trên dữ liệu..." hay "Tôi sẽ tóm tắt..."
+
+        Phản hồi:"""
 
         try:
-            response = requests.post(
-                self.openrouter_url,
-                headers=headers,
-                json=payload,
-                timeout=self.openrouter_timeout,
+            logger.info(f"Calling OpenRouter API for AI summary. Prompt: {prompt}")
+            response = self.openai_client.responses.create(
+                model="gpt-5-nano",
+                reasoning={"effort": "low"},
+                input=[
+                    {
+                        "role": "system",
+                        "content": "Bạn là chuyên gia y tế, hãy diễn đạt lại câu trả lời sao cho dễ hiểu.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                store=True,
             )
-            response.raise_for_status()
-            data = response.json()
-            return data["choices"][0]["message"]["content"].strip()
+
+            return response.output_text
         except requests.exceptions.Timeout:
             logger.error("OpenRouter API timeout")
             return QAMessages.SUMMARIZE_TIMEOUT
