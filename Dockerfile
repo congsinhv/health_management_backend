@@ -3,8 +3,8 @@ FROM ${BASE_IMAGE} AS production
 COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser scripts/migrations/ ./migrations/
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8080/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=30s --start-period=300s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
 
 EXPOSE 8080
 
