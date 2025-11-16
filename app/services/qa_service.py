@@ -524,7 +524,9 @@ class QAService:
         try:
             # Phase 1: Semantic search (existing logic, async-safe)
             question_normalized = self.preprocess_text(question)
-            question_embedding = self.model.encode(question_normalized, convert_to_tensor=True)
+            question_embedding = self.model.encode(
+                question_normalized, convert_to_tensor=True
+            )
             similarities = util.cos_sim(question_embedding, self.question_embeddings)[0]
 
             # Get top results
