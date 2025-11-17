@@ -401,10 +401,7 @@ AI summarization will not be available without this secret.
                             --service-account ${serviceAccount} \
                             --vpc-connector ${vpcConnector} \
                             --vpc-egress private-ranges-only \
-                            --startup-probe-initial-delay 10 \
-                            --startup-probe-timeout 10 \
-                            --startup-probe-period 10 \
-                            --startup-probe-failure-threshold 30 \
+                            --startup-probe initialDelaySeconds=10,timeoutSeconds=10,periodSeconds=10,failureThreshold=30 \
                             --set-env-vars "DEBUG=${params.ENVIRONMENT == 'dev' ? 'True' : 'False'}" \
                             --set-env-vars "LOG_LEVEL=INFO" \
                             --set-env-vars "APP_NAME=VHealth Backend" \
