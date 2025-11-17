@@ -3,6 +3,8 @@ FastAPI application entrypoint for Health Management API.
 """
 
 import logging
+import threading
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -28,6 +30,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Thread lock for Q&A service initialization (singleton pattern)
+_qa_init_lock = threading.Lock()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,45 +49,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize rate limiter: {e}")
 
-    # Initialize Q&A Service if enabled
+    # Initialize Q&A Service state (lazy initialization on first request)
     if settings.qa_enabled:
-        try:
-            logger.info("Initializing Q&A Service...")
-            # Initialize QA Service in background to avoid blocking startup
-            import asyncio
-            from concurrent.futures import ThreadPoolExecutor
-
-            def init_qa_service():
-                try:
-                    return QAService(settings)
-                except Exception as e:
-                    logger.error(f"Failed to initialize Q&A Service: {e}")
-                    return None
-
-            # Initialize QA Service with timeout to prevent Cloud Run startup timeout
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(init_qa_service)
-                try:
-                    # Wait up to 30 seconds for QA Service initialization
-                    qa_service = future.result(timeout=30)
-                    if qa_service:
-                        app.state.qa_service = qa_service
-                        logger.info("Q&A Service initialized successfully")
-                    else:
-                        logger.warning("Q&A Service initialization returned None")
-                        app.state.qa_service = None
-                except Exception as e:
-                    logger.error(f"Q&A Service initialization timed out or failed: {e}")
-                    logger.warning("Q&A Service will not be available - continuing startup")
-                    app.state.qa_service = None
-
-        except Exception as e:
-            logger.error(f"Failed to start Q&A Service initialization: {e}")
-            logger.warning("Q&A Service will not be available")
-            app.state.qa_service = None
+        logger.info("Q&A Service enabled - will initialize on first request")
+        app.state.qa_service = None
+        app.state.qa_service_initializing = False
+        app.state.qa_service_error = None
     else:
         logger.info("Q&A Service is disabled in settings")
         app.state.qa_service = None
+        app.state.qa_service_initializing = False
+        app.state.qa_service_error = "Q&A Service disabled in configuration"
 
     # Initialize WebSocket connection cleanup task
     import asyncio
@@ -112,6 +89,63 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     await database.disconnect()
+
+
+def initialize_qa_service_lazy(app: FastAPI) -> bool:
+    """
+    Lazy initialize Q&A service with thread-safe singleton pattern.
+
+    Returns:
+        True if initialized successfully or already initialized
+        False if initialization failed or still in progress
+    """
+    # Check if already initialized
+    if app.state.qa_service is not None:
+        return True
+
+    # Check if disabled
+    if not settings.qa_enabled:
+        return False
+
+    # Check if initialization failed previously
+    if app.state.qa_service_error and "initialization failed" in app.state.qa_service_error.lower():
+        return False
+
+    # Thread-safe initialization
+    with _qa_init_lock:
+        # Double-check after acquiring lock
+        if app.state.qa_service is not None:
+            return True
+
+        # Check if another thread is initializing
+        if app.state.qa_service_initializing:
+            return False
+
+        # Mark as initializing
+        app.state.qa_service_initializing = True
+        logger.info("Starting Q&A Service initialization (first request)...")
+
+        try:
+            start_time = time.time()
+            from app.services.qa_service import QAService
+
+            # Initialize service (blocking but only on first request)
+            qa_service = QAService(settings)
+            app.state.qa_service = qa_service
+
+            elapsed = time.time() - start_time
+            logger.info(f"Q&A Service initialized successfully in {elapsed:.2f}s")
+            app.state.qa_service_error = None
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to initialize Q&A Service: {e}", exc_info=True)
+            app.state.qa_service = None
+            app.state.qa_service_error = f"Q&A Service initialization failed: {str(e)}"
+            return False
+
+        finally:
+            app.state.qa_service_initializing = False
 
 
 # Create FastAPI application
@@ -172,18 +206,28 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """
+    Health check endpoint for Cloud Run.
+
+    Returns healthy if core services (database) are operational.
+    Q&A service status reported separately as it uses lazy initialization.
+    """
     try:
         pool = database.get_pool()
         async with pool.acquire() as connection:
             await connection.fetchval("SELECT 1")
 
-        # Check QA service status
-        qa_status = (
-            "initialized"
-            if app.state.qa_service is not None
-            else ("disabled" if not settings.qa_enabled else "not initialized")
-        )
+        # Check QA service status with detailed state
+        if not settings.qa_enabled:
+            qa_status = "disabled"
+        elif app.state.qa_service is not None:
+            qa_status = "initialized"
+        elif app.state.qa_service_initializing:
+            qa_status = "initializing"
+        elif app.state.qa_service_error:
+            qa_status = f"error: {app.state.qa_service_error}"
+        else:
+            qa_status = "not_initialized"
 
         # Check WebSocket connection manager status
         from app.services.websocket_manager import connection_manager

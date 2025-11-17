@@ -53,14 +53,28 @@ async def ask_question(
         QuestionResponse with answers grouped by field and AI summary
     """
     try:
-        # Get QA service from app state
-        qa_service = request.app.state.qa_service
+        # Lazy initialize Q&A service on first request
+        from app.main import initialize_qa_service_lazy
 
-        if qa_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Q&A service is not available",
-            )
+        if not initialize_qa_service_lazy(request.app):
+            if request.app.state.qa_service_initializing:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Q&A service is initializing. Please retry in 2-3 minutes.",
+                    headers={"Retry-After": "180"}
+                )
+            elif request.app.state.qa_service_error:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Q&A service unavailable: {request.app.state.qa_service_error}"
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Q&A service is not available"
+                )
+
+        qa_service = request.app.state.qa_service
 
         # Process question
         result = qa_service.ask_question(
@@ -125,12 +139,28 @@ async def ask_question_stream(
         await rate_limiter.register_connection(str(current_user.id))
         await rate_limiter.register_request(str(current_user.id))
 
+    # Lazy initialize Q&A service on first request
+    from app.main import initialize_qa_service_lazy
+
+    if not initialize_qa_service_lazy(request.app):
+        if request.app.state.qa_service_initializing:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Q&A service is initializing. Please retry in 2-3 minutes.",
+                headers={"Retry-After": "180"}
+            )
+        elif request.app.state.qa_service_error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Q&A service unavailable: {request.app.state.qa_service_error}"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Q&A service is not available"
+            )
+
     qa_service = request.app.state.qa_service
-    if not qa_service:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Q&A service is not available",
-        )
 
     # Start monitoring
     start_time = time.time()
@@ -222,14 +252,33 @@ async def qa_health_check(request: Request):
     qa_service = request.app.state.qa_service
 
     if qa_service is None:
-        return QAHealthResponse(
-            status="unavailable",
-            model_loaded=False,
-            embeddings_loaded=False,
-            streaming_enabled=False,
-            openai_configured=False,
-            message="Q&A service is not initialized",
-        )
+        if request.app.state.qa_service_initializing:
+            return QAHealthResponse(
+                status="initializing",
+                model_loaded=False,
+                embeddings_loaded=False,
+                streaming_enabled=False,
+                openai_configured=False,
+                message="Q&A service is initializing (first request in progress)"
+            )
+        elif request.app.state.qa_service_error:
+            return QAHealthResponse(
+                status="error",
+                model_loaded=False,
+                embeddings_loaded=False,
+                streaming_enabled=False,
+                openai_configured=False,
+                message=f"Q&A service error: {request.app.state.qa_service_error}"
+            )
+        else:
+            return QAHealthResponse(
+                status="not_initialized",
+                model_loaded=False,
+                embeddings_loaded=False,
+                streaming_enabled=False,
+                openai_configured=False,
+                message="Q&A service not initialized (waiting for first request)"
+            )
 
     return QAHealthResponse(
         status="healthy",
@@ -238,5 +287,5 @@ async def qa_health_check(request: Request):
         streaming_enabled=hasattr(qa_service, "stream_ask_question"),
         openai_configured=hasattr(qa_service, "openai_client")
         and qa_service.openai_client is not None,
-        message="Q&A service is operational",
+        message="Q&A service is operational"
     )
