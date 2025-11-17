@@ -172,6 +172,7 @@ models/**/*.onnx
 models/**/*.pt
 models/**/*.pth
 models/**/*.h5
+models_obesity/
 
 # Q&A Data files (should be in GCS, not tracked in git)
 data.xlsx

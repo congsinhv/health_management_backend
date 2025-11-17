@@ -25,3 +25,5 @@ class AuthEventType(str, Enum):
     TOKEN_REFRESH_SUCCESS = "token_refresh_success"
     TOKEN_REFRESH_FAILED = "token_refresh_failed"
     TOKEN_REVOKED = "token_revoked"
+    
+

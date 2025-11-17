@@ -20,6 +20,7 @@ from app.db.database import database
 from app.middleware.rate_limit import init_rate_limiter
 from app.middleware.security import SecurityHeadersMiddleware
 from app.services.qa_service import QAService
+from app.api import predict
 
 # Configure logging
 logging.basicConfig(
@@ -144,6 +145,7 @@ app.include_router(
     auth_router, prefix=f"{settings.api_v1_prefix}/auth", tags=["authentication"]
 )
 app.include_router(qa_router, prefix=f"{settings.api_v1_prefix}/qa", tags=["Q&A"])
+app.include_router(predict.router)
 app.include_router(
     upload_router, prefix=f"{settings.api_v1_prefix}/upload", tags=["upload"]
 )
@@ -156,7 +158,6 @@ app.include_router(
     messages_router, prefix=f"{settings.api_v1_prefix}/messages", tags=["messages"]
 )
 app.include_router(websocket_router, tags=["websocket"])
-
 
 @app.get("/")
 async def root():
