@@ -1,18 +1,28 @@
 import os
 import joblib
 import pandas as pd
+import logging
 from typing import Dict
+from pathlib import Path
 from openai import OpenAI
 from app.config import settings
 from app.schemas.predict import UserInput
+from app.utils.gcs_downloader import GCSDownloader
 
+logger = logging.getLogger(__name__)
 BASE_DIR = os.getcwd()
 
 class ObesityPredictorComplete:
     def __init__(self):
+        # Define paths
+        model_dir = os.path.join(BASE_DIR, "models_obesity")
+        model_path = os.path.join(model_dir, "obesity_classifier_final.pkl")
+        encoder_path = os.path.join(model_dir, "label_encoder.pkl")
+        
+        # Download models from GCS if they don't exist locally
+        self._ensure_models_downloaded(model_path, encoder_path, model_dir)
+        
         # Load model và encoder
-        model_path = os.path.join(BASE_DIR, "models_obesity", "obesity_classifier_final.pkl")
-        encoder_path = os.path.join(BASE_DIR, "models_obesity", "label_encoder.pkl")
         self.model = joblib.load(model_path)
         self.le = joblib.load(encoder_path)
 
@@ -23,14 +33,71 @@ class ObesityPredictorComplete:
             'Metabolic_Age', 'Family_Risk_Score', 'Lifestyle_Score', 'Diet_Quality'
         ]
 
-        # Khởi tạo OpenAI client
-        if not settings.openrouter_api_key:
-            raise RuntimeError("OpenRouter API key is not set in settings.openrouter_api_key")
+        self.client = OpenAI(api_key=settings.openai_api_key)
 
-        self.client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=settings.openrouter_api_key
-        )
+    def _ensure_models_downloaded(self, model_path: str, encoder_path: str, model_dir: str):
+        """
+        Ensure obesity prediction models are downloaded from GCS if not present locally.
+        
+        Args:
+            model_path: Path to the model file
+            encoder_path: Path to the encoder file
+            model_dir: Directory where models should be stored
+        """
+        model_exists = os.path.exists(model_path)
+        encoder_exists = os.path.exists(encoder_path)
+        
+        # If both files exist, no need to download
+        if model_exists and encoder_exists:
+            logger.info("Obesity prediction models already exist locally")
+            return
+        
+        # Check if GCS bucket is configured
+        if not settings.gcp_model_bucket:
+            logger.error(
+                "GCS bucket not configured. Please set gcp_model_bucket in settings "
+                "or place model files manually in models_obesity/ directory"
+            )
+            raise ValueError("Model files not found and GCS bucket not configured")
+        
+        logger.info("Downloading obesity prediction models from GCS...")
+        
+        try:
+            # Create model directory if it doesn't exist
+            Path(model_dir).mkdir(parents=True, exist_ok=True)
+            
+            # Initialize GCS downloader
+            downloader = GCSDownloader(
+                bucket_name=settings.gcp_model_bucket,
+                project_id=settings.gcp_project_id,
+                timeout=settings.model_download_timeout,
+            )
+            
+            # Download model file if missing
+            if not model_exists:
+                blob_path = "models_obesity/obesity_classifier_final.pkl"
+                logger.info(f"Downloading {blob_path}...")
+                success = downloader.download_file(blob_path, model_path, force=False)
+                if not success:
+                    raise RuntimeError(f"Failed to download model file from GCS: {blob_path}")
+            
+            # Download encoder file if missing
+            if not encoder_exists:
+                blob_path = "models_obesity/label_encoder.pkl"
+                logger.info(f"Downloading {blob_path}...")
+                success = downloader.download_file(blob_path, encoder_path, force=False)
+                if not success:
+                    raise RuntimeError(f"Failed to download encoder file from GCS: {blob_path}")
+            
+            logger.info("Successfully downloaded obesity prediction models from GCS")
+            
+        except Exception as e:
+            logger.error(f"Error downloading models from GCS: {e}")
+            raise RuntimeError(
+                f"Failed to download obesity prediction models from GCS: {e}. "
+                "Please ensure the files exist in the bucket or place them manually "
+                f"in {model_dir}/"
+            )
 
     def predict_complete(self, user_inputs: dict):
         age = user_inputs["age"]
@@ -155,11 +222,8 @@ Bao gồm:
     def get_ai_suggestion(self, prompt_text: str) -> str:
         try:
             response = self.client.chat.completions.create(
-                model=settings.openrouter_model,
-                messages=[{"role": "user", "content": prompt_text}],
-                temperature=settings.openrouter_temperature,
-                max_tokens=settings.openrouter_max_tokens,
-                timeout=settings.openrouter_timeout,
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt_text}]
             )
             return response.choices[0].message.content.strip()
         except Exception as e:

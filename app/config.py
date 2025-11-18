@@ -169,6 +169,8 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        # Avoid Pydantic protected namespace warning for model_* fields
+        protected_namespaces = ()
 
 
 # Global settings instance
