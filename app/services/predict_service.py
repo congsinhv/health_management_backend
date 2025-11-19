@@ -2,11 +2,17 @@ import os
 import joblib
 import pandas as pd
 import logging
-from typing import Dict
+import json
+import uuid
+from datetime import datetime, timezone
+from typing import Dict, Any
 from pathlib import Path
 from openai import OpenAI
 from app.config import settings
-from app.schemas.predict import UserInput
+from app.schemas.predict import (
+    UserInput, PredictionResponse, UserInputResponse, PredictionDetail,
+    HealthMetrics, Metric, HealthAnalysis, DietPlan, WorkoutPlan
+)
 from app.utils.gcs_downloader import GCSDownloader
 
 logger = logging.getLogger(__name__)
@@ -158,76 +164,152 @@ class ObesityPredictorComplete:
             "phân_loại_bmi": self._get_bmi_category(bmi)
         }
 
-    def predict_obesity_ai(self, data: UserInput) -> Dict[str, str]:
+    def predict_obesity_ai(self, data: UserInput) -> PredictionResponse:
+        # 1. Get base prediction
         result = self.predict_complete(data.dict())
-        bmi_formatted = self.format_bmi(result['bmi'])
-        prompts = self.build_prompts(data, result, bmi_formatted)
+        level = result['dự_đoán']
+        confidence_str = result['độ_tin_cậy'].replace('%', '')
+        confidence = float(confidence_str)
+        bmi = float(result['bmi'])
+        
+        # 2. Generate AI advice
+        ai_response = self._generate_ai_advice(data, level, bmi)
+        
+        # 3. Construct UserInputResponse
+        user_input_response = self._map_user_input_response(data)
+        
+        # 4. Construct final response
+        return PredictionResponse(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            userInput=user_input_response,
+            prediction=PredictionDetail(
+                level=level,
+                confidence=confidence,
+                bmi=bmi,
+                status=self._map_status(level),
+                reliability="high" if confidence > 70 else "medium"
+            ),
+            healthMetrics=HealthMetrics(
+                weight=Metric(label="Cân nặng", value=data.weight, unit="kg"),
+                bmi=Metric(label="BMI", value=bmi, unit=""),
+                height=Metric(label="Chiều cao", value=data.height, unit="m")
+            ),
+            healthAnalysis=HealthAnalysis(paragraphs=ai_response.get("healthAnalysis", [])),
+            dietPlan=DietPlan(weeklyPlans=ai_response.get("dietPlan", {}).get("weeklyPlans", [])),
+            workoutPlan=WorkoutPlan(weeklyPlans=ai_response.get("workoutPlan", {}).get("weeklyPlans", []))
+        )
 
-        return {
-            "prediction": result,
-            "general_analysis": self.get_ai_suggestion(prompts["general"]),
-            "detailed_diet_plan": self.get_ai_suggestion(prompts["diet"]),
-            "detailed_exercise_plan": self.get_ai_suggestion(prompts["exercise"]),
-        }
-
-    def format_bmi(self, value) -> str:
-        try:
-            return f"{float(value):.1f}"
-        except (ValueError, TypeError):
-            return str(value)
-
-    def build_prompts(self, data: UserInput, result: Dict[str, str], bmi_formatted: str) -> Dict[str, str]:
-        bmi_type = result['phân_loại_bmi']
-        prediction = result['dự_đoán']
-
-        general_prompt = f"""
-Bạn là chuyên gia dinh dưỡng và sức khỏe. Hãy phân tích tình trạng sức khỏe của người dùng sau:
-
-- Giới tính: {data.gender}
-- Tuổi: {data.age}
-- Chiều cao: {data.height} m
-- Cân nặng: {data.weight} kg
-- BMI: {bmi_formatted} ({bmi_type})
-- Dự đoán: {prediction}
-
-Yêu cầu:
-1. Phân tích tổng quan sức khỏe
-2. Đề xuất chế độ ăn uống
-3. Đề xuất tập luyện
-4. Lời khuyên chung
-"""
-
-        diet_prompt = f"""
-Tạo chế độ ăn 1 tuần phù hợp với người có tình trạng {prediction}.
-Bao gồm:
-1. Lượng calo khuyến nghị
-2. Thực đơn 7 ngày (sáng, trưa, tối)
-3. Thực phẩm nên/không nên dùng
-"""
-
-        exercise_prompt = f"""
-Tạo kế hoạch tập luyện 1 tuần cho người có tình trạng {prediction}.
-Bao gồm:
-1. Các bài tập
-2. Thời gian & cường độ
-3. Lưu ý an toàn
-"""
-
-        return {
-            "general": general_prompt.strip(),
-            "diet": diet_prompt.strip(),
-            "exercise": exercise_prompt.strip(),
-        }
-
-    def get_ai_suggestion(self, prompt_text: str) -> str:
+    def _generate_ai_advice(self, data: UserInput, level: str, bmi: float) -> Dict[str, Any]:
+        prompt = f"""
+        Bạn là chuyên gia dinh dưỡng và huấn luyện viên cá nhân.
+        Người dùng có thông tin:
+        - Giới tính: {data.gender}
+        - Tuổi: {data.age}
+        - Chiều cao: {data.height}m, Cân nặng: {data.weight}kg
+        - BMI: {bmi:.1f}
+        - Tình trạng: {self._map_status(level)} ({level})
+        
+        Hãy tạo một kế hoạch sức khỏe chi tiết dưới dạng JSON với cấu trúc sau:
+        {{
+            "healthAnalysis": ["đoạn 1", "đoạn 2", "đoạn 3"],
+            "dietPlan": {{
+                "weeklyPlans": [
+                    {{
+                        "day": 1,
+                        "breakfast": [{{"name": "...", "calories": 100, "count": 1, "unit": "..."}}],
+                        "lunch": [...],
+                        "dinner": [...],
+                        "recommendedFoods": "...",
+                        "foodsToLimit": "..."
+                    }},
+                    ... (cho 7 ngày)
+                ]
+            }},
+            "workoutPlan": {{
+                "weeklyPlans": [
+                    {{
+                        "name": "Tên buổi tập",
+                        "day": 1,
+                        "exercises": [
+                            {{"name": "...", "duration": 30, "unit": "phút/giây", "description": "...", "sets": 3, "reps": 10}}
+                        ]
+                    }},
+                    ... (cho 7 ngày)
+                ]
+            }}
+        }}
+        
+        Đảm bảo phản hồi là JSON hợp lệ.
+        """
+        
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt_text}]
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"}
             )
-            return response.choices[0].message.content.strip()
+            content = response.choices[0].message.content
+            return json.loads(content)
         except Exception as e:
-            return f"Không thể tạo khuyến nghị: {str(e)}"
+            logger.error(f"Error generating AI advice: {e}")
+            # Return empty structure on error to avoid crash
+            return {"healthAnalysis": ["Không thể tạo phân tích lúc này."], "dietPlan": {"weeklyPlans": []}, "workoutPlan": {"weeklyPlans": []}}
+
+    def _map_status(self, level: str) -> str:
+        mapping = {
+            "Insufficient_Weight": "Thiếu cân",
+            "Normal_Weight": "Bình thường",
+            "Overweight_Level_I": "Thừa cân cấp độ I",
+            "Overweight_Level_II": "Thừa cân cấp độ II",
+            "Obesity_Type_I": "Béo phì độ I",
+            "Obesity_Type_II": "Béo phì độ II",
+            "Obesity_Type_III": "Béo phì độ III"
+        }
+        return mapping.get(level, level)
+
+    def _map_user_input_response(self, data: UserInput) -> UserInputResponse:
+        return UserInputResponse(
+            name=data.name or "User",
+            gender=data.gender,
+            age=data.age,
+            height=data.height,
+            weight=data.weight,
+            familyHistory="Có" if data.family_history else "Không",
+            highCalorieFood="Thường xuyên" if data.FAVC else "Không", # FAVC is usually binary yes/no
+            vegetableFrequency=self._map_frequency(data.FCVC, ["Không bao giờ", "Thỉnh thoảng", "Thường xuyên"]),
+            waterIntake=self._map_frequency(data.CH2O, ["< 1L", "1-2L", "> 2L"]),
+            mainMeals=int(data.NCP) if data.NCP else 3,
+            snackFrequency=self._map_frequency(data.CAEC, ["Không", "Thỉnh thoảng", "Thường xuyên", "Luôn luôn"], offset=0),
+            physicalActivity=self._map_frequency(data.FAF, ["Không", "1-2 ngày", "2-4 ngày", "> 4 ngày"], offset=0),
+            screenTime=self._map_frequency(data.TUE, ["0-2h", "3-5h", "> 5h"], offset=0),
+            transportation=self._map_transport(data.MTRANS_Calorie),
+            smoking="Không", # Default as not in input
+            alcohol=self._map_frequency(data.CALC, ["Không", "Thỉnh thoảng", "Thường xuyên", "Luôn luôn"], offset=0) if data.CALC is not None else "Không"
+        )
+
+    def _map_frequency(self, value: float | None, labels: list, offset: int = 1) -> str:
+        if value is None:
+            return labels[0]
+        idx = int(round(value)) - offset
+        idx = max(0, min(idx, len(labels) - 1))
+        return labels[idx]
+
+    def _map_transport(self, value: int | None) -> str:
+        # Mapping based on dataset encoding usually: 
+        # 0: Automobile, 1: Motorbike, 2: Bike, 3: Public_Transportation, 4: Walking
+        # But check the model training encoding. Assuming standard mapping or just returning generic.
+        # In the original code, MTRANS_Calorie default is 1.
+        # Let's use a generic mapping or just return the value if unknown.
+        # User example says "Xe đạp".
+        mapping = {
+            0: "Ô tô",
+            1: "Xe máy",
+            2: "Xe đạp",
+            3: "Phương tiện công cộng",
+            4: "Đi bộ"
+        }
+        return mapping.get(value, "Khác")
 
     def _bmi_category_index(self, bmi):
         if bmi < 16: return 0

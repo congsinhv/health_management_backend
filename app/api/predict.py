@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException
-from app.schemas.predict import UserInput
+from app.schemas.predict import UserInput, PredictionResponse
 from app.services.predict_service import ObesityPredictorComplete
 
 router = APIRouter(prefix="/predict", tags=["Prediction"])
 service = ObesityPredictorComplete()
 
-@router.post("/")
+@router.post("/", response_model=PredictionResponse)
 def predict_obesity(data: UserInput):
     try:
         return service.predict_obesity_ai(data)
