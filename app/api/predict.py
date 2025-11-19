@@ -6,8 +6,8 @@ router = APIRouter(prefix="/predict", tags=["Prediction"])
 service = ObesityPredictorComplete()
 
 @router.post("/", response_model=PredictionResponse)
-def predict_obesity(data: UserInput):
+async def predict_obesity(data: UserInput):
     try:
-        return service.predict_obesity_ai(data)
+        return await service.predict_obesity_ai(data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

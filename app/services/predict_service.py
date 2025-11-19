@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any
 from pathlib import Path
-from openai import OpenAI
+from openai import AsyncOpenAI
 from app.config import settings
 from app.schemas.predict import (
     UserInput, PredictionResponse, UserInputResponse, PredictionDetail,
@@ -39,7 +39,7 @@ class ObesityPredictorComplete:
             'Metabolic_Age', 'Family_Risk_Score', 'Lifestyle_Score', 'Diet_Quality'
         ]
 
-        self.client = OpenAI(api_key=settings.openai_api_key)
+        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     def _ensure_models_downloaded(self, model_path: str, encoder_path: str, model_dir: str):
         """
@@ -164,7 +164,7 @@ class ObesityPredictorComplete:
             "phân_loại_bmi": self._get_bmi_category(bmi)
         }
 
-    def predict_obesity_ai(self, data: UserInput) -> PredictionResponse:
+    async def predict_obesity_ai(self, data: UserInput) -> PredictionResponse:
         # 1. Get base prediction
         result = self.predict_complete(data.dict())
         level = result['dự_đoán']
@@ -173,7 +173,7 @@ class ObesityPredictorComplete:
         bmi = float(result['bmi'])
         
         # 2. Generate AI advice
-        ai_response = self._generate_ai_advice(data, level, bmi)
+        ai_response = await self._generate_ai_advice(data, level, bmi)
         
         # 3. Construct UserInputResponse
         user_input_response = self._map_user_input_response(data)
@@ -200,7 +200,7 @@ class ObesityPredictorComplete:
             workoutPlan=WorkoutPlan(weeklyPlans=ai_response.get("workoutPlan", {}).get("weeklyPlans", []))
         )
 
-    def _generate_ai_advice(self, data: UserInput, level: str, bmi: float) -> Dict[str, Any]:
+    async def _generate_ai_advice(self, data: UserInput, level: str, bmi: float) -> Dict[str, Any]:
         prompt = f"""
         Bạn là chuyên gia dinh dưỡng và huấn luyện viên cá nhân.
         Người dùng có thông tin:
@@ -222,8 +222,7 @@ class ObesityPredictorComplete:
                         "dinner": [...],
                         "recommendedFoods": "...",
                         "foodsToLimit": "..."
-                    }},
-                    ... (cho 7 ngày)
+                    }}
                 ]
             }},
             "workoutPlan": {{
@@ -232,19 +231,18 @@ class ObesityPredictorComplete:
                         "name": "Tên buổi tập",
                         "day": 1,
                         "exercises": [
-                            {{"name": "...", "duration": 30, "unit": "phút/giây", "description": "...", "sets": 3, "reps": 10}}
+                            {{"name": "...", "duration": 30, "unit": "phút", "description": "...", "sets": 3, "reps": 10}}
                         ]
-                    }},
-                    ... (cho 7 ngày)
+                    }}
                 ]
             }}
         }}
         
-        Đảm bảo phản hồi là JSON hợp lệ.
+        Chỉ tạo kế hoạch cho 1 ngày mẫu. Đảm bảo phản hồi là JSON hợp lệ.
         """
         
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"}
