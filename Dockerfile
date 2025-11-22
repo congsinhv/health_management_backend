@@ -22,9 +22,10 @@ RUN getent group appuser >/dev/null 2>&1 || groupadd appuser && \
 
 # Install Python dependencies
 COPY requirements.txt .
-# Install PyTorch CPU version first to avoid CUDA dependencies
-RUN pip install --no-cache-dir torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir -r requirements.txt
+# Install all dependencies including PyTorch CPU version
+RUN pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements.txt
 
 # Set working directory first
 WORKDIR /app
