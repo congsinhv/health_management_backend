@@ -290,3 +290,40 @@ variable "scheduler_paused" {
   type        = bool
   default     = false
 }
+
+# Redis/Memorystore Variables
+variable "redis_tier" {
+  description = "Redis tier (BASIC for dev, STANDARD_HA for prod)"
+  type        = string
+  default     = "BASIC"
+}
+
+variable "redis_memory_size_gb" {
+  description = "Redis memory size in GB"
+  type        = number
+  default     = 1
+}
+
+variable "redis_version" {
+  description = "Redis version"
+  type        = string
+  default     = "REDIS_7_0"
+}
+
+variable "redis_maintenance_day" {
+  description = "Maintenance window day"
+  type        = string
+  default     = "SUNDAY"
+}
+
+variable "redis_maintenance_hour" {
+  description = "Maintenance window start hour (0-23)"
+  type        = number
+  default     = 3
+}
+
+variable "enable_redis_cache" {
+  description = "Enable Redis caching"
+  type        = bool
+  default     = true
+}

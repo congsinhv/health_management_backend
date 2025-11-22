@@ -116,10 +116,7 @@ def asyncpg_record_factory():
 @pytest.fixture
 def async_client():
     """Create AsyncClient for testing SSE endpoints."""
-    return AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test"
-    )
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
 @pytest.fixture
@@ -136,16 +133,13 @@ def mock_qa_service():
 @pytest.fixture
 def sample_question_request():
     """Sample question request data."""
-    return {
-        "question": "Làm sao để khỏe mạnh?",
-        "threshold": 0.55,
-        "top_k": 7
-    }
+    return {"question": "Làm sao để khỏe mạnh?", "threshold": 0.55, "top_k": 7}
 
 
 @pytest.fixture
 def mock_openai_stream():
     """Create mock OpenAI streaming responses."""
+
     def create_mock_stream(content_chunks):
         """Create a mock stream with given content chunks."""
         mock_chunks = []

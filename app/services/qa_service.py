@@ -2,12 +2,14 @@
 Q&A Service using SBERT and OpenRouter AI.
 """
 
+import hashlib
+import json
 import logging
 import os
 import re
 import time
 from pathlib import Path
-from typing import AsyncGenerator, Dict, List, Optional, Set
+from typing import AsyncGenerator, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
 import requests
@@ -65,6 +67,43 @@ class QAMessages:
 QA_VOCAB_FILE = "tuvung.txt"  # Vietnamese vocabulary file
 
 
+def hash_question(question: str) -> str:
+    """
+    Normalize and hash question for consistent cache keys.
+
+    Args:
+        question: The question text to hash
+
+    Returns:
+        16-character MD5 hash of normalized question
+    """
+    # Normalize: lowercase, strip, collapse whitespace, remove extra punctuation
+    normalized = question.lower().strip()
+    normalized = re.sub(r"\s+", " ", normalized)  # Collapse multiple spaces
+    normalized = normalized.strip()  # Remove leading/trailing spaces
+
+    # Generate MD5 hash and return first 16 characters
+    return hashlib.md5(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def hash_content_for_summary(question: str, answers: List[Dict]) -> str:
+    """
+    Hash question and answers for summary caching.
+
+    Args:
+        question: The question text
+        answers: List of answer dictionaries
+
+    Returns:
+        16-character MD5 hash of content
+    """
+    # Create content string for hashing
+    content = question + json.dumps(answers, sort_keys=True, ensure_ascii=False)
+
+    # Generate MD5 hash and return first 16 characters
+    return hashlib.md5(content.encode("utf-8")).hexdigest()[:16]
+
+
 class QAService:
     """Service for handling health-related Q&A using semantic search."""
 
@@ -77,12 +116,13 @@ class QAService:
         "1_Pooling/config.json",
     ]
 
-    def __init__(self, settings):
-        """Initialize Q&A service with model and data."""
+    def __init__(self, settings, cache_service=None):
+        """Initialize Q&A service with model, data, and optional cache service."""
         self.settings = settings
         self.model_path = settings.qa_model_path
         self.data_path = settings.qa_data_path
         self.vocab_path = settings.qa_vocab_path
+        self.cache_service = cache_service
 
         # Ensure models are available (download from GCS if needed)
         if settings.model_auto_download:
@@ -96,6 +136,12 @@ class QAService:
         # Q&A behavior settings
         self.max_per_field = settings.qa_max_per_field
         self.openai_client = OpenAI(api_key=settings.openai_api_key)
+
+        # Log cache service status
+        if self.cache_service and self.cache_service.enabled:
+            logger.info("QAService initialized with caching enabled")
+        else:
+            logger.info("QAService initialized without caching")
 
     def _ensure_model_and_data_exist(self) -> None:
         """
@@ -291,7 +337,7 @@ class QAService:
             logger.error(f"Error loading model: {e}")
             raise RuntimeError(f"Failed to load Q&A model: {e}") from e
 
-    def _load_data(self) -> tuple[pd.DataFrame, any]:
+    def _load_data(self) -> Tuple[pd.DataFrame, any]:
         """
         Load and preprocess dataset.
 
@@ -361,7 +407,7 @@ class QAService:
 
         return " ".join(words)
 
-    def summarize_with_ai(
+    async def summarize_with_ai(
         self, user_question: str, collected_answers: List[str]
     ) -> str:
         """
@@ -376,6 +422,24 @@ class QAService:
         """
         if not collected_answers:
             return QAMessages.NO_DATA_TO_SUMMARIZE
+
+        # Check cache for AI summary if available
+        if self.cache_service and self.cache_service.enabled:
+            try:
+                content_hash = hash_content_for_summary(
+                    user_question, collected_answers
+                )
+                cache_key = f"qa:summary:{content_hash}"
+
+                cached_summary = await self.cache_service.get(cache_key)
+                if cached_summary:
+                    logger.info(f"Cache HIT for AI summary hash: {content_hash}")
+                    return cached_summary
+                else:
+                    logger.info(f"Cache MISS for AI summary hash: {content_hash}")
+            except Exception as e:
+                logger.warning(f"Cache get error for AI summary: {e}")
+                # Continue with normal flow if cache fails
 
         prompt = f"""Vai trò: Bạn là trợ lý AI chuyên tổng hợp thông tin.
 
@@ -411,12 +475,28 @@ class QAService:
                 max_tokens=2000,
             )
 
-            return response.choices[0].message.content
+            summary = response.choices[0].message.content
+
+            # Cache the AI summary if available (30 days TTL)
+            if self.cache_service and self.cache_service.enabled:
+                try:
+                    content_hash = hash_content_for_summary(
+                        user_question, collected_answers
+                    )
+                    cache_key = f"qa:summary:{content_hash}"
+
+                    # 30 days TTL for AI summaries (30 * 24 * 60 * 60 = 2592000 seconds)
+                    await self.cache_service.set(cache_key, summary, ttl=2592000)
+                    logger.info(f"Cached AI summary for hash: {content_hash}")
+                except Exception as e:
+                    logger.warning(f"Cache set error for AI summary: {e}")
+
+            return summary
         except Exception as e:
             logger.error(f"Error calling OpenAI API: {e}")
             return QAMessages.SUMMARIZE_ERROR.format(error=str(e))
 
-    def ask_question(
+    async def ask_question(
         self,
         user_question: str,
         threshold: Optional[float] = None,
@@ -444,6 +524,22 @@ class QAService:
             threshold = self.settings.qa_threshold
         if top_k is None:
             top_k = self.settings.qa_top_k
+
+        # Check cache first if available
+        if self.cache_service and self.cache_service.enabled:
+            try:
+                question_hash = hash_question(user_question)
+                cache_key = f"qa:answers:{question_hash}:{threshold}:{top_k}"
+
+                cached_result = await self.cache_service.get(cache_key)
+                if cached_result:
+                    logger.info(f"Cache HIT for question hash: {question_hash}")
+                    return json.loads(cached_result)
+                else:
+                    logger.info(f"Cache MISS for question hash: {question_hash}")
+            except Exception as e:
+                logger.warning(f"Cache get error for question: {e}")
+                # Continue with normal flow if cache fails
 
         # Preprocess question
         cleaned_question = self.preprocess_text(user_question)
@@ -501,9 +597,28 @@ class QAService:
                 result[field].append(full_text)
 
         # Generate AI summary
-        summary = self.summarize_with_ai(user_question, collected_answers)
+        summary = await self.summarize_with_ai(user_question, collected_answers)
 
-        return {"question": user_question, "answers": result, "summary": summary}
+        final_result = {
+            "question": user_question,
+            "answers": result,
+            "summary": summary,
+        }
+
+        # Cache the result if available
+        if self.cache_service and self.cache_service.enabled:
+            try:
+                question_hash = hash_question(user_question)
+                cache_key = f"qa:answers:{question_hash}:{threshold}:{top_k}"
+
+                await self.cache_service.set_json(
+                    cache_key, final_result, ttl=self.settings.cache_ttl_qa_answer
+                )
+                logger.info(f"Cached question result for hash: {question_hash}")
+            except Exception as e:
+                logger.warning(f"Cache set error for question: {e}")
+
+        return final_result
 
     async def stream_ask_question(
         self,
@@ -524,7 +639,9 @@ class QAService:
         try:
             # Phase 1: Semantic search (existing logic, async-safe)
             question_normalized = self.preprocess_text(question)
-            question_embedding = self.model.encode(question_normalized, convert_to_tensor=True)
+            question_embedding = self.model.encode(
+                question_normalized, convert_to_tensor=True
+            )
             similarities = util.cos_sim(question_embedding, self.question_embeddings)[0]
 
             # Get top results

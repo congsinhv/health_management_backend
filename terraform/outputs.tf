@@ -70,6 +70,11 @@ output "cloud_run_config" {
       MAIL_PASSWORD        = module.secret_manager.secret_versions["mail_password"]
       MAIL_FROM            = module.secret_manager.secret_versions["mail_from"]
       MAIL_SERVER          = module.secret_manager.secret_versions["mail_server"]
+      # Redis connection secrets
+      REDIS_HOST         = var.enable_redis_cache ? module.secret_manager.secret_versions["redis_host"] : null
+      REDIS_PORT         = var.enable_redis_cache ? module.secret_manager.secret_versions["redis_port"] : null
+      REDIS_AUTH_SECRET  = var.enable_redis_cache ? module.secret_manager.secret_versions["redis_auth_secret"] : null
+      ENABLE_REDIS_CACHE = var.enable_redis_cache ? module.secret_manager.secret_versions["enable_redis_cache"] : null
     }
   }
 }
@@ -133,4 +138,41 @@ output "scheduler_state" {
 output "scheduler_service_account_email" {
   description = "Cloud Scheduler service account email"
   value       = google_service_account.cloud_scheduler_sa.email
+}
+
+# Redis/Memorystore Outputs
+output "redis_host" {
+  description = "Redis instance host"
+  value       = var.enable_redis_cache ? module.memorystore.redis_host : null
+}
+
+output "redis_port" {
+  description = "Redis instance port"
+  value       = var.enable_redis_cache ? module.memorystore.redis_port : null
+}
+
+output "redis_url" {
+  description = "Redis connection URL"
+  value       = var.enable_redis_cache ? module.memorystore.redis_url : null
+  sensitive   = true
+}
+
+output "redis_auth_secret" {
+  description = "Secret Manager secret for Redis auth"
+  value       = var.enable_redis_cache ? module.memorystore.redis_auth_secret : null
+}
+
+output "redis_instance_id" {
+  description = "Redis instance ID"
+  value       = var.enable_redis_cache ? module.memorystore.redis_instance_id : null
+}
+
+output "redis_memory_size_gb" {
+  description = "Redis memory size in GB"
+  value       = var.enable_redis_cache ? module.memorystore.redis_memory_size_gb : null
+}
+
+output "redis_tier" {
+  description = "Redis tier"
+  value       = var.enable_redis_cache ? module.memorystore.redis_tier : null
 }

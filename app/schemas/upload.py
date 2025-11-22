@@ -3,6 +3,7 @@ Upload API schemas.
 """
 
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class UploadImageResponse(BaseModel):
@@ -10,7 +11,7 @@ class UploadImageResponse(BaseModel):
 
     url: str = Field(..., description="Public URL of the uploaded image")
     filename: str = Field(..., description="Filename of the uploaded image")
-    folder: str | None = Field(
+    folder: Optional[str] = Field(
         None, description="Folder path where the image was uploaded"
     )
 

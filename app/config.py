@@ -165,6 +165,68 @@ class Settings(BaseSettings):
         default=5, ge=1, le=10, description="Maximum answers per field category"
     )
 
+    # Redis Cache settings
+    # ========================================
+    enable_redis_cache: bool = Field(
+        default=False, description="Enable Redis caching for performance optimization"
+    )
+    redis_host: Optional[str] = Field(
+        None, description="Redis host (from GCP Memorystore)"
+    )
+    redis_port: int = Field(default=6379, description="Redis port")
+    redis_password: Optional[str] = Field(
+        None, description="Redis password (from Secret Manager)"
+    )
+    redis_db: int = Field(default=0, description="Redis database number")
+    redis_ssl: bool = Field(
+        default=True, description="Use SSL/TLS for Redis connection"
+    )
+    redis_max_connections: int = Field(
+        default=20, description="Maximum Redis connection pool size"
+    )
+    redis_connection_timeout: int = Field(
+        default=5, description="Redis connection timeout in seconds"
+    )
+
+    # TTL settings for different cache types (in seconds)
+    cache_ttl_qa_answer: int = Field(
+        default=1800, description="TTL for Q&A answers (30 minutes)"
+    )
+    cache_ttl_qa_summary: int = Field(
+        default=1800, description="TTL for Q&A AI summaries (30 minutes)"
+    )
+    cache_ttl_conversation_list: int = Field(
+        default=300, description="TTL for conversation list (5 minutes)"
+    )
+    cache_ttl_conversation_detail: int = Field(
+        default=600, description="TTL for conversation detail (10 minutes)"
+    )
+    cache_ttl_user_profile: int = Field(
+        default=600, description="TTL for user profile (10 minutes)"
+    )
+    cache_ttl_message_list: int = Field(
+        default=180, description="TTL for message list (3 minutes)"
+    )
+
+    @property
+    def redis_url(self) -> Optional[str]:
+        """Construct Redis URL from configuration."""
+        if not self.enable_redis_cache or not self.redis_host:
+            return None
+
+        # Build authentication part
+        auth_part = ""
+        if self.redis_password:
+            auth_part = f":{self.redis_password}@"
+
+        # Build URL with SSL requirement
+        url = f"redis://{auth_part}{self.redis_host}:{self.redis_port}/{self.redis_db}"
+
+        if self.redis_ssl:
+            url += "?ssl_cert_reqs=required"
+
+        return url
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

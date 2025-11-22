@@ -5,18 +5,26 @@ import logging
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 from pathlib import Path
 from openai import AsyncOpenAI
 from app.config import settings
 from app.schemas.predict import (
-    UserInput, PredictionResponse, UserInputResponse, PredictionDetail,
-    HealthMetrics, Metric, HealthAnalysis, DietPlan, WorkoutPlan
+    UserInput,
+    PredictionResponse,
+    UserInputResponse,
+    PredictionDetail,
+    HealthMetrics,
+    Metric,
+    HealthAnalysis,
+    DietPlan,
+    WorkoutPlan,
 )
 from app.utils.gcs_downloader import GCSDownloader
 
 logger = logging.getLogger(__name__)
 BASE_DIR = os.getcwd()
+
 
 class ObesityPredictorComplete:
     def __init__(self):
@@ -24,27 +32,61 @@ class ObesityPredictorComplete:
         model_dir = os.path.join(BASE_DIR, "models_obesity")
         model_path = os.path.join(model_dir, "obesity_classifier_final.pkl")
         encoder_path = os.path.join(model_dir, "label_encoder.pkl")
-        
-        # Download models from GCS if they don't exist locally
-        self._ensure_models_downloaded(model_path, encoder_path, model_dir)
-        
-        # Load model và encoder
-        self.model = joblib.load(model_path)
-        self.le = joblib.load(encoder_path)
+
+        # Check if models exist, otherwise set to None
+        if os.path.exists(model_path) and os.path.exists(encoder_path):
+            try:
+                # Download models from GCS if they don't exist locally
+                self._ensure_models_downloaded(model_path, encoder_path, model_dir)
+
+                # Load model và encoder
+                self.model = joblib.load(model_path)
+                self.le = joblib.load(encoder_path)
+                self.models_loaded = True
+            except Exception as e:
+                logger.error(f"Failed to load models: {e}")
+                self.model = None
+                self.le = None
+                self.models_loaded = False
+        else:
+            logger.warning(
+                "Model files not found, prediction service will be unavailable"
+            )
+            self.model = None
+            self.le = None
+            self.models_loaded = False
 
         self.features = [
-            'Gender', 'Age', 'Height', 'Weight', 'BMI', 'BMI_Category_Detailed',
-            'family_history_with_overweight', 'FAVC', 'FCVC', 'NCP', 'CAEC',
-            'CH2O', 'FAF', 'TUE', 'CALC', 'MTRANS_Calorie',
-            'Metabolic_Age', 'Family_Risk_Score', 'Lifestyle_Score', 'Diet_Quality'
+            "Gender",
+            "Age",
+            "Height",
+            "Weight",
+            "BMI",
+            "BMI_Category_Detailed",
+            "family_history_with_overweight",
+            "FAVC",
+            "FCVC",
+            "NCP",
+            "CAEC",
+            "CH2O",
+            "FAF",
+            "TUE",
+            "CALC",
+            "MTRANS_Calorie",
+            "Metabolic_Age",
+            "Family_Risk_Score",
+            "Lifestyle_Score",
+            "Diet_Quality",
         ]
 
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
 
-    def _ensure_models_downloaded(self, model_path: str, encoder_path: str, model_dir: str):
+    def _ensure_models_downloaded(
+        self, model_path: str, encoder_path: str, model_dir: str
+    ):
         """
         Ensure obesity prediction models are downloaded from GCS if not present locally.
-        
+
         Args:
             model_path: Path to the model file
             encoder_path: Path to the encoder file
@@ -52,12 +94,12 @@ class ObesityPredictorComplete:
         """
         model_exists = os.path.exists(model_path)
         encoder_exists = os.path.exists(encoder_path)
-        
+
         # If both files exist, no need to download
         if model_exists and encoder_exists:
             logger.info("Obesity prediction models already exist locally")
             return
-        
+
         # Check if GCS bucket is configured
         if not settings.gcp_model_bucket:
             logger.error(
@@ -65,38 +107,42 @@ class ObesityPredictorComplete:
                 "or place model files manually in models_obesity/ directory"
             )
             raise ValueError("Model files not found and GCS bucket not configured")
-        
+
         logger.info("Downloading obesity prediction models from GCS...")
-        
+
         try:
             # Create model directory if it doesn't exist
             Path(model_dir).mkdir(parents=True, exist_ok=True)
-            
+
             # Initialize GCS downloader
             downloader = GCSDownloader(
                 bucket_name=settings.gcp_model_bucket,
                 project_id=settings.gcp_project_id,
                 timeout=settings.model_download_timeout,
             )
-            
+
             # Download model file if missing
             if not model_exists:
                 blob_path = "models_obesity/obesity_classifier_final.pkl"
                 logger.info(f"Downloading {blob_path}...")
                 success = downloader.download_file(blob_path, model_path, force=False)
                 if not success:
-                    raise RuntimeError(f"Failed to download model file from GCS: {blob_path}")
-            
+                    raise RuntimeError(
+                        f"Failed to download model file from GCS: {blob_path}"
+                    )
+
             # Download encoder file if missing
             if not encoder_exists:
                 blob_path = "models_obesity/label_encoder.pkl"
                 logger.info(f"Downloading {blob_path}...")
                 success = downloader.download_file(blob_path, encoder_path, force=False)
                 if not success:
-                    raise RuntimeError(f"Failed to download encoder file from GCS: {blob_path}")
-            
+                    raise RuntimeError(
+                        f"Failed to download encoder file from GCS: {blob_path}"
+                    )
+
             logger.info("Successfully downloaded obesity prediction models from GCS")
-            
+
         except Exception as e:
             logger.error(f"Error downloading models from GCS: {e}")
             raise RuntimeError(
@@ -106,13 +152,17 @@ class ObesityPredictorComplete:
             )
 
     def predict_complete(self, user_inputs: dict):
+        # Check if models are loaded
+        if not self.models_loaded or self.model is None or self.le is None:
+            raise RuntimeError("Models not loaded - prediction service unavailable")
+
         age = user_inputs["age"]
         height = user_inputs["height"]
         weight = user_inputs["weight"]
         gender = user_inputs["gender"]
         family_history = user_inputs["family_history"]
 
-        bmi = weight / (height ** 2)
+        bmi = weight / (height**2)
         bmi_cat = self._bmi_category_index(bmi)
         metabolic_age = age * bmi / 10
         family_risk_score = (1 if family_history else 0) * bmi_cat
@@ -131,26 +181,26 @@ class ObesityPredictorComplete:
         diet_quality = fcvc + ch2o - (1 if favc else 0)
 
         input_data = {
-            'Gender': 1 if gender.lower() in ['nam', 'male', '1'] else 0,
-            'Age': age,
-            'Height': height,
-            'Weight': weight,
-            'BMI': bmi,
-            'BMI_Category_Detailed': bmi_cat,
-            'family_history_with_overweight': 1 if family_history else 0,
-            'FAVC': favc,
-            'FCVC': fcvc,
-            'NCP': ncp,
-            'CAEC': caec,
-            'CH2O': ch2o,
-            'FAF': faf,
-            'TUE': tue,
-            'CALC': calc,
-            'MTRANS_Calorie': mtrans,
-            'Metabolic_Age': metabolic_age,
-            'Family_Risk_Score': family_risk_score,
-            'Lifestyle_Score': lifestyle_score,
-            'Diet_Quality': diet_quality
+            "Gender": 1 if gender.lower() in ["nam", "male", "1"] else 0,
+            "Age": age,
+            "Height": height,
+            "Weight": weight,
+            "BMI": bmi,
+            "BMI_Category_Detailed": bmi_cat,
+            "family_history_with_overweight": 1 if family_history else 0,
+            "FAVC": favc,
+            "FCVC": fcvc,
+            "NCP": ncp,
+            "CAEC": caec,
+            "CH2O": ch2o,
+            "FAF": faf,
+            "TUE": tue,
+            "CALC": calc,
+            "MTRANS_Calorie": mtrans,
+            "Metabolic_Age": metabolic_age,
+            "Family_Risk_Score": family_risk_score,
+            "Lifestyle_Score": lifestyle_score,
+            "Diet_Quality": diet_quality,
         }
 
         df = pd.DataFrame([input_data])
@@ -161,23 +211,23 @@ class ObesityPredictorComplete:
             "dự_đoán": self.le.inverse_transform([prediction])[0],
             "độ_tin_cậy": f"{confidence:.1%}",
             "bmi": f"{bmi:.1f}",
-            "phân_loại_bmi": self._get_bmi_category(bmi)
+            "phân_loại_bmi": self._get_bmi_category(bmi),
         }
 
     async def predict_obesity_ai(self, data: UserInput) -> PredictionResponse:
         # 1. Get base prediction
         result = self.predict_complete(data.dict())
-        level = result['dự_đoán']
-        confidence_str = result['độ_tin_cậy'].replace('%', '')
+        level = result["dự_đoán"]
+        confidence_str = result["độ_tin_cậy"].replace("%", "")
         confidence = float(confidence_str)
-        bmi = float(result['bmi'])
-        
+        bmi = float(result["bmi"])
+
         # 2. Generate AI advice
         ai_response = await self._generate_ai_advice(data, level, bmi)
-        
+
         # 3. Construct UserInputResponse
         user_input_response = self._map_user_input_response(data)
-        
+
         # 4. Construct final response
         return PredictionResponse(
             id=str(uuid.uuid4()),
@@ -188,19 +238,27 @@ class ObesityPredictorComplete:
                 confidence=confidence,
                 bmi=bmi,
                 status=self._map_status(level),
-                reliability="high" if confidence > 70 else "medium"
+                reliability="high" if confidence > 70 else "medium",
             ),
             healthMetrics=HealthMetrics(
                 weight=Metric(label="Cân nặng", value=data.weight, unit="kg"),
                 bmi=Metric(label="BMI", value=bmi, unit=""),
-                height=Metric(label="Chiều cao", value=data.height, unit="m")
+                height=Metric(label="Chiều cao", value=data.height, unit="m"),
             ),
-            healthAnalysis=HealthAnalysis(paragraphs=ai_response.get("healthAnalysis", [])),
-            dietPlan=DietPlan(weeklyPlans=ai_response.get("dietPlan", {}).get("weeklyPlans", [])),
-            workoutPlan=WorkoutPlan(weeklyPlans=ai_response.get("workoutPlan", {}).get("weeklyPlans", []))
+            healthAnalysis=HealthAnalysis(
+                paragraphs=ai_response.get("healthAnalysis", [])
+            ),
+            dietPlan=DietPlan(
+                weeklyPlans=ai_response.get("dietPlan", {}).get("weeklyPlans", [])
+            ),
+            workoutPlan=WorkoutPlan(
+                weeklyPlans=ai_response.get("workoutPlan", {}).get("weeklyPlans", [])
+            ),
         )
 
-    async def _generate_ai_advice(self, data: UserInput, level: str, bmi: float) -> Dict[str, Any]:
+    async def _generate_ai_advice(
+        self, data: UserInput, level: str, bmi: float
+    ) -> Dict[str, Any]:
         prompt = f"""
         Bạn là chuyên gia dinh dưỡng và huấn luyện viên cá nhân.
         Người dùng có thông tin:
@@ -240,19 +298,23 @@ class ObesityPredictorComplete:
         
         Chỉ tạo kế hoạch cho 1 ngày mẫu. Đảm bảo phản hồi là JSON hợp lệ.
         """
-        
+
         try:
             response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content
             return json.loads(content)
         except Exception as e:
             logger.error(f"Error generating AI advice: {e}")
             # Return empty structure on error to avoid crash
-            return {"healthAnalysis": ["Không thể tạo phân tích lúc này."], "dietPlan": {"weeklyPlans": []}, "workoutPlan": {"weeklyPlans": []}}
+            return {
+                "healthAnalysis": ["Không thể tạo phân tích lúc này."],
+                "dietPlan": {"weeklyPlans": []},
+                "workoutPlan": {"weeklyPlans": []},
+            }
 
     def _map_status(self, level: str) -> str:
         mapping = {
@@ -262,7 +324,7 @@ class ObesityPredictorComplete:
             "Overweight_Level_II": "Thừa cân cấp độ II",
             "Obesity_Type_I": "Béo phì độ I",
             "Obesity_Type_II": "Béo phì độ II",
-            "Obesity_Type_III": "Béo phì độ III"
+            "Obesity_Type_III": "Béo phì độ III",
         }
         return mapping.get(level, level)
 
@@ -274,27 +336,47 @@ class ObesityPredictorComplete:
             height=data.height,
             weight=data.weight,
             familyHistory="Có" if data.family_history else "Không",
-            highCalorieFood="Thường xuyên" if data.FAVC else "Không", # FAVC is usually binary yes/no
-            vegetableFrequency=self._map_frequency(data.FCVC, ["Không bao giờ", "Thỉnh thoảng", "Thường xuyên"]),
+            highCalorieFood="Thường xuyên"
+            if data.FAVC
+            else "Không",  # FAVC is usually binary yes/no
+            vegetableFrequency=self._map_frequency(
+                data.FCVC, ["Không bao giờ", "Thỉnh thoảng", "Thường xuyên"]
+            ),
             waterIntake=self._map_frequency(data.CH2O, ["< 1L", "1-2L", "> 2L"]),
             mainMeals=int(data.NCP) if data.NCP else 3,
-            snackFrequency=self._map_frequency(data.CAEC, ["Không", "Thỉnh thoảng", "Thường xuyên", "Luôn luôn"], offset=0),
-            physicalActivity=self._map_frequency(data.FAF, ["Không", "1-2 ngày", "2-4 ngày", "> 4 ngày"], offset=0),
-            screenTime=self._map_frequency(data.TUE, ["0-2h", "3-5h", "> 5h"], offset=0),
+            snackFrequency=self._map_frequency(
+                data.CAEC,
+                ["Không", "Thỉnh thoảng", "Thường xuyên", "Luôn luôn"],
+                offset=0,
+            ),
+            physicalActivity=self._map_frequency(
+                data.FAF, ["Không", "1-2 ngày", "2-4 ngày", "> 4 ngày"], offset=0
+            ),
+            screenTime=self._map_frequency(
+                data.TUE, ["0-2h", "3-5h", "> 5h"], offset=0
+            ),
             transportation=self._map_transport(data.MTRANS_Calorie),
-            smoking="Không", # Default as not in input
-            alcohol=self._map_frequency(data.CALC, ["Không", "Thỉnh thoảng", "Thường xuyên", "Luôn luôn"], offset=0) if data.CALC is not None else "Không"
+            smoking="Không",  # Default as not in input
+            alcohol=self._map_frequency(
+                data.CALC,
+                ["Không", "Thỉnh thoảng", "Thường xuyên", "Luôn luôn"],
+                offset=0,
+            )
+            if data.CALC is not None
+            else "Không",
         )
 
-    def _map_frequency(self, value: float | None, labels: list, offset: int = 1) -> str:
+    def _map_frequency(
+        self, value: Optional[float], labels: List, offset: int = 1
+    ) -> str:
         if value is None:
             return labels[0]
         idx = int(round(value)) - offset
         idx = max(0, min(idx, len(labels) - 1))
         return labels[idx]
 
-    def _map_transport(self, value: int | None) -> str:
-        # Mapping based on dataset encoding usually: 
+    def _map_transport(self, value: Optional[int]) -> str:
+        # Mapping based on dataset encoding usually:
         # 0: Automobile, 1: Motorbike, 2: Bike, 3: Public_Transportation, 4: Walking
         # But check the model training encoding. Assuming standard mapping or just returning generic.
         # In the original code, MTRANS_Calorie default is 1.
@@ -305,24 +387,38 @@ class ObesityPredictorComplete:
             1: "Xe máy",
             2: "Xe đạp",
             3: "Phương tiện công cộng",
-            4: "Đi bộ"
+            4: "Đi bộ",
         }
         return mapping.get(value, "Khác")
 
     def _bmi_category_index(self, bmi):
-        if bmi < 16: return 0
-        elif bmi < 17: return 1
-        elif bmi < 18.5: return 2
-        elif bmi < 25: return 3
-        elif bmi < 30: return 4
-        elif bmi < 35: return 5
-        elif bmi < 40: return 6
-        else: return 7
+        if bmi < 16:
+            return 0
+        elif bmi < 17:
+            return 1
+        elif bmi < 18.5:
+            return 2
+        elif bmi < 25:
+            return 3
+        elif bmi < 30:
+            return 4
+        elif bmi < 35:
+            return 5
+        elif bmi < 40:
+            return 6
+        else:
+            return 7
 
     def _get_bmi_category(self, bmi):
-        if bmi < 18.5: return "Thiếu cân"
-        elif bmi < 25: return "Bình thường"
-        elif bmi < 30: return "Thừa cân"
-        elif bmi < 35: return "Béo phì cấp I"
-        elif bmi < 40: return "Béo phì cấp II"
-        else: return "Béo phì cấp III"
+        if bmi < 18.5:
+            return "Thiếu cân"
+        elif bmi < 25:
+            return "Bình thường"
+        elif bmi < 30:
+            return "Thừa cân"
+        elif bmi < 35:
+            return "Béo phì cấp I"
+        elif bmi < 40:
+            return "Béo phì cấp II"
+        else:
+            return "Béo phì cấp III"

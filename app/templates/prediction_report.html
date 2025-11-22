@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+</head>
+<body>
+    <!-- Page 1: User Information and Prediction Results -->
+    <div class="header">
+        <div class="title">{{ title }}</div>
+        <div>Ngày tạo: {{ generated_at }}</div>
+    </div>
+
+    <!-- User Information Section -->
+    <div class="section">
+        <div class="section-title">Thông Tin Người Dùng</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Họ tên</div>
+                <div class="info-value">{{ user_input.name }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Giới tính</div>
+                <div class="info-value">{{ user_input.gender }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Tuổi</div>
+                <div class="info-value">{{ user_input.age }} tuổi</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Chiều cao</div>
+                <div class="info-value">{{ user_input.height }} m</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Cân nặng</div>
+                <div class="info-value">{{ user_input.weight }} kg</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Tiền sử gia đình</div>
+                <div class="info-value">{% if user_input.family_history %}Có{% else %}Không{% endif %}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prediction Results Section -->
+    <div class="section">
+        <div class="section-title">Kết Quả Dự Đoán</div>
+        <div class="prediction-badge">
+            {{ prediction.prediction.level }}
+            <span class="confidence">{{ "%.1f"|format(prediction.prediction.confidence) }}% độ tin cậy</span>
+        </div>
+
+        <div class="info-grid">
+            <div class="metric">
+                <span class="metric-label">BMI</span>
+                <span class="metric-value">{{ "%.1f"|format(prediction.prediction.bmi) }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Trạng thái</span>
+                <span class="metric-value">{{ prediction.prediction.status }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Health Metrics Section -->
+    <div class="section">
+        <div class="section-title">Chỉ Số Sức Khỏe</div>
+        <div class="info-grid">
+            <div class="metric">
+                <span class="metric-label">{{ prediction.healthMetrics.weight.label }}</span>
+                <span class="metric-value">{{ prediction.healthMetrics.weight.value }}</span>
+                <span class="metric-unit">{{ prediction.healthMetrics.weight.unit }}</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">{{ prediction.healthMetrics.height.label }}</span>
+                <span class="metric-value">{{ prediction.healthMetrics.height.value }}</span>
+                <span class="metric-unit">{{ prediction.healthMetrics.height.unit }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Break -->
+    <div class="page-break"></div>
+
+    <!-- Page 2: Health Analysis and Plans -->
+    <div class="header">
+        <div class="title">{{ title }}</div>
+        <div>Phân Tích và Kế Hoạch Sức Khỏe</div>
+    </div>
+
+    <!-- Health Analysis Section -->
+    <div class="section">
+        <div class="section-title">Phân Tích Sức Khỏe</div>
+        <div class="health-analysis">
+            {% for paragraph in prediction.healthAnalysis.paragraphs %}
+            <p class="analysis-paragraph">{{ paragraph }}</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Diet Plan Section -->
+    {% if prediction.dietPlan.weeklyPlans %}
+    <div class="section">
+        <div class="section-title">Kế Hoạch Dinh Dưỡng</div>
+        {% for day_plan in prediction.dietPlan.weeklyPlans %}
+        <div class="plan-section">
+            <div class="day-plan">
+                <div class="day-title">Ngày {{ day_plan.day }}</div>
+
+                <div class="meal-section">
+                    <div class="meal-title">Bữa sáng:</div>
+                    {% for food in day_plan.breakfast %}
+                    <div class="food-item">• {{ food.name }} ({{ food.calories }} cal, {{ food.count }} {{ food.unit }})</div>
+                    {% endfor %}
+                </div>
+
+                <div class="meal-section">
+                    <div class="meal-title">Bữa trưa:</div>
+                    {% for food in day_plan.lunch %}
+                    <div class="food-item">• {{ food.name }} ({{ food.calories }} cal, {{ food.count }} {{ food.unit }})</div>
+                    {% endfor %}
+                </div>
+
+                <div class="meal-section">
+                    <div class="meal-title">Bữa tối:</div>
+                    {% for food in day_plan.dinner %}
+                    <div class="food-item">• {{ food.name }} ({{ food.calories }} cal, {{ food.count }} {{ food.unit }})</div>
+                    {% endfor %}
+                </div>
+
+                {% if day_plan.recommendedFoods %}
+                <div class="meal-section">
+                    <div class="meal-title">Thực phẩm khuyên dùng:</div>
+                    <div class="food-item">{{ day_plan.recommendedFoods }}</div>
+                </div>
+                {% endif %}
+
+                {% if day_plan.foodsToLimit %}
+                <div class="meal-section">
+                    <div class="meal-title">Thực phẩm cần hạn chế:</div>
+                    <div class="food-item">{{ day_plan.foodsToLimit }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Workout Plan Section -->
+    {% if prediction.workoutPlan.weeklyPlans %}
+    <div class="section">
+        <div class="section-title">Kế Hoạch Tập Luyện</div>
+        {% for workout_plan in prediction.workoutPlan.weeklyPlans %}
+        <div class="plan-section">
+            <div class="day-plan">
+                <div class="day-title">{{ workout_plan.name }} - Ngày {{ workout_plan.day }}</div>
+                {% for exercise in workout_plan.exercises %}
+                <div class="exercise-item">
+                    <span class="exercise-name">{{ exercise.name }}</span>
+                    {% if exercise.duration %}
+                    <span class="exercise-details">({{ exercise.duration }} {{ exercise.unit }})</span>
+                    {% endif %}
+                    {% if exercise.sets and exercise.reps %}
+                    <span class="exercise-details">{{ exercise.sets }} hiệp × {{ exercise.reps }} lần</span>
+                    {% endif %}
+                    <div class="exercise-details">{{ exercise.description }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <div class="footer">
+        <div>Báo cáo được tạo tự động bởi Hệ thống Quản lý Sức khỏe</div>
+        <div>Đây là tài liệu tham khảo, hãy tham khảo ý kiến chuyên gia để có lời khuyên tốt nhất</div>
+    </div>
+</body>
+</html>

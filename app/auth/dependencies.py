@@ -93,6 +93,10 @@ async def get_current_active_superuser(
     return current_user
 
 
+# Alias for admin operations
+require_admin = get_current_active_superuser
+
+
 # Optional user dependency for routes that work with or without authentication
 async def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),

@@ -7,6 +7,7 @@ import asyncpg
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
+from app.config import logger
 from app.db.message import MessageRepository
 from app.db.message_version import MessageVersionRepository
 from app.db.conversation import ConversationRepository
@@ -26,10 +27,17 @@ from app.services.ai_chat import AIChatService
 class MessageService:
     """Service layer for message operations."""
 
-    def __init__(self, db_pool: asyncpg.Pool):
+    def __init__(self, db_pool: asyncpg.Pool, cache_service=None):
         self.message_repo = MessageRepository(db_pool)
         self.version_repo = MessageVersionRepository(db_pool)
         self.conversation_repo = ConversationRepository(db_pool)
+        self.cache_service = cache_service
+
+        # Log cache service status
+        if self.cache_service and self.cache_service.enabled:
+            logger.info("MessageService initialized with caching enabled")
+        else:
+            logger.info("MessageService initialized without caching")
 
     def _transform_message_record(self, record: asyncpg.Record) -> Dict[str, Any]:
         """Transform database record to MessageResponse format."""
@@ -43,6 +51,46 @@ class MessageService:
             "created_at": record["created_at"],
             "updated_at": record["updated_at"],
         }
+
+    async def _invalidate_message_caches(self, conversation_id: int):
+        """Invalidate all message-related caches for a conversation."""
+        if not self.cache_service or not self.cache_service.enabled:
+            return
+
+        try:
+            # Build patterns for cache invalidation
+            patterns = [
+                f"msg:list:{conversation_id}:*",  # All message lists with pagination
+                f"msg:latest:{conversation_id}",  # Latest message
+                f"msg:count:{conversation_id}",  # Message count
+            ]
+
+            # Delete all matching patterns
+            for pattern in patterns:
+                deleted_count = await self.cache_service.delete_pattern(pattern)
+                if deleted_count > 0:
+                    logger.debug(
+                        f"Invalidated {deleted_count} message cache entries for pattern: {pattern}"
+                    )
+
+            # Also invalidate conversation message count cache (cross-service)
+            conv_msg_count_pattern = f"conv:msgcount:{conversation_id}"
+            conv_deleted_count = await self.cache_service.delete_pattern(
+                conv_msg_count_pattern
+            )
+            if conv_deleted_count > 0:
+                logger.debug(
+                    f"Invalidated {conv_deleted_count} conversation message count cache entries"
+                )
+
+            logger.info(
+                f"Invalidated message caches for conversation {conversation_id}"
+            )
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to invalidate message caches for conversation {conversation_id}: {e}"
+            )
 
     async def create_message(
         self,
@@ -86,6 +134,9 @@ class MessageService:
 
         message_response = MessageResponse(**self._transform_message_record(record))
 
+        # Invalidate caches for this conversation
+        await self._invalidate_message_caches(conversation_id)
+
         # Broadcast message creation to conversation participants
         await self._broadcast_message_created(
             message_response, conversation_id, exclude_user=str(user_id)
@@ -126,7 +177,22 @@ class MessageService:
         if not conversation:
             raise ValueError("Conversation not found or access denied")
 
-        # Get messages
+        # Check cache (only cache recent messages without pagination for better performance)
+        cache_key = None
+        if (
+            before is None and limit <= 50
+        ):  # Only cache first page with reasonable limit
+            cache_key = f"msg:list:{conversation_id}:{limit}"
+            if self.cache_service and self.cache_service.enabled:
+                try:
+                    cached_data = await self.cache_service.get_json(cache_key)
+                    if cached_data:
+                        logger.debug(f"Cache HIT for message list: {cache_key}")
+                        return MessageList(**cached_data)
+                except Exception as e:
+                    logger.warning(f"Cache retrieval failed for {cache_key}: {e}")
+
+        # Cache miss or pagination - get from database
         records = await self.message_repo.list_by_conversation(
             conversation_id, limit=limit, before=before
         )
@@ -139,8 +205,19 @@ class MessageService:
         # Determine pagination info
         has_more = len(messages) == limit
         cursor = records[-1]["id"] if records and has_more else None
+        result = MessageList(messages=messages, has_more=has_more, cursor=cursor)
 
-        return MessageList(messages=messages, has_more=has_more, cursor=cursor)
+        # Cache result (only if no pagination and reasonable limit)
+        if cache_key and self.cache_service and self.cache_service.enabled:
+            try:
+                await self.cache_service.set_json(
+                    cache_key, result.dict(), ttl=300
+                )  # 5 minutes TTL
+                logger.debug(f"Cache SET for message list: {cache_key}")
+            except Exception as e:
+                logger.warning(f"Cache set failed for {cache_key}: {e}")
+
+        return result
 
     async def update_message(
         self,
@@ -174,6 +251,9 @@ class MessageService:
 
         message_response = MessageResponse(**self._transform_message_record(record))
 
+        # Invalidate caches for this conversation
+        await self._invalidate_message_caches(conversation_id)
+
         # Broadcast message update to conversation participants
         await self._broadcast_message_updated(
             message_response, conversation_id, exclude_user=str(user_id)
@@ -200,6 +280,9 @@ class MessageService:
         success = await self.message_repo.delete(message_id, conversation_id)
 
         if success:
+            # Invalidate caches for this conversation
+            await self._invalidate_message_caches(conversation_id)
+
             # Broadcast message deletion to conversation participants
             await self._broadcast_message_deleted(
                 message_id, conversation_id, exclude_user=str(user_id)
@@ -309,13 +392,37 @@ class MessageService:
         if not conversation:
             return None
 
+        # Check cache first
+        cache_key = f"msg:latest:{conversation_id}"
+        if self.cache_service and self.cache_service.enabled:
+            try:
+                cached_data = await self.cache_service.get_json(cache_key)
+                if cached_data:
+                    logger.debug(f"Cache HIT for latest message: {cache_key}")
+                    return MessageResponse(**cached_data)
+            except Exception as e:
+                logger.warning(f"Cache retrieval failed for {cache_key}: {e}")
+
+        # Cache miss - get from database
         record = await self.message_repo.get_conversation_latest_message(
             conversation_id
         )
         if not record:
             return None
 
-        return MessageResponse(**self._transform_message_record(record))
+        message_response = MessageResponse(**self._transform_message_record(record))
+
+        # Cache the result (shorter TTL for latest message)
+        if self.cache_service and self.cache_service.enabled:
+            try:
+                await self.cache_service.set_json(
+                    cache_key, message_response.dict(), ttl=120
+                )  # 2 minutes TTL
+                logger.debug(f"Cache SET for latest message: {cache_key}")
+            except Exception as e:
+                logger.warning(f"Cache set failed for {cache_key}: {e}")
+
+        return message_response
 
     async def count_messages_in_conversation(
         self, conversation_id: int, user_id: int

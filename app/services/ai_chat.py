@@ -5,7 +5,7 @@ AI Chat Service for intelligent conversation responses.
 import json
 import asyncpg
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timezone
 from app.services.qa_service import QAService
 from app.db.message import MessageRepository
@@ -93,7 +93,7 @@ class AIChatService:
 
     async def create_ai_message_pair(
         self, user_id: int, conversation_id: int, user_prompt: str
-    ) -> tuple[MessageResponse, Optional[MessageResponse]]:
+    ) -> Tuple[MessageResponse, Optional[MessageResponse]]:
         """Create user message and AI response pair."""
         # Verify user owns the conversation
         conversation = await self.conversation_repo.get_by_id_and_user(

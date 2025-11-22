@@ -15,10 +15,16 @@ async def test_stream_summarize_with_ai_token_accumulation():
     """Test token accumulation during streaming."""
 
     # Setup QA service with minimal mocking
-    settings = Settings(qa_enabled=True, openai_api_key="test-key")
+    settings = Settings(
+        qa_enabled=True,
+        openai_api_key="test-key",
+        database_url="postgresql://test",
+        secret_key="test-secret",
+    )
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(
+        QAService, "_load_data", return_value=(pd.DataFrame(), [])
+    ):
         qa_service = QAService(settings)
 
     # Mock OpenAI streaming response
@@ -37,7 +43,9 @@ async def test_stream_summarize_with_ai_token_accumulation():
     mock_chunk.choices = [mock_choice]
     mock_chunks.append(mock_chunk)
 
-    with patch.object(qa_service.openai_client.chat.completions, 'create') as mock_create:
+    with patch.object(
+        qa_service.openai_client.chat.completions, "create"
+    ) as mock_create:
         mock_create.return_value = iter(mock_chunks)
 
         # Execute streaming
@@ -59,22 +67,26 @@ async def test_stream_ask_question_event_sequence():
     """Test correct event sequence from stream_ask_question."""
 
     # Setup with mocked SBERT and data
-    settings = Settings(qa_enabled=True)
+    settings = Settings(
+        qa_enabled=True, database_url="postgresql://test", secret_key="test-secret"
+    )
 
-    with patch.object(QAService, '_load_model') as mock_model, \
-         patch.object(QAService, '_load_data') as mock_data:
-
+    with patch.object(QAService, "_load_model") as mock_model, patch.object(
+        QAService, "_load_data", return_value=(pd.DataFrame(), [])
+    ) as mock_data:
         # Mock SBERT model
         qa_service = QAService(settings)
         qa_service.model = MagicMock()
         qa_service.model.encode.return_value = [0.1, 0.2, 0.3]
 
         # Mock data and embeddings
-        mock_df = pd.DataFrame({
-            "Câu hỏi": ["Q1", "Q2"],
-            "Câu trả lời": ["A1", "A2"],
-            "Lĩnh vực": ["Health", "Nutrition"]
-        })
+        mock_df = pd.DataFrame(
+            {
+                "Câu hỏi": ["Q1", "Q2"],
+                "Câu trả lời": ["A1", "A2"],
+                "Lĩnh vực": ["Health", "Nutrition"],
+            }
+        )
         qa_service.df = mock_df
         qa_service.question_embeddings = [[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]]
 
@@ -93,7 +105,9 @@ async def test_stream_ask_question_event_sequence():
         mock_chunk.choices = [mock_choice]
         mock_chunks.append(mock_chunk)
 
-        with patch.object(qa_service.openai_client.chat.completions, 'create') as mock_create:
+        with patch.object(
+            qa_service.openai_client.chat.completions, "create"
+        ) as mock_create:
             mock_create.return_value = iter(mock_chunks)
 
             # Execute
@@ -104,7 +118,7 @@ async def test_stream_ask_question_event_sequence():
             # Validate sequence
             event_types = []
             for event in events:
-                if 'event_type' in event:
+                if "event_type" in event:
                     # Extract event type from SSE format
                     event_type = event.split('"event_type":"')[1].split('"')[0]
                     event_types.append(event_type)
@@ -119,10 +133,13 @@ async def test_stream_ask_question_event_sequence():
 async def test_stream_ask_question_error_event_emission():
     """Test error event emission on exception."""
 
-    settings = Settings(qa_enabled=True)
+    settings = Settings(
+        qa_enabled=True, database_url="postgresql://test", secret_key="test-secret"
+    )
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(
+        QAService, "_load_data", return_value=(pd.DataFrame(), [])
+    ):
         qa_service = QAService(settings)
 
         # Mock model to raise exception
@@ -134,30 +151,38 @@ async def test_stream_ask_question_error_event_emission():
         async for event in qa_service.stream_ask_question("test question"):
             events.append(event)
 
-        # Should have error event
-        assert len(events) == 1
-        assert "error" in events[0]
-        assert "processing_error" in events[0]
+        # Should have question_received and error event
+        assert len(events) == 2
+        assert "question_received" in events[0]
+        assert "error" in events[1]
+        assert "processing_error" in events[1]
 
 
 @pytest.mark.asyncio
 async def test_stream_summarize_with_ai_openai_error():
     """Test error handling when OpenAI API fails."""
 
-    settings = Settings(qa_enabled=True)
+    settings = Settings(
+        qa_enabled=True, database_url="postgresql://test", secret_key="test-secret"
+    )
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(
+        QAService, "_load_data", return_value=(pd.DataFrame(), [])
+    ):
         qa_service = QAService(settings)
 
         # Mock OpenAI to raise exception
-        with patch.object(qa_service.openai_client.chat.completions, 'create') as mock_create:
+        with patch.object(
+            qa_service.openai_client.chat.completions, "create"
+        ) as mock_create:
             mock_create.side_effect = Exception("OpenAI API error")
 
             # Execute
             events = []
             grouped_answers = {"Field": ["Answer1"]}
-            async for event in qa_service.stream_summarize_with_ai("test", grouped_answers):
+            async for event in qa_service.stream_summarize_with_ai(
+                "test", grouped_answers
+            ):
                 events.append(event)
 
             # Should have error event
@@ -169,16 +194,19 @@ async def test_stream_summarize_with_ai_openai_error():
 def test_build_summary_prompt_helper():
     """Test _build_summary_prompt helper method."""
 
-    settings = Settings(qa_enabled=True)
+    settings = Settings(
+        qa_enabled=True, database_url="postgresql://test", secret_key="test-secret"
+    )
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(
+        QAService, "_load_data", return_value=(pd.DataFrame(), [])
+    ):
         qa_service = QAService(settings)
 
         question = "How to stay healthy?"
         grouped_answers = {
             "Diet": ["Eat vegetables", "Drink water"],
-            "Exercise": ["Walk daily", "Do yoga"]
+            "Exercise": ["Walk daily", "Do yoga"],
         }
 
         prompt = qa_service._build_summary_prompt(question, grouped_answers)
@@ -197,31 +225,38 @@ def test_build_summary_prompt_helper():
 async def test_stream_ask_question_no_results_found():
     """Test streaming when no search results are found."""
 
-    settings = Settings(qa_enabled=True)
+    settings = Settings(
+        qa_enabled=True, database_url="postgresql://test", secret_key="test-secret"
+    )
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(
+        QAService, "_load_data", return_value=(pd.DataFrame(), [])
+    ):
         qa_service = QAService(settings)
 
-        # Mock model to return low similarities
+        # Mock model encode
         qa_service.model = MagicMock()
-        qa_service.model.encode.return_value = [0.1, 0.2, 0.3]
+        qa_service.model.encode.return_value = MagicMock()
 
         # Mock empty dataframe
         qa_service.df = pd.DataFrame()
         qa_service.question_embeddings = []
 
-        # Execute
-        events = []
-        async for event in qa_service.stream_ask_question("test"):
-            events.append(event)
+        # Mock cos_sim to return empty similarities
+        with patch("app.services.qa_service.util.cos_sim") as mock_cos_sim:
+            mock_cos_sim.return_value = [[]]  # Empty similarity results
 
-        # Should still have question_received and answers_found events
-        assert len(events) >= 2
+            # Execute
+            events = []
+            async for event in qa_service.stream_ask_question("test"):
+                events.append(event)
 
-        # First event should be question_received
-        assert "question_received" in events[0]
+            # Should still have question_received and answers_found events
+            assert len(events) >= 2
 
-        # Should have answers_found with empty results
-        assert "answers_found" in events[1]
-        assert '"count":0' in events[1]
+            # First event should be question_received
+            assert "question_received" in events[0]
+
+            # Should have answers_found with empty results
+            assert "answers_found" in events[1]
+            assert '"count":0' in events[1]

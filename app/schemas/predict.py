@@ -1,35 +1,41 @@
 # app/schemas/predict.py
+from typing import Optional, List
 from pydantic import BaseModel
 
+
 class UserInput(BaseModel):
-    name: str | None = "User"
+    name: Optional[str] = "User"
     gender: str
     age: float
     height: float
     weight: float
     family_history: bool = False
-    FAF: float | None = 1.0
-    TUE: float | None = 1.0
-    NCP: int | None = 3
-    FCVC: float | None = 2.0
-    CH2O: float | None = 2.0
-    FAVC: int | None = 0
-    CALC: int | None = 0
-    CAEC: int | None = 2
-    MTRANS_Calorie: int | None = 1
+    FAF: Optional[float] = 1.0
+    TUE: Optional[float] = 1.0
+    NCP: Optional[int] = 3
+    FCVC: Optional[float] = 2.0
+    CH2O: Optional[float] = 2.0
+    FAVC: Optional[int] = 0
+    CALC: Optional[int] = 0
+    CAEC: Optional[int] = 2
+    MTRANS_Calorie: Optional[int] = 1
+
 
 class Metric(BaseModel):
     label: str
     value: float
     unit: str
 
+
 class HealthMetrics(BaseModel):
     weight: Metric
     bmi: Metric
     height: Metric
 
+
 class HealthAnalysis(BaseModel):
-    paragraphs: list[str]
+    paragraphs: List[str]
+
 
 class FoodItem(BaseModel):
     name: str
@@ -37,32 +43,38 @@ class FoodItem(BaseModel):
     count: float
     unit: str
 
+
 class DailyDietPlan(BaseModel):
     day: int
-    breakfast: list[FoodItem]
-    lunch: list[FoodItem]
-    dinner: list[FoodItem]
+    breakfast: List[FoodItem]
+    lunch: List[FoodItem]
+    dinner: List[FoodItem]
     recommendedFoods: str
     foodsToLimit: str
 
+
 class DietPlan(BaseModel):
-    weeklyPlans: list[DailyDietPlan]
+    weeklyPlans: List[DailyDietPlan]
+
 
 class Exercise(BaseModel):
     name: str
     duration: int
     unit: str
     description: str
-    sets: int | None = None
-    reps: int | None = None
+    sets: Optional[int] = None
+    reps: Optional[int] = None
+
 
 class DailyWorkoutPlan(BaseModel):
     name: str
     day: int
-    exercises: list[Exercise]
+    exercises: List[Exercise]
+
 
 class WorkoutPlan(BaseModel):
-    weeklyPlans: list[DailyWorkoutPlan]
+    weeklyPlans: List[DailyWorkoutPlan]
+
 
 class UserInputResponse(BaseModel):
     name: str
@@ -82,12 +94,14 @@ class UserInputResponse(BaseModel):
     smoking: str
     alcohol: str
 
+
 class PredictionDetail(BaseModel):
     level: str
     confidence: float
     bmi: float
     status: str
     reliability: str
+
 
 class PredictionResponse(BaseModel):
     id: str

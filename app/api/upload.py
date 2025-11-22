@@ -3,7 +3,7 @@ File upload API endpoints.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 from typing_extensions import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from app.auth.dependencies import get_current_active_user
@@ -51,7 +51,7 @@ def get_gcs_uploader() -> GCSUploader:
     )
 
 
-def validate_image_file(file: UploadFile) -> tuple[str, bytes]:
+def validate_image_file(file: UploadFile) -> Tuple[str, bytes]:
     """
     Validate and read image file.
 
