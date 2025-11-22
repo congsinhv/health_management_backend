@@ -1,6 +1,17 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE:-python:3.13-slim} AS production
 
+# Install system dependencies required by WeasyPrint
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libffi-dev \
+    libcairo2 \
+    libgobject-2.0-0 \
+    shared-mime-info \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create appuser if it doesn't exist (base image may already have it)
 RUN getent group appuser >/dev/null 2>&1 || groupadd appuser && \
     getent passwd appuser >/dev/null 2>&1 || useradd -g appuser -m appuser
