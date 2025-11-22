@@ -8,7 +8,7 @@ from app.services.pdf_service import PdfGeneratorService
 from app.db.database import get_database_pool
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/predict", tags=["Prediction"])
+router = APIRouter()
 
 
 # Service initialization with dependency injection
