@@ -26,6 +26,9 @@ authlib==1.3.0
 fastapi-mail==1.4.1
 jinja2==3.1.2
 
+# PDF Generation
+weasyprint==61.2
+
 # Utilities
 python-dateutil==2.8.2
 typing_extensions>=4.0.0

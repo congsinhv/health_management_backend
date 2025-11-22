@@ -15,12 +15,12 @@ from app.api.upload import router as upload_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
 from app.api.websocket import router as websocket_router
+from app.api import predict
 from app.config import settings
 from app.db.database import database
 from app.middleware.rate_limit import init_rate_limiter
 from app.middleware.security import SecurityHeadersMiddleware
 from app.services.qa_service import QAService
-from app.api import predict
 
 # Configure logging
 logging.basicConfig(
@@ -74,7 +74,9 @@ async def lifespan(app: FastAPI):
                         app.state.qa_service = None
                 except Exception as e:
                     logger.error(f"Q&A Service initialization timed out or failed: {e}")
-                    logger.warning("Q&A Service will not be available - continuing startup")
+                    logger.warning(
+                        "Q&A Service will not be available - continuing startup"
+                    )
                     app.state.qa_service = None
 
         except Exception as e:
@@ -158,6 +160,7 @@ app.include_router(
     messages_router, prefix=f"{settings.api_v1_prefix}/messages", tags=["messages"]
 )
 app.include_router(websocket_router, tags=["websocket"])
+
 
 @app.get("/")
 async def root():
