@@ -212,7 +212,9 @@ app.include_router(
     auth_router, prefix=f"{settings.api_v1_prefix}/auth", tags=["authentication"]
 )
 app.include_router(qa_router, prefix=f"{settings.api_v1_prefix}/qa", tags=["Q&A"])
-app.include_router(predict.router)
+app.include_router(
+    predict.router, prefix=f"{settings.api_v1_prefix}/predict", tags=["predict"]
+)
 app.include_router(
     upload_router, prefix=f"{settings.api_v1_prefix}/upload", tags=["upload"]
 )
