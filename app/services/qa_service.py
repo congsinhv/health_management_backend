@@ -9,7 +9,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import AsyncGenerator, Dict, List, Optional, Set, Tuple
+from typing import AsyncGenerator, Dict, List, Optional, Set, Tuple, Any
 
 import pandas as pd
 import requests
@@ -337,7 +337,7 @@ class QAService:
             logger.error(f"Error loading model: {e}")
             raise RuntimeError(f"Failed to load Q&A model: {e}") from e
 
-    def _load_data(self) -> Tuple[pd.DataFrame, any]:
+    def _load_data(self) -> Tuple[pd.DataFrame, Any]:
         """
         Load and preprocess dataset.
 

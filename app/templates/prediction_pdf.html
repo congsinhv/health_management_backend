@@ -1,0 +1,164 @@
+{% extends "base_pdf.html" %}
+
+{% block content %}
+<!-- Page 1: User Input -->
+<div class="page">
+    <h1>Thông tin đầu vào</h1>
+    <p><strong>Ngày tạo:</strong> {{ created_at }}</p>
+    <p><strong>Mã dự đoán:</strong> #{{ prediction_id }}</p>
+
+    <h2>Thông tin cá nhân</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Họ và tên</div>
+            <div class="info-value">{{ user_input.name }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Giới tính</div>
+            <div class="info-value">{% if user_input.gender == 'male' %}Nam{% else %}Nữ{% endif %}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Tuổi</div>
+            <div class="info-value">{{ user_input.age or '' }} tuổi</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Chiều cao</div>
+            <div class="info-value">{{ user_input.height }} m</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Cân nặng</div>
+            <div class="info-value">{{ user_input.weight }} kg</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Tiền sử gia đình</div>
+            <div class="info-value">{% if user_input.familyHistory %}Có{% else %}Không{% endif %}</div>
+        </div>
+    </div>
+
+    <h2>Thói quen ăn uống</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Tần suất ăn thực phẩm cao calo</div>
+            <div class="info-value">{{ user_input.highCalorieFood }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Tần suất ăn rau</div>
+            <div class="info-value">{{ user_input.vegetableFrequency }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Lượng nước uống</div>
+            <div class="info-value">{{ user_input.waterIntake }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Bữa ăn chính/ngày</div>
+            <div class="info-value">{{ user_input.mainMeals }} bữa</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Tần suất ăn vặt</div>
+            <div class="info-value">{{ user_input.snackFrequency }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Rượu bia</div>
+            <div class="info-value">{{ user_input.alcohol }}</div>
+        </div>
+    </div>
+
+    <h2>Hoạt động thể chất</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Tần suất tập luyện</div>
+            <div class="info-value">{{ user_input.physicalActivity }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Thời gian màn hình</div>
+            <div class="info-value">{{ user_input.screenTime }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Phương tiện di chuyển</div>
+            <div class="info-value">{{ user_input.transportation }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Thói quen hút thuốc</div>
+            <div class="info-value">{{ user_input.smoking }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Page 2: Prediction Results -->
+<div class="page">
+    <h1>Kết quả dự đoán</h1>
+
+    <div class="metric-box">
+        <div class="metric-label">Chỉ số BMI</div>
+        <div class="metric-value">{{ "%.1f"|format(prediction.bmi) }}</div>
+    </div>
+
+    <div class="status-box status-{{ status_class }}">
+        <h2 style="margin: 0;">{{ prediction.level or 'Không xác định' }}</h2>
+        {% if prediction.confidence %}
+        <p style="margin: 5px 0 0 0;">Độ tin cậy: {{ "%.0f"|format(prediction.confidence) }}%</p>
+        {% endif %}
+    </div>
+
+    <h2>Phân tích sức khỏe</h2>
+    {% for paragraph in health_analysis %}
+    <p style="margin: 10px 0;">{{ paragraph }}</p>
+    {% else %}
+    <p>Không có phân tích sức khỏe.</p>
+    {% endfor %}
+
+    <h2>Chỉ số sức khỏe</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Cân nặng</div>
+            <div class="info-value">
+                {% if health_metrics.weight %}{{ health_metrics.weight.value }} {{ health_metrics.weight.unit }}{% else %}N/A{% endif %}
+            </div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">BMI</div>
+            <div class="info-value">
+                {% if health_metrics.bmi %}{{ health_metrics.bmi.value }}{% else %}N/A{% endif %}
+            </div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Chiều cao</div>
+            <div class="info-value">
+                {% if health_metrics.height %}{{ health_metrics.height.value }} {{ health_metrics.height.unit }}{% else %}N/A{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <h2>Kế hoạch dinh dưỡng</h2>
+    {% if diet_plan %}
+        {% for day_plan in diet_plan %}
+        <h3>Ngày {{ day_plan.day }}</h3>
+        <p><strong>Thực phẩm nên ăn:</strong> {{ day_plan.recommendedFoods }}</p>
+        <p><strong>Thực phẩm nên hạn chế:</strong> {{ day_plan.foodsToLimit }}</p>
+        {% endfor %}
+    {% else %}
+    <p>Không có dữ liệu kế hoạch dinh dưỡng.</p>
+    {% endif %}
+
+    <h2>Kế hoạch tập luyện</h2>
+    {% if workout_plan %}
+        {% for workout in workout_plan %}
+        <h3>{{ workout.name }} (Ngày {{ workout.day }})</h3>
+        <ul>
+        {% for exercise in workout.exercises %}
+            <li>{{ exercise.name }} - {{ exercise.duration }} {{ exercise.unit }}
+            {% if exercise.sets %} ({{ exercise.sets }} hiệp × {{ exercise.reps }} lần){% endif %}
+            </li>
+        {% endfor %}
+        </ul>
+        {% endfor %}
+    {% else %}
+    <p>Không có dữ liệu kế hoạch tập luyện.</p>
+    {% endif %}
+
+    <div class="footer">
+        <p>Báo cáo này được tạo tự động từ Health Management API</p>
+        <p>Ngày tạo: {{ created_at }}</p>
+    </div>
+</div>
+{% endblock %}

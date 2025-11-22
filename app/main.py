@@ -16,6 +16,7 @@ from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
 from app.api.websocket import router as websocket_router
 from app.api import cache_monitoring
+from app.api import predict
 from app.config import settings
 from app.db.database import database
 from app.middleware.rate_limit import init_rate_limiter

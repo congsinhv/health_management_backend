@@ -11,6 +11,7 @@ from unittest.mock import Mock, AsyncMock, patch
 
 import websockets
 from fastapi.testclient import TestClient
+
 try:
     from httpx import WebSocketDisconnect as WebSocketConnectError
 except ImportError:

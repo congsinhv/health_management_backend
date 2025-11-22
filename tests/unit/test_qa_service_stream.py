@@ -17,8 +17,7 @@ async def test_stream_summarize_with_ai_token_accumulation():
     # Setup QA service with minimal mocking
     settings = Settings(qa_enabled=True, openai_api_key="test-key")
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(QAService, "_load_data"):
         qa_service = QAService(settings)
 
     # Mock OpenAI streaming response
@@ -37,7 +36,9 @@ async def test_stream_summarize_with_ai_token_accumulation():
     mock_chunk.choices = [mock_choice]
     mock_chunks.append(mock_chunk)
 
-    with patch.object(qa_service.openai_client.chat.completions, 'create') as mock_create:
+    with patch.object(
+        qa_service.openai_client.chat.completions, "create"
+    ) as mock_create:
         mock_create.return_value = iter(mock_chunks)
 
         # Execute streaming
@@ -61,20 +62,22 @@ async def test_stream_ask_question_event_sequence():
     # Setup with mocked SBERT and data
     settings = Settings(qa_enabled=True)
 
-    with patch.object(QAService, '_load_model') as mock_model, \
-         patch.object(QAService, '_load_data') as mock_data:
-
+    with patch.object(QAService, "_load_model") as mock_model, patch.object(
+        QAService, "_load_data"
+    ) as mock_data:
         # Mock SBERT model
         qa_service = QAService(settings)
         qa_service.model = MagicMock()
         qa_service.model.encode.return_value = [0.1, 0.2, 0.3]
 
         # Mock data and embeddings
-        mock_df = pd.DataFrame({
-            "Câu hỏi": ["Q1", "Q2"],
-            "Câu trả lời": ["A1", "A2"],
-            "Lĩnh vực": ["Health", "Nutrition"]
-        })
+        mock_df = pd.DataFrame(
+            {
+                "Câu hỏi": ["Q1", "Q2"],
+                "Câu trả lời": ["A1", "A2"],
+                "Lĩnh vực": ["Health", "Nutrition"],
+            }
+        )
         qa_service.df = mock_df
         qa_service.question_embeddings = [[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]]
 
@@ -93,7 +96,9 @@ async def test_stream_ask_question_event_sequence():
         mock_chunk.choices = [mock_choice]
         mock_chunks.append(mock_chunk)
 
-        with patch.object(qa_service.openai_client.chat.completions, 'create') as mock_create:
+        with patch.object(
+            qa_service.openai_client.chat.completions, "create"
+        ) as mock_create:
             mock_create.return_value = iter(mock_chunks)
 
             # Execute
@@ -104,7 +109,7 @@ async def test_stream_ask_question_event_sequence():
             # Validate sequence
             event_types = []
             for event in events:
-                if 'event_type' in event:
+                if "event_type" in event:
                     # Extract event type from SSE format
                     event_type = event.split('"event_type":"')[1].split('"')[0]
                     event_types.append(event_type)
@@ -121,8 +126,7 @@ async def test_stream_ask_question_error_event_emission():
 
     settings = Settings(qa_enabled=True)
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(QAService, "_load_data"):
         qa_service = QAService(settings)
 
         # Mock model to raise exception
@@ -146,18 +150,21 @@ async def test_stream_summarize_with_ai_openai_error():
 
     settings = Settings(qa_enabled=True)
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(QAService, "_load_data"):
         qa_service = QAService(settings)
 
         # Mock OpenAI to raise exception
-        with patch.object(qa_service.openai_client.chat.completions, 'create') as mock_create:
+        with patch.object(
+            qa_service.openai_client.chat.completions, "create"
+        ) as mock_create:
             mock_create.side_effect = Exception("OpenAI API error")
 
             # Execute
             events = []
             grouped_answers = {"Field": ["Answer1"]}
-            async for event in qa_service.stream_summarize_with_ai("test", grouped_answers):
+            async for event in qa_service.stream_summarize_with_ai(
+                "test", grouped_answers
+            ):
                 events.append(event)
 
             # Should have error event
@@ -171,14 +178,13 @@ def test_build_summary_prompt_helper():
 
     settings = Settings(qa_enabled=True)
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(QAService, "_load_data"):
         qa_service = QAService(settings)
 
         question = "How to stay healthy?"
         grouped_answers = {
             "Diet": ["Eat vegetables", "Drink water"],
-            "Exercise": ["Walk daily", "Do yoga"]
+            "Exercise": ["Walk daily", "Do yoga"],
         }
 
         prompt = qa_service._build_summary_prompt(question, grouped_answers)
@@ -199,8 +205,7 @@ async def test_stream_ask_question_no_results_found():
 
     settings = Settings(qa_enabled=True)
 
-    with patch.object(QAService, '_load_model'), \
-         patch.object(QAService, '_load_data'):
+    with patch.object(QAService, "_load_model"), patch.object(QAService, "_load_data"):
         qa_service = QAService(settings)
 
         # Mock model to return low similarities

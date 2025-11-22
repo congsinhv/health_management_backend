@@ -52,3 +52,6 @@ prometheus-client>=0.20.0
 
 # Redis caching
 redis>=5.0.0
+
+# PDF Generation
+weasyprint==61.2
