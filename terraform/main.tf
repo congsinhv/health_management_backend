@@ -166,6 +166,29 @@ module "cloud_sql" {
   depends_on = [google_project_service.required_apis]
 }
 
+# Allocate IP range for private service connections (Cloud SQL, Redis, etc.)
+resource "google_compute_global_address" "private_ip_alloc" {
+  name          = "vhealth-private-ip-${var.environment}"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  network       = "projects/${var.project_id}/global/networks/${var.vpc_network}"
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Establish private service connection
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = "projects/${var.project_id}/global/networks/${var.vpc_network}"
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_ip_alloc.name]
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_compute_global_address.private_ip_alloc
+  ]
+}
+
 # Provision Memorystore Redis
 module "memorystore" {
   source = "./modules/memorystore"
@@ -184,7 +207,8 @@ module "memorystore" {
 
   depends_on = [
     google_project_service.required_apis,
-    module.vpc_connector
+    module.vpc_connector,
+    google_service_networking_connection.private_vpc_connection
   ]
 }
 
