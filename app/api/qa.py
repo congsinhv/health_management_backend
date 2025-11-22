@@ -63,7 +63,7 @@ async def ask_question(
             )
 
         # Process question
-        result = qa_service.ask_question(
+        result = await qa_service.ask_question(
             user_question=question_data.question,
             threshold=question_data.threshold,
             top_k=question_data.top_k,

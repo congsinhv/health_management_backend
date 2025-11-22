@@ -30,10 +30,13 @@ router = APIRouter()
 
 
 async def get_message_service(
+    request: Request,
     db_pool: asyncpg.Pool = Depends(get_database_pool),
 ) -> MessageService:
     """Dependency to get message service."""
-    return MessageService(db_pool)
+    # Get cache service from app state
+    cache_service = getattr(request.app.state, "cache_service", None)
+    return MessageService(db_pool, cache_service=cache_service)
 
 
 async def get_ai_chat_service(

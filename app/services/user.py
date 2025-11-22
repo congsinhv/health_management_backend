@@ -2,6 +2,8 @@
 User business logic and services.
 """
 
+import asyncio
+import hashlib
 import asyncpg
 from typing import Optional, List, Dict, Any
 from datetime import timedelta, datetime, timezone
@@ -39,9 +41,16 @@ from app.services.email import email_service
 class UserService:
     """Service layer for user operations."""
 
-    def __init__(self, db_pool: asyncpg.Pool):
+    def __init__(self, db_pool: asyncpg.Pool, cache_service=None):
         self.user_repo = UserRepository(db_pool)
         self.profile_repo = UserProfileRepository(db_pool)
+        self.cache_service = cache_service
+
+        # Log cache service status
+        if self.cache_service and self.cache_service.enabled:
+            logger.info("UserService initialized with caching enabled")
+        else:
+            logger.info("UserService initialized without caching")
 
     def _transform_user_record(self, record: asyncpg.Record) -> Dict[str, Any]:
         """Transform database record to UserResponse format."""
@@ -149,19 +158,83 @@ class UserService:
 
     async def get_user_by_id(self, user_id: int) -> Optional[UserResponse]:
         """Get user by ID."""
+        # Check cache first if available
+        if self.cache_service and self.cache_service.enabled:
+            cache_key = f"user:detail:{user_id}"
+            cached_data = await self.cache_service.get_json(cache_key)
+            if cached_data:
+                logger.debug(f"Cache HIT for user detail: user_id={user_id}")
+                # CRITICAL: UserResponse excludes password_hash for security
+                return UserResponse(**cached_data)
+            else:
+                logger.debug(f"Cache MISS for user detail: user_id={user_id}")
+
+        # Fetch from database
         user_record = await self.user_repo.get_user_by_id(user_id)
         if not user_record:
             return None
 
-        return UserResponse(**self._transform_user_record(user_record))
+        user_data = self._transform_user_record(user_record)
+
+        # Cache the result if available (WITHOUT password_hash)
+        if self.cache_service and self.cache_service.enabled:
+            try:
+                cache_key = f"user:detail:{user_id}"
+                # CRITICAL: UserResponse excludes password_hash by design
+                user_response = UserResponse(**user_data)
+                await self.cache_service.set_json(
+                    cache_key,
+                    user_response.model_dump(),
+                    ttl=self.cache_service.settings.cache_ttl_user_profile,
+                )
+                logger.debug(f"Cached user detail: user_id={user_id}")
+            except Exception as e:
+                logger.warning(f"Failed to cache user detail {user_id}: {e}")
+
+        return UserResponse(**user_data)
 
     async def get_user_by_email(self, email: str) -> Optional[UserInDB]:
         """Get user by email (includes password hash for authentication)."""
+        # Check cache first if available
+        if self.cache_service and self.cache_service.enabled:
+            # Hash email for PII protection in cache key
+            email_hash = hashlib.md5(email.lower().encode()).hexdigest()[:16]
+            cache_key = f"user:email:{email_hash}"
+
+            cached_data = await self.cache_service.get_json(cache_key)
+            if cached_data:
+                logger.debug(f"Cache HIT for user email: email_hash={email_hash}")
+                # UserInDB includes password_hash for authentication
+                return UserInDB(**cached_data)
+            else:
+                logger.debug(f"Cache MISS for user email: email_hash={email_hash}")
+
+        # Fetch from database
         user_record = await self.user_repo.get_user_by_email(email)
         if not user_record:
             return None
 
-        return UserInDB(**self._transform_user_record(user_record))
+        user_data = self._transform_user_record(user_record)
+
+        # Cache the result if available (includes password_hash for auth)
+        if self.cache_service and self.cache_service.enabled:
+            try:
+                # Hash email for PII protection in cache key
+                email_hash = hashlib.md5(email.lower().encode()).hexdigest()[:16]
+                cache_key = f"user:email:{email_hash}"
+
+                # UserInDB includes password_hash for authentication
+                user_in_db = UserInDB(**user_data)
+                await self.cache_service.set_json(
+                    cache_key,
+                    user_in_db.model_dump(),
+                    ttl=300,  # Short TTL (5min) for security
+                )
+                logger.debug(f"Cached user email: email_hash={email_hash}")
+            except Exception as e:
+                logger.warning(f"Failed to cache user email: {e}")
+
+        return UserInDB(**user_data)
 
     async def get_users(self, limit: int = 100, offset: int = 0) -> List[UserResponse]:
         """Get all users with pagination."""
@@ -227,6 +300,23 @@ class UserService:
                 profile_create = UserProfileCreate(user_id=user_id, **profile_fields)
                 await self.profile_repo.create_profile(profile_create)
 
+        # Invalidate user caches on update
+        if self.cache_service and self.cache_service.enabled:
+            try:
+                # Delete user detail cache
+                detail_cache_key = f"user:detail:{user_id}"
+                await self.cache_service.delete(detail_cache_key)
+
+                # Cannot efficiently delete specific email cache without knowing email
+                # Solution: delete all email caches (pattern-based)
+                await self.cache_service.delete_pattern("user:email:*")
+
+                logger.debug(f"Invalidated user caches for user_id={user_id}")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to invalidate user caches for user {user_id}: {e}"
+                )
+
         # Re-fetch user with profile
         user_record = await self.user_repo.get_user_by_id(user_id)
         return UserResponse(**self._transform_user_record(user_record))
@@ -234,6 +324,23 @@ class UserService:
     async def delete_user(self, user_id: int) -> bool:
         """Delete user (soft delete)."""
         result = await self.user_repo.delete_user(user_id)
+
+        # Invalidate user caches on deletion
+        if result and self.cache_service and self.cache_service.enabled:
+            try:
+                # Delete user detail cache
+                detail_cache_key = f"user:detail:{user_id}"
+                await self.cache_service.delete(detail_cache_key)
+
+                # Delete all email caches
+                await self.cache_service.delete_pattern("user:email:*")
+
+                logger.debug(f"Invalidated user caches for deleted user_id={user_id}")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to invalidate user caches for deleted user {user_id}: {e}"
+                )
+
         return result is not None
 
     async def authenticate_user(self, email: str, password: str) -> Optional[UserInDB]:

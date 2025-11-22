@@ -68,3 +68,8 @@ scheduler_cron_schedule   = "*/30 * * * *"  # Every 30 minutes
 scheduler_time_zone       = "Asia/Ho_Chi_Minh"  # Vietnam time zone (UTC+7)
 scheduler_use_oidc_auth   = false  # Set to true if Cloud Run requires authentication
 scheduler_paused          = false  # Set to true to pause the scheduler
+
+# Redis Configuration for Development
+redis_tier           = "BASIC"
+redis_memory_size_gb = 1
+enable_redis_cache   = true
