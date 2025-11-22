@@ -149,6 +149,20 @@ pipeline {
             }
         }
 
+        stage('Import VPC Connection') {
+            steps {
+                dir('terraform') {
+                    script {
+                        echo 'Importing existing VPC peering connection (if not already imported)...'
+                        sh """
+                            terraform import google_service_networking_connection.private_vpc_connection \
+                                ${GCP_PROJECT_ID}:default:servicenetworking.googleapis.com || true
+                        """
+                    }
+                }
+            }
+        }
+
         stage('Setup Q&A Models & Terraform Plan') {
             parallel {
                 stage('Setup Q&A Models') {
@@ -241,20 +255,6 @@ AI summarization will not be available without this secret.
                                 """
                             }
                         }
-                    }
-                }
-            }
-        }
-
-        stage('Import VPC Connection') {
-            steps {
-                dir('terraform') {
-                    script {
-                        echo 'Importing existing VPC peering connection (if not already imported)...'
-                        sh """
-                            terraform import google_service_networking_connection.private_vpc_connection \
-                                ${GCP_PROJECT_ID}:default:servicenetworking.googleapis.com || true
-                        """
                     }
                 }
             }

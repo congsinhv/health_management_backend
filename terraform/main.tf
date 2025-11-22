@@ -166,6 +166,11 @@ module "cloud_sql" {
   depends_on = [google_project_service.required_apis]
 }
 
+# Reference existing SQL private IP allocation (already exists in GCP)
+data "google_compute_global_address" "sql_private_ip" {
+  name = "health-mgmt-sql-private-ip-${var.environment}"
+}
+
 # Allocate IP range for Redis and other private services
 resource "google_compute_global_address" "private_ip_alloc" {
   name          = "vhealth-private-ip-${var.environment}"
@@ -177,11 +182,13 @@ resource "google_compute_global_address" "private_ip_alloc" {
   depends_on = [google_project_service.required_apis]
 }
 
-# Create VPC peering connection for private services (Redis only, SQL uses public IP)
+# Manage existing VPC peering connection (includes both SQL and Redis IP ranges)
+# IMPORTANT: Must be imported first: terraform import google_service_networking_connection.private_vpc_connection <project>:<network>:servicenetworking.googleapis.com
 resource "google_service_networking_connection" "private_vpc_connection" {
   network                 = "projects/${var.project_id}/global/networks/${var.vpc_network}"
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [
+    data.google_compute_global_address.sql_private_ip.name,
     google_compute_global_address.private_ip_alloc.name
   ]
 
