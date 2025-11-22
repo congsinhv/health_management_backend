@@ -2,6 +2,7 @@
 Conversation business logic and services.
 """
 
+import hashlib
 import json
 import logging
 import asyncpg
@@ -26,9 +27,16 @@ from app.schemas.message import MessageResponse
 class ConversationService:
     """Service layer for conversation operations."""
 
-    def __init__(self, db_pool: asyncpg.Pool):
+    def __init__(self, db_pool: asyncpg.Pool, cache_service=None):
         self.conversation_repo = ConversationRepository(db_pool)
         self.message_repo = MessageRepository(db_pool)
+        self.cache_service = cache_service
+
+        # Log cache service status
+        if self.cache_service and self.cache_service.enabled:
+            logger.info("ConversationService initialized with caching enabled")
+        else:
+            logger.info("ConversationService initialized without caching")
 
     def _transform_conversation_record(
         self, record: asyncpg.Record, include_message_count: bool = False
@@ -50,6 +58,41 @@ class ConversationService:
             conversation_data["message_count"] = record.get("message_count")
 
         return conversation_data
+
+    async def _invalidate_conversation_caches(
+        self, user_id: int, conversation_id: Optional[int] = None
+    ):
+        """Invalidate all conversation-related caches for a user."""
+        if not self.cache_service or not self.cache_service.enabled:
+            return
+
+        try:
+            # Build patterns for cache invalidation
+            patterns = [
+                f"conv:list:{user_id}:*",  # All list pages with pagination
+                f"conv:count:{user_id}",  # Conversation count
+                f"conv:pinned:{user_id}:*",  # All pinned conversations lists
+                f"conv:search:{user_id}:*",  # All search results
+            ]
+
+            # Add specific conversation detail if provided
+            if conversation_id:
+                patterns.append(f"conv:detail:{conversation_id}:{user_id}")
+
+            # Delete all matching patterns
+            for pattern in patterns:
+                deleted_count = await self.cache_service.delete_pattern(pattern)
+                if deleted_count > 0:
+                    logger.debug(
+                        f"Invalidated {deleted_count} conversation cache entries for pattern: {pattern}"
+                    )
+
+            logger.info(f"Invalidated conversation caches for user {user_id}")
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to invalidate conversation caches for user {user_id}: {e}"
+            )
 
     async def create_conversation(
         self, user_id: int, conversation_data: ConversationCreate
@@ -75,6 +118,9 @@ class ConversationService:
                 **self._transform_conversation_record(record)
             )
 
+            # Invalidate conversation caches for this user
+            await self._invalidate_conversation_caches(user_id)
+
             # Broadcast conversation creation to user's WebSocket connections
             await self._broadcast_conversation_update(user_id, conversation_response)
 
@@ -87,13 +133,45 @@ class ConversationService:
     ) -> Optional[ConversationResponse]:
         """Get conversation by ID with user authorization."""
         try:
+            # Check cache first if available
+            if self.cache_service and self.cache_service.enabled:
+                cache_key = f"conv:detail:{conversation_id}:{user_id}"
+                cached_data = await self.cache_service.get_json(cache_key)
+                if cached_data:
+                    logger.debug(
+                        f"Cache HIT for conversation detail: {conversation_id}"
+                    )
+                    return ConversationResponse(**cached_data)
+                else:
+                    logger.debug(
+                        f"Cache MISS for conversation detail: {conversation_id}"
+                    )
+
+            # Fetch from database
             record = await self.conversation_repo.get_by_id_and_user(
                 conversation_id, user_id
             )
             if not record:
                 return None
 
-            return ConversationResponse(**self._transform_conversation_record(record))
+            conversation_data = self._transform_conversation_record(record)
+
+            # Cache the result if available
+            if self.cache_service and self.cache_service.enabled:
+                try:
+                    cache_key = f"conv:detail:{conversation_id}:{user_id}"
+                    await self.cache_service.set_json(
+                        cache_key,
+                        conversation_data,
+                        ttl=self.cache_service.settings.cache_ttl_conversation_detail,
+                    )
+                    logger.debug(f"Cached conversation detail: {conversation_id}")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to cache conversation detail {conversation_id}: {e}"
+                    )
+
+            return ConversationResponse(**conversation_data)
         except Exception as e:
             raise Exception(f"Failed to get conversation by ID: {e}")
 
@@ -141,7 +219,41 @@ class ConversationService:
     ) -> ConversationList:
         """List conversations for a user with pagination."""
         try:
-            # Get conversations
+            # Check cache first if available
+            if self.cache_service and self.cache_service.enabled:
+                list_cache_key = f"conv:list:{user_id}:{limit}:{offset}"
+                count_cache_key = f"conv:count:{user_id}"
+
+                # Try to get cached data
+                cached_list = await self.cache_service.get_json(list_cache_key)
+                cached_count = None
+                if include_message_count:
+                    cached_count = await self.cache_service.get(count_cache_key)
+
+                if cached_list is not None:
+                    # If we have cached list data
+                    conversations = [
+                        ConversationResponse(**conv_data) for conv_data in cached_list
+                    ]
+                    total_count = int(cached_count) if cached_count else None
+                    has_more = (
+                        total_count is not None and (offset + limit) < total_count
+                    )
+
+                    logger.debug(
+                        f"Cache HIT for conversation list: user_id={user_id}, offset={offset}"
+                    )
+                    return ConversationList(
+                        conversations=conversations,
+                        total_count=total_count,
+                        has_more=has_more,
+                    )
+                else:
+                    logger.debug(
+                        f"Cache MISS for conversation list: user_id={user_id}, offset={offset}"
+                    )
+
+            # Fetch from database
             records = await self.conversation_repo.list_by_user(
                 user_id, limit=limit, offset=offset
             )
@@ -159,6 +271,33 @@ class ConversationService:
                 user_id
             )
             has_more = (offset + limit) < total_count
+
+            # Cache the results if available
+            if self.cache_service and self.cache_service.enabled:
+                try:
+                    # Cache the conversation list
+                    list_cache_key = f"conv:list:{user_id}:{limit}:{offset}"
+                    conversations_data = [conv.model_dump() for conv in conversations]
+                    await self.cache_service.set_json(
+                        list_cache_key,
+                        conversations_data,
+                        ttl=self.cache_service.settings.cache_ttl_conversation_list,
+                    )
+
+                    # Cache the count separately
+                    if include_message_count:
+                        count_cache_key = f"conv:count:{user_id}"
+                        await self.cache_service.set(
+                            count_cache_key,
+                            str(total_count),
+                            ttl=self.cache_service.settings.cache_ttl_conversation_list,
+                        )
+
+                    logger.debug(
+                        f"Cached conversation list: user_id={user_id}, offset={offset}"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to cache conversation list: {e}")
 
             return ConversationList(
                 conversations=conversations, total_count=total_count, has_more=has_more
@@ -207,6 +346,9 @@ class ConversationService:
                 **self._transform_conversation_record(record)
             )
 
+            # Invalidate conversation caches for this user and conversation
+            await self._invalidate_conversation_caches(user_id, conversation_id)
+
             # Broadcast conversation update to user's WebSocket connections
             await self._broadcast_conversation_update(user_id, conversation_response)
 
@@ -232,6 +374,9 @@ class ConversationService:
                 **self._transform_conversation_record(record)
             )
 
+            # Invalidate conversation caches for this user (pinning affects lists)
+            await self._invalidate_conversation_caches(user_id, conversation_id)
+
             # Broadcast conversation update to user's WebSocket connections
             await self._broadcast_conversation_update(user_id, conversation_response)
 
@@ -249,7 +394,14 @@ class ConversationService:
             if not existing:
                 return False
 
-            return await self.conversation_repo.delete(conversation_id, user_id)
+            # Delete conversation
+            deleted = await self.conversation_repo.delete(conversation_id, user_id)
+
+            # Invalidate conversation caches for this user if deletion was successful
+            if deleted:
+                await self._invalidate_conversation_caches(user_id, conversation_id)
+
+            return deleted
         except Exception as e:
             raise Exception(f"Failed to delete conversation: {e}")
 
@@ -288,8 +440,24 @@ class ConversationService:
         self, user_id: int, limit: int = 10
     ) -> List[ConversationResponse]:
         """Get pinned conversations for a user."""
-        # Get all conversations with pinned first
         try:
+            # Check cache first if available
+            if self.cache_service and self.cache_service.enabled:
+                cache_key = f"conv:pinned:{user_id}:{limit}"
+                cached_data = await self.cache_service.get_json(cache_key)
+                if cached_data:
+                    logger.debug(
+                        f"Cache HIT for pinned conversations: user_id={user_id}"
+                    )
+                    return [
+                        ConversationResponse(**conv_data) for conv_data in cached_data
+                    ]
+                else:
+                    logger.debug(
+                        f"Cache MISS for pinned conversations: user_id={user_id}"
+                    )
+
+            # Fetch from database
             records = await self.conversation_repo.list_by_user(
                 user_id, limit=limit, offset=0
             )
@@ -302,6 +470,24 @@ class ConversationService:
                         record, include_message_count=True
                     )
                     pinned_conversations.append(ConversationResponse(**conv_data))
+
+            # Cache the result if available
+            if (
+                self.cache_service
+                and self.cache_service.enabled
+                and pinned_conversations
+            ):
+                try:
+                    cache_key = f"conv:pinned:{user_id}:{limit}"
+                    pinned_data = [conv.model_dump() for conv in pinned_conversations]
+                    await self.cache_service.set_json(
+                        cache_key,
+                        pinned_data,
+                        ttl=self.cache_service.settings.cache_ttl_conversation_detail,
+                    )
+                    logger.debug(f"Cached pinned conversations: user_id={user_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to cache pinned conversations: {e}")
 
             return pinned_conversations
         except Exception as e:

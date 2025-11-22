@@ -43,6 +43,7 @@ resource "google_project_service" "required_apis" {
     "cloudbuild.googleapis.com",
     "cloudscheduler.googleapis.com",
     "storage.googleapis.com",
+    "redis.googleapis.com",
   ])
 
   service            = each.key
@@ -132,12 +133,18 @@ module "secret_manager" {
     mail_server          = var.mail_server
     # Scheduler endpoint URL - configure this to point to actual scheduled endpoint
     scheduler_endpoint_url = var.scheduler_endpoint_url
+    # Redis connection details
+    redis_host         = var.enable_redis_cache ? module.memorystore.redis_host : ""
+    redis_port         = var.enable_redis_cache ? module.memorystore.redis_port : ""
+    redis_auth_secret  = var.enable_redis_cache ? module.memorystore.redis_auth_secret : ""
+    enable_redis_cache = var.enable_redis_cache ? "true" : "false"
   }
 
   depends_on = [
     google_project_service.required_apis,
     google_service_account.cloud_run_sa,
-    module.cloud_sql
+    module.cloud_sql,
+    module.memorystore
   ]
 }
 
@@ -159,6 +166,37 @@ module "cloud_sql" {
   depends_on = [google_project_service.required_apis]
 }
 
+# Provision Memorystore Redis
+module "memorystore" {
+  source = "./modules/memorystore"
+
+  instance_name  = "vhealth-cache-${var.environment}"
+  tier           = var.redis_tier
+  memory_size_gb = var.redis_memory_size_gb
+  region         = var.region
+  redis_version  = var.redis_version
+  display_name   = "VHealth API Cache - ${var.environment}"
+  vpc_network    = "projects/${var.project_id}/global/networks/${var.vpc_network}"
+  environment    = var.environment
+
+  maintenance_window_day  = var.redis_maintenance_day
+  maintenance_window_hour = var.redis_maintenance_hour
+
+  depends_on = [
+    google_project_service.required_apis,
+    module.vpc_connector
+  ]
+}
+
+# Grant Cloud Run SA access to Redis auth secret
+resource "google_secret_manager_secret_iam_member" "redis_auth_access" {
+  secret_id = module.memorystore.redis_auth_secret
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+
+  depends_on = [module.memorystore]
+}
+
 # Create a service account for Cloud Scheduler
 resource "google_service_account" "cloud_scheduler_sa" {
   account_id   = "vhealth-scheduler-${var.environment}"
@@ -172,23 +210,23 @@ resource "google_service_account" "cloud_scheduler_sa" {
 module "cloud_scheduler" {
   source = "./modules/cloud_scheduler"
 
-  project_id     = var.project_id
-  region         = var.region
-  environment    = var.environment
-  job_name       = "vhealth-scheduler-${var.environment}"
-  description    = "Periodic task that runs every 30 minutes - ${var.environment}"
-  schedule       = var.scheduler_cron_schedule
-  time_zone      = var.scheduler_time_zone
+  project_id      = var.project_id
+  region          = var.region
+  environment     = var.environment
+  job_name        = "vhealth-scheduler-${var.environment}"
+  description     = "Periodic task that runs every 30 minutes - ${var.environment}"
+  schedule        = var.scheduler_cron_schedule
+  time_zone       = var.scheduler_time_zone
   http_target_uri = var.scheduler_endpoint_url
-  http_method    = "POST"
+  http_method     = "POST"
   http_headers = {
     "Content-Type" = "application/json"
   }
-  
+
   # Enable OIDC authentication if Cloud Run requires authentication
   oidc_token            = var.scheduler_use_oidc_auth
   service_account_email = var.scheduler_use_oidc_auth ? google_service_account.cloud_scheduler_sa.email : null
-  
+
   # Retry configuration
   retry_config = {
     retry_count          = 3
@@ -197,7 +235,7 @@ module "cloud_scheduler" {
     max_backoff_duration = "3600s"
     max_doublings        = 5
   }
-  
+
   paused = var.scheduler_paused
 
   depends_on = [

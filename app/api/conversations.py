@@ -9,7 +9,7 @@ from app.config import logger
 from app.services.conversation import ConversationService
 from app.db.database import get_database_pool
 from app.auth.dependencies import get_current_active_user
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from app.schemas.user import UserInDB
 from app.schemas.conversation import (
     ConversationCreate,
@@ -24,10 +24,13 @@ router = APIRouter()
 
 
 async def get_conversation_service(
+    request: Request,
     db_pool: asyncpg.Pool = Depends(get_database_pool),
 ) -> ConversationService:
     """Dependency to get conversation service."""
-    return ConversationService(db_pool)
+    # Get cache service from app state
+    cache_service = getattr(request.app.state, "cache_service", None)
+    return ConversationService(db_pool, cache_service=cache_service)
 
 
 @router.post(
