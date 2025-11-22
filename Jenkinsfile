@@ -246,6 +246,20 @@ AI summarization will not be available without this secret.
             }
         }
 
+        stage('Import VPC Connection') {
+            steps {
+                dir('terraform') {
+                    script {
+                        echo 'Importing existing VPC peering connection (if not already imported)...'
+                        sh """
+                            terraform import google_service_networking_connection.private_vpc_connection \
+                                ${GCP_PROJECT_ID}:default:servicenetworking.googleapis.com || true
+                        """
+                    }
+                }
+            }
+        }
+
         stage('Approve Terraform Apply') {
             when {
                 expression { return params.ENVIRONMENT == 'prod' }
