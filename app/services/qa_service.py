@@ -7,7 +7,7 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import AsyncGenerator, Dict, List, Optional, Set
+from typing import AsyncGenerator, Dict, List, Optional, Set, Tuple, Any
 
 import pandas as pd
 import requests
@@ -291,7 +291,7 @@ class QAService:
             logger.error(f"Error loading model: {e}")
             raise RuntimeError(f"Failed to load Q&A model: {e}") from e
 
-    def _load_data(self) -> tuple[pd.DataFrame, any]:
+    def _load_data(self) -> Tuple[pd.DataFrame, Any]:
         """
         Load and preprocess dataset.
 
@@ -524,7 +524,9 @@ class QAService:
         try:
             # Phase 1: Semantic search (existing logic, async-safe)
             question_normalized = self.preprocess_text(question)
-            question_embedding = self.model.encode(question_normalized, convert_to_tensor=True)
+            question_embedding = self.model.encode(
+                question_normalized, convert_to_tensor=True
+            )
             similarities = util.cos_sim(question_embedding, self.question_embeddings)[0]
 
             # Get top results
