@@ -70,11 +70,11 @@ output "cloud_run_config" {
       MAIL_PASSWORD        = module.secret_manager.secret_versions["mail_password"]
       MAIL_FROM            = module.secret_manager.secret_versions["mail_from"]
       MAIL_SERVER          = module.secret_manager.secret_versions["mail_server"]
-      # Redis connection secrets
-      REDIS_HOST         = var.enable_redis_cache ? module.secret_manager.secret_versions["redis_host"] : null
-      REDIS_PORT         = var.enable_redis_cache ? module.secret_manager.secret_versions["redis_port"] : null
-      REDIS_AUTH_SECRET  = var.enable_redis_cache ? module.secret_manager.secret_versions["redis_auth_secret"] : null
-      ENABLE_REDIS_CACHE = var.enable_redis_cache ? module.secret_manager.secret_versions["enable_redis_cache"] : null
+      # Redis connection secrets (use try() to handle case where secrets don't exist yet)
+      REDIS_HOST         = var.enable_redis_cache ? try(module.secret_manager.secret_versions["redis_host"], null) : null
+      REDIS_PORT         = var.enable_redis_cache ? try(module.secret_manager.secret_versions["redis_port"], null) : null
+      REDIS_AUTH_SECRET  = var.enable_redis_cache ? try(module.secret_manager.secret_versions["redis_auth_secret"], null) : null
+      ENABLE_REDIS_CACHE = var.enable_redis_cache ? try(module.secret_manager.secret_versions["enable_redis_cache"], null) : null
     }
   }
 }
