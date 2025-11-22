@@ -1,8 +1,11 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE:-python:3.13-slim} AS production
 
-# Install system dependencies required by WeasyPrint
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Ensure we're running as root and install system dependencies required by WeasyPrint
+USER root
+RUN mkdir -p /var/lib/apt/lists/partial && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \
     libgdk-pixbuf2.0-0 \
