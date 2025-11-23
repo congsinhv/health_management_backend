@@ -691,13 +691,15 @@
           box-shadow: none;
           border: 1px solid #e0e0e0;
           page-break-after: always;
-          page-break-inside: avoid;
-          break-inside: avoid;
           break-after: page;
           order: 1;
         }
 
         .sidebar-sections-container {
+          /* Allow breaking between sections */
+        }
+
+        .sidebar-section {
           page-break-inside: avoid;
           break-inside: avoid;
         }
