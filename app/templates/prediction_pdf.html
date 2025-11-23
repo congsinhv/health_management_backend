@@ -1,164 +1,1376 @@
-{% extends "base_pdf.html" %}
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kết quả dự đoán - VHealth</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-{% block content %}
-<!-- Page 1: User Input -->
-<div class="page">
-    <h1>Thông tin đầu vào</h1>
-    <p><strong>Ngày tạo:</strong> {{ created_at }}</p>
-    <p><strong>Mã dự đoán:</strong> #{{ prediction_id }}</p>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', sans-serif;
+        color: #1a1a1a;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
 
-    <h2>Thông tin cá nhân</h2>
-    <div class="info-grid">
-        <div class="info-item">
-            <div class="info-label">Họ và tên</div>
-            <div class="info-value">{{ user_input.name }}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Giới tính</div>
-            <div class="info-value">{% if user_input.gender == 'male' %}Nam{% else %}Nữ{% endif %}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Tuổi</div>
-            <div class="info-value">{{ user_input.age or '' }} tuổi</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Chiều cao</div>
-            <div class="info-value">{{ user_input.height }} m</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Cân nặng</div>
-            <div class="info-value">{{ user_input.weight }} kg</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Tiền sử gia đình</div>
-            <div class="info-value">{% if user_input.familyHistory %}Có{% else %}Không{% endif %}</div>
-        </div>
-    </div>
+      .container {
+        margin: 0 auto;
+        padding: 16px;
+      }
 
-    <h2>Thói quen ăn uống</h2>
-    <div class="info-grid">
-        <div class="info-item">
-            <div class="info-label">Tần suất ăn thực phẩm cao calo</div>
-            <div class="info-value">{{ user_input.highCalorieFood }}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Tần suất ăn rau</div>
-            <div class="info-value">{{ user_input.vegetableFrequency }}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Lượng nước uống</div>
-            <div class="info-value">{{ user_input.waterIntake }}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Bữa ăn chính/ngày</div>
-            <div class="info-value">{{ user_input.mainMeals }} bữa</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Tần suất ăn vặt</div>
-            <div class="info-value">{{ user_input.snackFrequency }}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Rượu bia</div>
-            <div class="info-value">{{ user_input.alcohol }}</div>
-        </div>
-    </div>
+      /* Header */
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 0;
+        margin-bottom: 24px;
+      }
 
-    <h2>Hoạt động thể chất</h2>
-    <div class="info-grid">
-        <div class="info-item">
-            <div class="info-label">Tần suất tập luyện</div>
-            <div class="info-value">{{ user_input.physicalActivity }}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Thời gian màn hình</div>
-            <div class="info-value">{{ user_input.screenTime }}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Phương tiện di chuyển</div>
-            <div class="info-value">{{ user_input.transportation }}</div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Thói quen hút thuốc</div>
-            <div class="info-value">{{ user_input.smoking }}</div>
-        </div>
-    </div>
-</div>
+      .logo {
+        display: flex;
+        align-items: center;
+        font-size: 22px;
+        font-weight: 600;
+        color: #1a1a1a;
+        letter-spacing: -0.5px;
+      }
 
-<!-- Page 2: Prediction Results -->
-<div class="page">
-    <h1>Kết quả dự đoán</h1>
+      .logo::before {
+        content: '✓';
+        background: linear-gradient(135deg, #00d4aa 0%, #00c29a 100%);
+        color: white;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 6px;
+        font-weight: bold;
+        font-size: 16px;
+        box-shadow: 0 2px 8px rgba(0, 212, 170, 0.3);
+      }
 
-    <div class="metric-box">
-        <div class="metric-label">Chỉ số BMI</div>
-        <div class="metric-value">{{ "%.1f"|format(prediction.bmi) }}</div>
-    </div>
+      .nav {
+        display: flex;
+        gap: 32px;
+        font-size: 14px;
+      }
 
-    <div class="status-box status-{{ status_class }}">
-        <h2 style="margin: 0;">{{ prediction.level or 'Không xác định' }}</h2>
-        {% if prediction.confidence %}
-        <p style="margin: 5px 0 0 0;">Độ tin cậy: {{ "%.0f"|format(prediction.confidence) }}%</p>
-        {% endif %}
-    </div>
+      .nav a {
+        color: #666;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
 
-    <h2>Phân tích sức khỏe</h2>
-    {% for paragraph in health_analysis %}
-    <p style="margin: 10px 0;">{{ paragraph }}</p>
-    {% else %}
-    <p>Không có phân tích sức khỏe.</p>
-    {% endfor %}
+      .nav a:hover {
+        color: #00d4aa;
+      }
 
-    <h2>Chỉ số sức khỏe</h2>
-    <div class="info-grid">
-        <div class="info-item">
-            <div class="info-label">Cân nặng</div>
-            <div class="info-value">
-                {% if health_metrics.weight %}{{ health_metrics.weight.value }} {{ health_metrics.weight.unit }}{% else %}N/A{% endif %}
+      /* Hero Section */
+      .hero {
+        background: linear-gradient(135deg, #00d4aa 0%, #5ce1e6 100%);
+        border-radius: 24px;
+        padding: 48px 56px;
+        margin-bottom: 32px;
+        color: white;
+        box-shadow: 0 8px 32px rgba(0, 212, 170, 0.2);
+      }
+
+      .hero h1 {
+        font-size: 40px;
+        margin-bottom: 12px;
+        font-weight: 600;
+        letter-spacing: -1px;
+      }
+
+      .hero p {
+        font-size: 14.5px;
+        opacity: 0.95;
+        max-width: 650px;
+        line-height: 1.7;
+      }
+
+      /* Main Layout */
+      .main-content {
+        display: grid;
+        grid-template-columns: 400px 1fr;
+        gap: 24px;
+        margin-bottom: 48px;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        border-radius: 16px;
+        padding: 16px;
+        border: 2px solid rgba(0, 0, 0, 0.04);
+      }
+
+      .sidebar h3 {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .sidebar-section {
+        margin-bottom: 32px;
+        border: 2px solid rgba(0, 0, 0, 0.04);
+        border-radius: 16px;
+      }
+
+      .sidebar-section:last-child {
+        margin-bottom: 0;
+      }
+
+      .sidebar-section h4 {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: none;
+        letter-spacing: 0;
+        padding: 12px 16px;
+        border-bottom: 2px solid rgba(0, 0, 0, 0.04);
+      }
+
+      .info-container {
+        padding: 8px 16px;
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        font-size: 12px;
+        gap: 12px;
+        padding: 4px 0;
+      }
+
+      .info-label {
+        color: #666;
+        flex: 1;
+        line-height: 1.5;
+      }
+
+      .info-value {
+        font-weight: 500;
+        color: #1a1a1a;
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      /* Center Content */
+      .prediction-overview {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .section-header h2 {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #e8f9f5;
+        color: #00d4aa;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0;
+      }
+
+      .badge::before {
+        content: '✓';
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        background: #00d4aa;
+        color: white;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 16px;
+        font-size: 10px;
+        font-weight: bold;
+      }
+
+      .download-btn {
+        background: #1a1a1a;
+        color: white;
+        padding: 11px 24px;
+        border-radius: 24px;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: none;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+
+      .download-btn:hover {
+        background: #2a2a2a;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      /* Prediction Chart */
+      .health-cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        position: relative;
+      }
+
+      .prediction-chart {
+        border: 2px solid rgba(0, 0, 0, 0.04);
+        border-radius: 16px;
+        padding: 16px;
+      }
+
+      .chart-circle {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .chart-circle svg {
+        filter: drop-shadow(0 2px 8px rgba(0, 212, 170, 0.15));
+      }
+
+      .chart-content {
+        position: absolute;
+        top: 60%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .chart-percentage {
+        font-size: 24px;
+        color: #1a1a1a;
+        letter-spacing: -1.5px;
+        line-height: 1;
+        margin-bottom: 2px;
+      }
+
+      .chart-label {
+        font-size: 14px;
+        color: #888;
+        margin-bottom: 6px;
+      }
+
+      .chart-result {
+        font-size: 14px;
+        font-weight: 500;
+        color: #1a1a1a;
+        margin-top: 4px;
+        letter-spacing: -0.3px;
+      }
+
+      /* Health Analysis */
+      .health-analysis {
+        margin: 36px 0;
+        padding: 16px;
+        border-radius: 16px;
+        border: 2px solid rgba(0, 0, 0, 0.04);
+      }
+
+      .health-analysis h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 24px;
+        letter-spacing: -0.3px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: space-between;
+      }
+
+      .health-analysis h3 span:last-child {
+        font-size: 12px;
+        color: #999;
+        font-weight: 400;
+      }
+
+      .health-analysis .subtitle {
+        font-size: 11px;
+        color: #999;
+        margin-bottom: 16px;
+      }
+
+      .health-analysis p {
+        font-size: 12px;
+        background-color: #fafafa;
+        padding: 12px;
+        line-height: 1.8;
+        margin-bottom: 4px;
+        border-top-left-radius: 16px;
+        border-top-right-radius: 16px;
+      }
+
+      .health-analysis p:last-child {
+        margin-bottom: 0;
+        border-bottom-left-radius: 16px;
+        border-bottom-right-radius: 16px;
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+      }
+
+      .health-analysis p:nth-child(3) {
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+      }
+
+      /* Diet Recommendations */
+      .diet-section {
+        margin: 48px 0;
+      }
+
+      .diet-section h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        letter-spacing: -0.3px;
+      }
+
+      .diet-section .subtitle {
+        font-size: 11px;
+        color: #999;
+        margin-bottom: 24px;
+      }
+
+      .day-tabs {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 32px;
+        flex-wrap: wrap;
+      }
+
+      .day-tab {
+        text-align: center;
+        padding: 14px;
+        border-radius: 50%;
+        background: #f5f5f5;
+        min-width: 64px;
+        width: 64px;
+        height: 64px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid transparent;
+      }
+
+      .day-tab:hover {
+        background: #ebebeb;
+      }
+
+      .day-tab.active {
+        background: #1a1a1a;
+        color: white;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      .day-tab .day-label {
+        font-size: 10px;
+        display: block;
+        margin-bottom: 2px;
+        font-weight: 500;
+      }
+
+      .day-tab .day-number {
+        font-size: 20px;
+        font-weight: 700;
+        display: block;
+        line-height: 1;
+      }
+
+      .meals {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        margin-bottom: 36px;
+      }
+
+      .meal {
+        padding: 24px;
+        background: #fafbfc;
+        border-radius: 12px;
+        border: 1px solid #f0f0f0;
+      }
+
+      .meal h4 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        color: #1a1a1a;
+        letter-spacing: -0.2px;
+      }
+
+      .meal ul {
+        list-style: none;
+        font-size: 13px;
+        color: #555;
+      }
+
+      .meal li {
+        padding: 6px 0;
+        padding-left: 18px;
+        position: relative;
+        line-height: 1.6;
+      }
+
+      .meal li::before {
+        content: '•';
+        position: absolute;
+        left: 0;
+        color: #00d4aa;
+        font-weight: bold;
+        font-size: 16px;
+      }
+
+      .food-restrictions {
+        margin: 32px 0;
+        padding: 20px 24px;
+        background: #fafbfc;
+        border-radius: 12px;
+        border: 1px solid #f0f0f0;
+      }
+
+      .food-restrictions h4 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 10px;
+        color: #1a1a1a;
+        letter-spacing: -0.2px;
+      }
+
+      .food-restrictions p {
+        font-size: 13px;
+        color: #555;
+        line-height: 1.7;
+      }
+
+      /* Exercise Plan */
+      .exercise-section {
+        margin: 48px 0 0 0;
+        padding-top: 48px;
+        border-top: 1px solid #f0f0f0;
+      }
+
+      .exercise-section h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 6px;
+        letter-spacing: -0.3px;
+      }
+
+      .exercise-section .subtitle {
+        font-size: 11px;
+        color: #999;
+        margin-bottom: 24px;
+      }
+
+      .exercise-section h4 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        margin-top: 32px;
+        color: #1a1a1a;
+        letter-spacing: -0.2px;
+      }
+
+      .exercise-list {
+        margin-top: 16px;
+      }
+
+      .exercise-item {
+        font-size: 13px;
+        color: #555;
+        padding: 10px 0;
+        padding-left: 18px;
+        position: relative;
+        line-height: 1.7;
+      }
+
+      .exercise-item::before {
+        content: '•';
+        position: absolute;
+        left: 0;
+        color: #00d4aa;
+        font-weight: bold;
+        font-size: 16px;
+      }
+
+      /* Health Cards */
+      .health-cards {
+        display: grid;
+        gap: 16px;
+        padding-bottom: 16px;
+      }
+
+      .health-card {
+        background: #97ffdc80;
+        border-radius: 20px;
+        padding: 24px 0px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      }
+
+      .health-card::before {
+        content: '';
+        position: absolute;
+        right: -20px;
+        top: 10px;
+        width: 120px;
+        height: 80px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        transform: rotate(-15deg);
+      }
+
+      .health-card::after {
+        content: '';
+        position: absolute;
+        left: -30px;
+        bottom: -20px;
+        width: 100px;
+        height: 100px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+      }
+
+      .health-card .icon {
+        font-size: 48px;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+        position: relative;
+        height: 90px;
+        z-index: 1;
+      }
+
+      .health-card:first-child .icon {
+        text-align: left;
+      }
+
+      .health-card:last-child .icon {
+        text-align: right;
+      }
+
+      .health-card h4 {
+        font-size: 12px;
+        color: #1a1a1a;
+        font-weight: 600;
+        position: relative;
+        z-index: 1;
+        letter-spacing: -0.2px;
+      }
+
+      .health-card .value {
+        font-size: 16px;
+        position: relative;
+        z-index: 1;
+        letter-spacing: -1px;
+      }
+
+      .health-card .unit {
+        font-size: 13px;
+        color: #555;
+        font-weight: 500;
+      }
+
+      /* Footer */
+      .footer {
+        background: #0a0e1a;
+        color: #999;
+        text-align: center;
+        padding: 32px;
+        font-size: 12px;
+        margin-top: 48px;
+        border-radius: 16px 16px 0 0;
+      }
+
+      /* Right Sidebar Heading */
+      .health-cards-container {
+        border: 2px solid rgba(0, 0, 0, 0.04);
+        border-radius: 16px;
+        padding: 16px 16px 0 16px;
+      }
+
+      .health-cards-container h3 {
+        font-size: 14px;
+        margin-bottom: 16px;
+        font-weight: 600;
+      }
+
+      /* Print Styles */
+      @media print {
+        body {
+          background: white;
+        }
+
+        .header,
+        .download-btn {
+          display: none;
+        }
+
+        .main-content {
+          break-inside: avoid;
+        }
+
+        .hero {
+          box-shadow: none;
+        }
+
+        .sidebar,
+        .center-content {
+          box-shadow: none;
+          border: 1px solid #e0e0e0;
+        }
+
+        @page {
+          margin: 1.5cm;
+          size: A4;
+        }
+      }
+
+      /* Responsive */
+      @media (max-width: 1400px) {
+        .main-content {
+          grid-template-columns: 350px 1fr;
+          gap: 20px;
+        }
+
+        .prediction-overview {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 1200px) {
+        .main-content {
+          grid-template-columns: 320px 1fr;
+          gap: 20px;
+        }
+
+        .hero {
+          padding: 40px 44px;
+        }
+
+        .hero h1 {
+          font-size: 36px;
+        }
+
+        .hero p {
+          font-size: 14px;
+        }
+      }
+
+      @media (max-width: 992px) {
+        .main-content {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          order: 2;
+        }
+
+        .center-content {
+          order: 1;
+        }
+
+        .prediction-overview {
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+
+        .meals {
+          grid-template-columns: 1fr;
+        }
+
+        .container {
+          padding: 16px;
+        }
+
+        .nav {
+          gap: 20px;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .hero {
+          padding: 32px 24px;
+          border-radius: 16px;
+        }
+
+        .hero h1 {
+          font-size: 28px;
+        }
+
+        .hero p {
+          font-size: 13px;
+        }
+
+        .center-content {
+          padding: 24px 20px;
+        }
+
+        .prediction-overview {
+          grid-template-columns: 1fr;
+        }
+
+        .health-cards {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+        }
+
+        .health-card {
+          padding: 16px 0px;
+        }
+
+        .health-card .icon {
+          height: 60px;
+        }
+
+        .health-card .icon svg {
+          width: 60px;
+          height: auto;
+        }
+
+        .health-card h4 {
+          font-size: 11px;
+        }
+
+        .health-card .value {
+          font-size: 14px;
+        }
+
+        .health-card .unit {
+          font-size: 12px;
+        }
+
+        .day-tabs {
+          gap: 8px;
+          justify-content: center;
+        }
+
+        .day-tab {
+          min-width: 56px;
+          width: 56px;
+          height: 56px;
+        }
+
+        .day-tab .day-label {
+          font-size: 9px;
+        }
+
+        .day-tab .day-number {
+          font-size: 18px;
+        }
+
+        .section-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+
+        .download-btn {
+          width: 100%;
+          justify-content: center;
+        }
+
+        .chart-circle svg {
+          width: 240px;
+          height: auto;
+        }
+
+        .chart-percentage {
+          font-size: 20px;
+        }
+
+        .chart-label {
+          font-size: 12px;
+        }
+
+        .chart-result {
+          font-size: 12px;
+        }
+
+        .sidebar-section h4 {
+          font-size: 11px;
+          padding: 10px 12px;
+        }
+
+        .info-container {
+          padding: 6px 12px;
+        }
+
+        .info-row {
+          font-size: 11px;
+        }
+      }
+
+      @media (max-width: 576px) {
+        .container {
+          padding: 12px;
+        }
+
+        .header {
+          padding: 12px 0;
+          margin-bottom: 16px;
+        }
+
+        .logo {
+          font-size: 18px;
+        }
+
+        .logo::before {
+          width: 24px;
+          height: 24px;
+          font-size: 14px;
+        }
+
+        .nav {
+          display: none;
+        }
+
+        .hero {
+          padding: 24px 20px;
+          margin-bottom: 24px;
+        }
+
+        .hero h1 {
+          font-size: 24px;
+          margin-bottom: 8px;
+        }
+
+        .hero p {
+          font-size: 12px;
+        }
+
+        .main-content {
+          gap: 16px;
+          margin-bottom: 32px;
+        }
+
+        .sidebar,
+        .prediction-chart,
+        .health-cards-container,
+        .sidebar-section {
+          border-radius: 12px;
+        }
+
+        .health-cards {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
+        .health-card {
+          display: grid;
+          grid-template-columns: 80px 1fr;
+          text-align: left;
+          padding: 16px;
+          gap: 12px;
+        }
+
+        .health-card .icon {
+          height: auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .health-card .icon svg {
+          width: 70px;
+        }
+
+        .health-card h4 {
+          font-size: 12px;
+          margin-bottom: 4px;
+        }
+
+        .health-card .value {
+          font-size: 20px;
+        }
+
+        .health-card::before,
+        .health-card::after {
+          display: none;
+        }
+
+        .day-tabs {
+          gap: 6px;
+        }
+
+        .day-tab {
+          min-width: 48px;
+          width: 48px;
+          height: 48px;
+          padding: 10px;
+        }
+
+        .day-tab .day-label {
+          font-size: 8px;
+        }
+
+        .day-tab .day-number {
+          font-size: 16px;
+        }
+
+        .meal {
+          padding: 16px;
+        }
+
+        .meal h4 {
+          font-size: 13px;
+          margin-bottom: 12px;
+        }
+
+        .meal ul {
+          font-size: 12px;
+        }
+
+        .health-analysis,
+        .diet-section,
+        .exercise-section {
+          margin: 24px 0;
+        }
+
+        .health-analysis h3,
+        .diet-section h3,
+        .exercise-section h3 {
+          font-size: 14px;
+        }
+
+        .health-analysis p {
+          font-size: 11px;
+          padding: 10px;
+        }
+
+        .food-restrictions {
+          padding: 16px;
+          margin: 24px 0;
+        }
+
+        .food-restrictions h4 {
+          font-size: 13px;
+        }
+
+        .food-restrictions p {
+          font-size: 12px;
+        }
+
+        .exercise-item {
+          font-size: 12px;
+        }
+
+        .footer {
+          padding: 24px 16px;
+          font-size: 11px;
+          margin-top: 32px;
+        }
+      }
+
+      @media (max-width: 400px) {
+        .hero h1 {
+          font-size: 20px;
+        }
+
+        .hero p {
+          font-size: 11px;
+        }
+
+        .chart-circle svg {
+          width: 200px;
+        }
+
+        .health-card {
+          grid-template-columns: 60px 1fr;
+        }
+
+        .health-card .icon svg {
+          width: 50px;
+        }
+
+        .day-tab {
+          min-width: 42px;
+          width: 42px;
+          height: 42px;
+        }
+
+        .day-tab .day-number {
+          font-size: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <img src="https://dev.vhealth.io.vn/Healthcare_logo.svg" alt="Logo" />
+      </div>
+
+      <!-- Main Content -->
+      <div class="main-content">
+        <!-- Left Sidebar -->
+        <div class="sidebar">
+          <div class="section-header">
+            <h3>Thông tin đã điền</h3>
+          </div>
+
+          <div class="sidebar-section">
+            <h4>Thông tin nhân khẩu học (Demographic Information)</h4>
+            <div class="info-container">
+              <div class="info-row">
+                <span class="info-label">Tên người dùng</span>
+                <span class="info-value">{{ user_input.name }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Giới tính</span>
+                <span class="info-value">{% if user_input.gender == 'male' %}Nam{% else %}Nữ{% endif %}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Chiều cao (m)</span>
+                <span class="info-value">{{ user_input.height }} m</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Cân nặng (kg)</span>
+                <span class="info-value">{{ user_input.weight }} kg</span>
+              </div>
             </div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">BMI</div>
-            <div class="info-value">
-                {% if health_metrics.bmi %}{{ health_metrics.bmi.value }}{% else %}N/A{% endif %}
+          </div>
+
+          <div class="sidebar-section">
+            <h4>Thói quen ăn uống</h4>
+            <div class="info-container">
+              <div class="info-row">
+                <span class="info-label">Thường xuyên ăn nhiều calo</span>
+                <span class="info-value">{{ user_input.highCalorieFood }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Có thường xuyên ăn rau không?</span>
+                <span class="info-value">{{ user_input.vegetableFrequency }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Uống bao nhiêu nước mỗi ngày?</span>
+                <span class="info-value">{{ user_input.waterIntake }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Số lớ ăn chính mỗi ngày</span>
+                <span class="info-value">{{ user_input.mainMeals }} bữa/ngày</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label"
+                  >Có ăn vặt ăn giữa các bữa ăn chính không?</span
+                >
+                <span class="info-value">{{ user_input.snackFrequency }}</span>
+              </div>
             </div>
-        </div>
-        <div class="info-item">
-            <div class="info-label">Chiều cao</div>
-            <div class="info-value">
-                {% if health_metrics.height %}{{ health_metrics.height.value }} {{ health_metrics.height.unit }}{% else %}N/A{% endif %}
+          </div>
+
+          <div class="sidebar-section">
+            <h4>Thói quen vận động</h4>
+            <div class="info-container">
+              <div class="info-row">
+                <span class="info-label"
+                  >Có thường xuyên tập thể dục không?</span
+                >
+                <span class="info-value">{{ user_input.physicalActivity }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label"
+                  >Mức độ đi dụng thiết bị điện tử/ngày</span
+                >
+                <span class="info-value">{{ user_input.screenTime }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label"
+                  >Phương tiện di chuyển thường dùng</span
+                >
+                <span class="info-value">{{ user_input.transportation }}</span>
+              </div>
             </div>
+          </div>
+
+          <div class="sidebar-section">
+            <h4>Thói quen khác</h4>
+            <div class="info-container">
+              <div class="info-row">
+                <span class="info-label">Bạn có hút thuốc không?</span>
+                <span class="info-value">{{ user_input.smoking }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label"
+                  >Bạn có thường xuyên sử dụng rượu bia không?</span
+                >
+                <span class="info-value">{{ user_input.alcohol }}</span>
+              </div>
+            </div>
+          </div>
         </div>
+
+        <!-- Center Content -->
+        <div class="center-content">
+          <div class="prediction-overview">
+            <!-- Prediction Chart -->
+            <div class="prediction-chart">
+              <div class="section-header">
+                <h2>Kết quả dự đoán</h2>
+              </div>
+              <div class="chart-circle">
+                <svg width="280" height="168" viewBox="0 0 280 168">
+                  <!-- Background half circle -->
+                  <path
+                    d="M 37 140 A 103 103 0 0 1 243 140"
+                    stroke="#E5E7EB"
+                    stroke-width="22"
+                    fill="none"
+                    stroke-linecap="round"
+                  />
+                  <!-- Progress half circle with gradient -->
+                  <path
+                    d="M 37 140 A 103 103 0 0 1 243 140"
+                    stroke="url(#progressGradient)"
+                    stroke-width="22"
+                    fill="none"
+                    stroke-dasharray="323.4"
+                    stroke-dashoffset="{{ 323.4 - (323.4 * (prediction.confidence or 0) / 100) }}"
+                    stroke-linecap="round"
+                  />
+                  <defs>
+                    <linearGradient
+                      id="progressGradient"
+                      x1="0%"
+                      y1="0%"
+                      x2="100%"
+                      y2="0%"
+                    >
+                      <stop offset="0%" stop-color="#32F6B4" />
+                      <stop offset="100%" stop-color="#9DFFEA" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div class="chart-content">
+                  <div class="chart-percentage">{{ "%.0f"|format(prediction.confidence or 0) }}%</div>
+                  <div class="chart-label">Dự đoán</div>
+                  <div class="chart-result">{{ prediction.level or 'Không xác định' }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Sidebar - Health Cards -->
+            <div class="health-cards-container">
+              <h3>Các chỉ số sức khỏe</h3>
+              <div class="health-cards">
+                <div class="health-card">
+                  <div class="icon">
+                    <svg
+                      width="123"
+                      height="68"
+                      viewBox="0 0 123 68"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M37 19.6488C50.6 21.8875 61.3333 19.6488 65 18.2497L63.5 53.2289C35.5 61.624 37 52.8791 23 52.1796C11.8 51.6199 3 57.0767 0 59.875V16.5007C18 10.2044 20 16.8505 37 19.6488Z"
+                        fill="#1E1E1E"
+                      ></path>
+                      <path
+                        d="M89.5515 3.33763L56.5 12.1937L63.0782 67.0656H115.543L122.924 12.1937L89.5515 3.33763Z"
+                        fill="#B1B2B8"
+                      ></path>
+                      <circle
+                        cx="89.7117"
+                        cy="16.2048"
+                        r="16.2048"
+                        fill="white"
+                      ></circle>
+                      <path
+                        d="M89.8721 0C99.0876 0 106.559 7.471 106.559 16.6865C106.558 24.9168 100.599 31.7541 92.7607 33.1221V50.8604C92.7607 52.3666 91.5394 53.5877 90.0332 53.5879C88.5268 53.5879 87.3057 52.3667 87.3057 50.8604V33.1748C79.3089 31.9401 73.1867 25.029 73.1865 16.6865C73.1865 7.4711 80.6567 0.000155082 89.8721 0ZM89.8721 4.77734C83.2949 4.7775 77.9629 10.1093 77.9629 16.6865C77.9631 23.2636 83.295 28.5955 89.8721 28.5957C96.4492 28.5957 101.781 23.2637 101.781 16.6865C101.781 10.1092 96.4494 4.77734 89.8721 4.77734Z"
+                        fill="#D9D9D9"
+                      ></path>
+                      <rect
+                        x="93.8936"
+                        y="6.73865"
+                        width="4.81332"
+                        height="12.8355"
+                        rx="2.40666"
+                        transform="rotate(30.8841 93.8936 6.73865)"
+                        fill="url(#paint0_linear_327_209)"
+                      ></rect>
+                      <defs>
+                        <linearGradient
+                          id="paint0_linear_327_209"
+                          x1="96.3002"
+                          y1="6.73865"
+                          x2="96.3002"
+                          y2="19.5742"
+                          gradientUnits="userSpaceOnUse"
+                        >
+                          <stop stop-color="#32F6B4"></stop>
+                          <stop offset="1" stop-color="#14B6E2"></stop>
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </div>
+                  <h4>Cân nặng</h4>
+                  <div class="value">{{ health_metrics.weight.value if health_metrics.weight else 'N/A' }} <span class="unit">{{ health_metrics.weight.unit if health_metrics.weight else '' }}</span></div>
+                </div>
+                <div class="health-card">
+                  <div class="icon">
+                    <svg
+                      width="93"
+                      height="51"
+                      viewBox="0 0 93 51"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <rect
+                        width="93"
+                        height="51"
+                        rx="14"
+                        fill="#1E1E1E"
+                      ></rect>
+                      <circle cx="46.5" cy="25.5" r="16" fill="white"></circle>
+                      <path
+                        d="M51.9827 15.5823C50.4037 14.7924 48.6637 14.3774 46.8982 14.3697C45.1326 14.3619 43.3891 14.7615 41.8031 15.5375L43.3038 18.6047C44.418 18.0596 45.6428 17.7789 46.8832 17.7843C48.1235 17.7898 49.3458 18.0813 50.4551 18.6362L51.9827 15.5823Z"
+                        fill="#1E1E1E"
+                      ></path>
+                      <path
+                        d="M40.8055 16.0886C39.1612 17.1066 37.8008 18.5236 36.8506 20.2079C35.9004 21.8923 35.3911 23.7894 35.3701 25.7232L38.7846 25.7603C38.7993 24.4018 39.1571 23.069 39.8246 21.8858C40.4922 20.7025 41.4479 19.7071 42.603 18.9919L40.8055 16.0886Z"
+                        fill="#1E1E1E"
+                      ></path>
+                      <path
+                        d="M58.326 25.8478C58.326 23.8873 57.8238 21.9595 56.8674 20.2481C55.9109 18.5367 54.5321 17.0988 52.8623 16.0715L51.073 18.9799C52.246 19.7016 53.2147 20.7117 53.8866 21.914C54.5585 23.1162 54.9113 24.4705 54.9113 25.8478H58.326Z"
+                        fill="#1E1E1E"
+                      ></path>
+                      <path
+                        d="M47.4053 16.9311C47.5389 16.3716 48.091 16.0175 48.6553 16.1294C49.2195 16.2413 49.5949 16.7791 49.5049 17.3471L48.4043 24.2729C48.7328 24.6417 48.9346 25.1259 48.9346 25.6587C48.9346 26.8112 48.0002 27.7455 46.8477 27.7456C45.6951 27.7456 44.7607 26.8113 44.7607 25.6587C44.7607 24.9116 45.1541 24.2578 45.7441 23.8891L47.4053 16.9311Z"
+                        fill="#1E1E1E"
+                        stroke="white"
+                        stroke-width="0.695652"
+                      ></path>
+                      <path
+                        d="M45.7548 29.6739V35.2391H44.5967V31.6193L43.0499 35.2391H42.1731L40.618 31.6193V35.2391H39.46V29.6739H40.7752L42.6115 33.812L44.4478 29.6739H45.7548Z"
+                        fill="#1E1E1E"
+                      ></path>
+                      <path
+                        d="M50.1753 32.3848C50.5007 32.4432 50.7681 32.6 50.9777 32.8552C51.1872 33.1103 51.292 33.4027 51.292 33.7322C51.292 34.0299 51.2148 34.293 51.0604 34.5216C50.9115 34.7448 50.6937 34.9202 50.4069 35.0478C50.1202 35.1753 49.781 35.2391 49.3895 35.2391H46.8997V29.6739H49.282C49.6735 29.6739 50.0099 29.735 50.2911 29.8573C50.5779 29.9796 50.7929 30.1496 50.9363 30.3676C51.0852 30.5855 51.1597 30.8327 51.1597 31.1091C51.1597 31.4333 51.0687 31.7044 50.8867 31.9223C50.7102 32.1403 50.4731 32.2944 50.1753 32.3848ZM48.0577 31.9702H49.1165C49.3923 31.9702 49.6046 31.9117 49.7535 31.7948C49.9024 31.6725 49.9768 31.4998 49.9768 31.2765C49.9768 31.0533 49.9024 30.8805 49.7535 30.7583C49.6046 30.636 49.3923 30.5749 49.1165 30.5749H48.0577V31.9702ZM49.2241 34.3302C49.5053 34.3302 49.7231 34.2664 49.8775 34.1388C50.0375 34.0113 50.1174 33.8306 50.1174 33.5967C50.1174 33.3575 50.0347 33.1714 49.8693 33.0386C49.7038 32.9004 49.4805 32.8313 49.1993 32.8313H48.0577V34.3302H49.2241Z"
+                        fill="#1E1E1E"
+                      ></path>
+                      <path
+                        d="M53.373 29.6739V35.2391H52.215V29.6739H53.373Z"
+                        fill="#1E1E1E"
+                      ></path>
+                    </svg>
+                  </div>
+                  <h4>BMI</h4>
+                  <div class="value">{{ health_metrics.bmi.value if health_metrics.bmi else 'N/A' }}</div>
+                </div>
+                <div class="health-card">
+                  <div class="icon">
+                    <svg
+                      width="124"
+                      height="67"
+                      viewBox="0 0 124 67"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M86.5 19.6488C72.9 21.8875 62.1667 19.6488 58.5 18.2497L60 53.2289C88 61.624 86.5 52.8791 100.5 52.1796C111.7 51.6199 120.5 57.0767 123.5 59.875V16.5007C105.5 10.2044 103.5 16.8505 86.5 19.6488Z"
+                        fill="#1E1E1E"
+                      ></path>
+                      <path
+                        d="M40.833 27.3788L33.8744 21M33.8744 21L27.2471 27.3788M33.8744 21V46.1008M33.8744 46.1008L40.833 39.5564M33.8744 46.1008L27.2471 39.5564"
+                        stroke="white"
+                        stroke-width="2.48523"
+                        stroke-linecap="round"
+                      ></path>
+                      <rect
+                        width="67"
+                        height="67"
+                        rx="28.2889"
+                        transform="matrix(-1 0 0 1 67 0)"
+                        fill="#B1B2B8"
+                      ></rect>
+                      <path
+                        d="M29.5 23L27.4024 20M27.4024 20L25 23M27.4024 20V48"
+                        stroke="url(#paint0_linear_327_221)"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      ></path>
+                      <path
+                        d="M32.5 24.0707V20H44.5V48H32.5V43.8743H35.5145V40.9587H32.5V38.0982H38.413V35.1827H32.5V32.5422H35.5145V29.6817H32.5V26.8212H38.413V24.0707H32.5Z"
+                        fill="white"
+                      ></path>
+                      <defs>
+                        <linearGradient
+                          id="paint0_linear_327_221"
+                          x1="27.25"
+                          y1="20"
+                          x2="27.25"
+                          y2="48"
+                          gradientUnits="userSpaceOnUse"
+                        >
+                          <stop stop-color="#32F6B4"></stop>
+                          <stop offset="1" stop-color="#14B6E2"></stop>
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </div>
+                  <h4>Chiều cao</h4>
+                  <div class="value">{{ health_metrics.height.value if health_metrics.height else 'N/A' }} <span class="unit">{{ health_metrics.height.unit if health_metrics.height else '' }}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Health Analysis -->
+          <div class="health-analysis">
+            <h3>
+              <span>Phân tích sức khỏe qua trên kết quả dự đoán</span>
+              <span>* Phân tích chỉ mang tính tham khảo </span>
+            </h3>
+
+            {% for paragraph in health_analysis %}
+            <p>{{ paragraph }}</p>
+            {% else %}
+            <p>Không có phân tích sức khỏe.</p>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
     </div>
 
-    <h2>Kế hoạch dinh dưỡng</h2>
-    {% if diet_plan %}
-        {% for day_plan in diet_plan %}
-        <h3>Ngày {{ day_plan.day }}</h3>
-        <p><strong>Thực phẩm nên ăn:</strong> {{ day_plan.recommendedFoods }}</p>
-        <p><strong>Thực phẩm nên hạn chế:</strong> {{ day_plan.foodsToLimit }}</p>
-        {% endfor %}
-    {% else %}
-    <p>Không có dữ liệu kế hoạch dinh dưỡng.</p>
-    {% endif %}
-
-    <h2>Kế hoạch tập luyện</h2>
-    {% if workout_plan %}
-        {% for workout in workout_plan %}
-        <h3>{{ workout.name }} (Ngày {{ workout.day }})</h3>
-        <ul>
-        {% for exercise in workout.exercises %}
-            <li>{{ exercise.name }} - {{ exercise.duration }} {{ exercise.unit }}
-            {% if exercise.sets %} ({{ exercise.sets }} hiệp × {{ exercise.reps }} lần){% endif %}
-            </li>
-        {% endfor %}
-        </ul>
-        {% endfor %}
-    {% else %}
-    <p>Không có dữ liệu kế hoạch tập luyện.</p>
-    {% endif %}
-
+    <!-- Footer -->
     <div class="footer">
-        <p>Báo cáo này được tạo tự động từ Health Management API</p>
-        <p>Ngày tạo: {{ created_at }}</p>
+      © 2025 Copyright by TruLem. All images are for demo purposes only.
     </div>
-</div>
-{% endblock %}
+  </body>
+</html>
