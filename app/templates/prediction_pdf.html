@@ -12,8 +12,9 @@
       }
 
       body {
-        font-family: "DejaVu Sans", "Noto Sans", "Liberation Sans", "Arial Unicode MS", 
-          "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+        font-family: "DejaVu Sans", "Noto Sans", "Liberation Sans",
+          "Arial Unicode MS", "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
+          "Cantarell", sans-serif;
         color: #1a1a1a;
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
@@ -22,7 +23,6 @@
 
       .container {
         margin: 0 auto;
-        padding: 16px;
       }
 
       /* Header */
@@ -104,7 +104,6 @@
         display: flex;
         flex-direction: column;
         gap: 24px;
-        margin-bottom: 48px;
       }
 
       /* Sidebar */
@@ -186,7 +185,7 @@
       /* Center Content */
       .prediction-overview {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
         gap: 24px;
       }
 
@@ -268,6 +267,8 @@
         display: flex;
         justify-content: center;
         align-items: center;
+        padding-bottom: 20px;
+        padding-left: 30px;
       }
 
       .chart-circle svg {
@@ -283,6 +284,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        padding-left: 30px;
       }
 
       .chart-percentage {
@@ -309,21 +311,21 @@
 
       /* Health Analysis */
       .health-analysis {
-        margin: 36px 0;
+        margin-top: 24px;
         padding: 16px;
         border-radius: 16px;
         border: 2px solid rgba(0, 0, 0, 0.04);
       }
 
       .health-analysis h3 {
-        font-size: 16px;
+        font-size: 14px;
         font-weight: 600;
         margin-bottom: 24px;
         letter-spacing: -0.3px;
         display: flex;
         align-items: center;
-        gap: 8px;
-        justify-content: space-between;
+        flex-direction: column;
+        gap: 4px;
       }
 
       .health-analysis h3 span:last-child {
@@ -627,9 +629,8 @@
         background: #0a0e1a;
         color: #999;
         text-align: center;
-        padding: 32px;
+        padding: 16px;
         font-size: 12px;
-        margin-top: 48px;
         border-radius: 16px 16px 0 0;
       }
 
@@ -657,9 +658,27 @@
           background: white;
         }
 
-        .header,
         .download-btn {
           display: none;
+        }
+
+        .header {
+          position: running(header-logo);
+          display: flex;
+          justify-content: flex-start;
+          align-items: center;
+          padding-top: 42px;
+          padding-bottom: 16px;
+          margin: 0;
+          height: 30px;
+        }
+
+        .logo {
+          display: flex;
+        }
+
+        .logo::before {
+          display: none !important;
         }
 
         .main-content {
@@ -678,97 +697,21 @@
           order: 1;
         }
 
-        .center-content {
-          box-shadow: none;
-          order: 2;
-          page-break-before: always;
-          break-before: page;
-        }
-
-        .sidebar-section {
+        .sidebar-sections-container {
           page-break-inside: avoid;
           break-inside: avoid;
         }
 
-        .prediction-overview {
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-
-        .prediction-chart,
-        .health-cards-container {
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-
-        .health-analysis,
-        .diet-section,
-        .exercise-section {
-          page-break-inside: avoid;
-          break-inside: avoid;
+        .sidebar-section:not(:last-child) {
+          margin-bottom: 20px;
         }
 
         @page {
           margin: 1.5cm;
           size: A4 portrait;
-        }
-      }
-
-      /* Responsive */
-      @media (max-width: 1200px) {
-        .sidebar {
-          padding: 20px;
-        }
-
-        .container {
-          padding: 20px;
-        }
-      }
-
-      @media (max-width: 992px) {
-        .meals {
-          grid-template-columns: 1fr;
-        }
-
-        .container {
-          padding: 16px;
-        }
-
-        .sidebar {
-          padding: 16px;
-        }
-      }
-
-      @media (max-width: 768px) {
-        .hero {
-          padding: 32px 24px;
-        }
-
-        .hero h1 {
-          font-size: 28px;
-        }
-
-        .center-content {
-          padding: 24px 20px;
-        }
-
-        .day-tabs {
-          gap: 8px;
-        }
-
-        .day-tab {
-          min-width: 56px;
-          width: 56px;
-          height: 56px;
-        }
-
-        .sidebar-sections-container {
-          grid-template-columns: 1fr;
-          gap: 16px;
-        }
-
-        .sidebar h3 {
-          font-size: 16px;
+          @top-left {
+            content: element(header-logo);
+          }
         }
       }
     </style>
@@ -777,43 +720,113 @@
     <div class="container">
       <!-- Header -->
       <div class="header">
-        <img src="https://dev.vhealth.io.vn/Healthcare_logo.svg" alt="Logo" />
+        <div class="logo">
+          <svg
+            width="30"
+            height="30"
+            viewBox="0 0 30 30"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M27.4963 1.31494L14.5695 15.4681L10.5691 22.9935C10.5691 22.9935 4.65358 16.0346 11.188 9.51541C16.4512 4.26511 19.3057 1.34152 27.4963 1.31494Z"
+              fill="url(#paint0_linear_152_190)"
+            />
+            <path
+              d="M27.4963 1.31494C27.4963 1.31494 27.6611 6.50374 25.7938 10.5542C23.9272 14.604 20.0985 20.8377 16.9023 23.4324C13.7061 26.0272 10.5691 22.9935 10.5691 22.9935L14.5695 15.4681L27.4963 1.31494Z"
+              fill="url(#paint1_linear_152_190)"
+            />
+            <path
+              d="M2.5 8.62847C3.18192 16.0794 5.7038 19.6022 7.84295 22.2653C8.32363 22.8637 8.94708 23.5167 9.62444 24.1706L14.6697 15.254C9.51205 8.13867 2.5 8.62847 2.5 8.62847Z"
+              fill="url(#paint2_linear_152_190)"
+            />
+            <path
+              d="M15.0008 15.7225C14.8915 15.5623 14.7806 15.4074 14.6697 15.254L9.62444 24.1706C11.9633 26.4267 14.9514 28.685 14.9514 28.685C14.9514 28.685 20.1843 23.3284 15.0008 15.7225Z"
+              fill="url(#paint3_linear_152_190)"
+            />
+            <defs>
+              <linearGradient
+                id="paint0_linear_152_190"
+                x1="2.83969"
+                y1="24.1071"
+                x2="20.5612"
+                y2="1.00133"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stop-color="#A6FBD0" />
+                <stop offset="1" stop-color="#16F5A2" />
+              </linearGradient>
+              <linearGradient
+                id="paint1_linear_152_190"
+                x1="6.84926"
+                y1="26.469"
+                x2="22.3134"
+                y2="1.80496"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stop-color="#32F6B4" />
+                <stop offset="1" stop-color="#04C98B" />
+              </linearGradient>
+              <linearGradient
+                id="paint2_linear_152_190"
+                x1="7.42325"
+                y1="7.74355"
+                x2="18.7416"
+                y2="21.0144"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stop-color="#32F6B4" />
+                <stop offset="1" stop-color="#14B6E2" />
+              </linearGradient>
+              <linearGradient
+                id="paint3_linear_152_190"
+                x1="18.0922"
+                y1="19.4564"
+                x2="10.7643"
+                y2="25.0681"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stop-color="#0099FF" />
+                <stop offset="1" stop-color="#14B6E2" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
       </div>
 
       <!-- Main Content -->
       <div class="main-content">
         <!-- Left Sidebar -->
         <div class="sidebar">
-          <div class="section-header">
-            <h3>Thông tin đã điền</h3>
-          </div>
+          <h3>Thông tin đã điền</h3>
 
-          <div class="sidebar-section">
-            <h4>Thông tin nhân khẩu học (Demographic Information)</h4>
-            <div class="info-container">
-              <div class="info-row">
-                <span class="info-label">Tên người dùng</span>
-                <span class="info-value">{{ user_input.name }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Giới tính</span>
-                <span class="info-value"
-                  >{% if user_input.gender == 'male' %}Nam{% else %}Nữ{% endif
-                  %}</span
-                >
-              </div>
-              <div class="info-row">
-                <span class="info-label">Chiều cao (m)</span>
-                <span class="info-value">{{ user_input.height }} m</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Cân nặng (kg)</span>
-                <span class="info-value">{{ user_input.weight }} kg</span>
+          <div class="sidebar-sections-container">
+            <div class="sidebar-section">
+              <h4>Thông tin nhân khẩu học (Demographic Information)</h4>
+              <div class="info-container">
+                <div class="info-row">
+                  <span class="info-label">Tên người dùng</span>
+                  <span class="info-value">{{ user_input.name }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Giới tính</span>
+                  <span class="info-value"
+                    >{% if user_input.gender == 'male' %}Nam{% else %}Nữ{% endif
+                    %}</span
+                  >
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Chiều cao (m)</span>
+                  <span class="info-value">{{ user_input.height }} m</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Cân nặng (kg)</span>
+                  <span class="info-value">{{ user_input.weight }} kg</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="sidebar-section">
+            <div class="sidebar-section">
               <h4>Thói quen ăn uống</h4>
               <div class="info-container">
                 <div class="info-row">
@@ -848,7 +861,6 @@
                 </div>
               </div>
             </div>
-
             <div class="sidebar-section">
               <h4>Thói quen vận động</h4>
               <div class="info-container">
@@ -1148,11 +1160,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="footer">
-      © 2025 Copyright by TruLem. All images are for demo purposes only.
     </div>
   </body>
 </html>
