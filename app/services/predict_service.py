@@ -322,7 +322,10 @@ class ObesityPredictorComplete:
             }}
         }}
 
-        Đảm bảo phản hồi là JSON hợp lệ và đầy đủ 7 ngày kế hoạch.
+        LƯU Ý QUAN TRỌNG:
+        - Tất cả các trường số (calories, count, duration, day, sets, reps) PHẢI là số nguyên, KHÔNG được là chuỗi.
+        - Nếu không có giá trị cho sets hoặc reps, bỏ qua trường đó hoặc để null, KHÔNG dùng "N/A".
+        - Đảm bảo phản hồi là JSON hợp lệ và đầy đủ 7 ngày kế hoạch.
         """
 
         try:

@@ -1,5 +1,5 @@
 # app/schemas/predict.py
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 
 
@@ -64,6 +64,14 @@ class Exercise(BaseModel):
     description: str
     sets: Optional[int] = None
     reps: Optional[int] = None
+
+    @field_validator('sets', 'reps', mode='before')
+    @classmethod
+    def convert_na_to_none(cls, v):
+        """Convert 'N/A' string to None for integer fields."""
+        if isinstance(v, str) and v.upper() in ('N/A', 'NA', 'NONE', ''):
+            return None
+        return v
 
 
 class DailyWorkoutPlan(BaseModel):
