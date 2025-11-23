@@ -321,8 +321,8 @@ class ObesityPredictorComplete:
                 ]
             }}
         }}
-        
-        Chỉ tạo kế hoạch cho 1 ngày mẫu. Đảm bảo phản hồi là JSON hợp lệ.
+
+        Đảm bảo phản hồi là JSON hợp lệ và đầy đủ 7 ngày kế hoạch.
         """
 
         try:
