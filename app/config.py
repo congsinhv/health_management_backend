@@ -122,6 +122,12 @@ class Settings(BaseSettings):
         default="tuvung.txt", description="Path to Vietnamese vocabulary file"
     )
 
+    # Obesity Prediction Model settings
+    obesity_model_dir: str = Field(
+        default="/tmp/models_obesity",
+        description="Path to obesity prediction models directory (writable cache)",
+    )
+
     # GCS Storage settings
     gcp_project_id: Optional[str] = Field(
         default=None, description="GCP project ID for GCS access"

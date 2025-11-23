@@ -54,10 +54,8 @@ class TestObesityPredictorComplete:
 
     def test_init_with_existing_local_files(self, mock_model_files, mock_joblib):
         """Test initialization when model files exist locally."""
-        with patch(
-            "app.services.predict_service.BASE_DIR",
-            mock_model_files["model_dir"].replace("/models_obesity", ""),
-        ):
+        with patch("app.services.predict_service.settings") as mock_settings:
+            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
             with patch(
                 "app.services.predict_service.os.path.exists", return_value=True
             ):
@@ -167,10 +165,8 @@ class TestObesityPredictorComplete:
 
     def test_bmi_category_index(self, mock_model_files, mock_joblib):
         """Test BMI category index calculation."""
-        with patch(
-            "app.services.predict_service.BASE_DIR",
-            mock_model_files["model_dir"].replace("/models_obesity", ""),
-        ):
+        with patch("app.services.predict_service.settings") as mock_settings:
+            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
             with patch("os.path.exists", return_value=True):
                 predictor = ObesityPredictorComplete()
 
@@ -185,10 +181,8 @@ class TestObesityPredictorComplete:
 
     def test_get_bmi_category(self, mock_model_files, mock_joblib):
         """Test BMI category string."""
-        with patch(
-            "app.services.predict_service.BASE_DIR",
-            mock_model_files["model_dir"].replace("/models_obesity", ""),
-        ):
+        with patch("app.services.predict_service.settings") as mock_settings:
+            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
             with patch("os.path.exists", return_value=True):
                 predictor = ObesityPredictorComplete()
 
@@ -201,10 +195,8 @@ class TestObesityPredictorComplete:
 
     def test_predict_complete(self, mock_model_files, mock_joblib):
         """Test complete prediction flow."""
-        with patch(
-            "app.services.predict_service.BASE_DIR",
-            mock_model_files["model_dir"].replace("/models_obesity", ""),
-        ):
+        with patch("app.services.predict_service.settings") as mock_settings:
+            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
             with patch("os.path.exists", return_value=True):
                 predictor = ObesityPredictorComplete()
 
@@ -226,10 +218,8 @@ class TestObesityPredictorComplete:
 
     def test_format_bmi(self, mock_model_files, mock_joblib):
         """Test BMI formatting."""
-        with patch(
-            "app.services.predict_service.BASE_DIR",
-            mock_model_files["model_dir"].replace("/models_obesity", ""),
-        ):
+        with patch("app.services.predict_service.settings") as mock_settings:
+            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
             with patch("os.path.exists", return_value=True):
                 predictor = ObesityPredictorComplete()
 
@@ -240,10 +230,8 @@ class TestObesityPredictorComplete:
 
     def test_build_prompts(self, mock_model_files, mock_joblib):
         """Test AI prompt building."""
-        with patch(
-            "app.services.predict_service.BASE_DIR",
-            mock_model_files["model_dir"].replace("/models_obesity", ""),
-        ):
+        with patch("app.services.predict_service.settings") as mock_settings:
+            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
             with patch("os.path.exists", return_value=True):
                 predictor = ObesityPredictorComplete()
 
@@ -273,10 +261,8 @@ class TestObesityPredictorComplete:
 
     def test_get_ai_suggestion_success(self, mock_model_files, mock_joblib):
         """Test AI suggestion generation success."""
-        with patch(
-            "app.services.predict_service.BASE_DIR",
-            mock_model_files["model_dir"].replace("/models_obesity", ""),
-        ):
+        with patch("app.services.predict_service.settings") as mock_settings:
+            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
             with patch("os.path.exists", return_value=True):
                 predictor = ObesityPredictorComplete()
 
@@ -294,10 +280,8 @@ class TestObesityPredictorComplete:
 
     def test_get_ai_suggestion_failure(self, mock_model_files, mock_joblib):
         """Test AI suggestion generation handles errors."""
-        with patch(
-            "app.services.predict_service.BASE_DIR",
-            mock_model_files["model_dir"].replace("/models_obesity", ""),
-        ):
+        with patch("app.services.predict_service.settings") as mock_settings:
+            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
             with patch("os.path.exists", return_value=True):
                 predictor = ObesityPredictorComplete()
 

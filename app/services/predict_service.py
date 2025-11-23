@@ -25,7 +25,6 @@ from app.utils.gcs_downloader import GCSDownloader
 from app.db.prediction import PredictionRepository
 
 logger = logging.getLogger(__name__)
-BASE_DIR = os.getcwd()
 
 
 class ObesityPredictorComplete:
@@ -34,8 +33,8 @@ class ObesityPredictorComplete:
         self.pool = pool
         self.prediction_repo = PredictionRepository(pool) if pool else None
 
-        # Define paths
-        model_dir = os.path.join(BASE_DIR, "models_obesity")
+        # Define paths - use writable directory from config
+        model_dir = settings.obesity_model_dir
         model_path = os.path.join(model_dir, "obesity_classifier_final.pkl")
         encoder_path = os.path.join(model_dir, "label_encoder.pkl")
 
@@ -102,7 +101,14 @@ class ObesityPredictorComplete:
 
         try:
             # Create model directory if it doesn't exist
-            Path(model_dir).mkdir(parents=True, exist_ok=True)
+            try:
+                Path(model_dir).mkdir(parents=True, exist_ok=True)
+                logger.info(f"Model directory ready: {model_dir}")
+            except PermissionError as pe:
+                raise RuntimeError(
+                    f"Permission denied creating model directory {model_dir}. "
+                    f"Ensure the directory is writable or set OBESITY_MODEL_DIR to a writable location like /tmp"
+                ) from pe
 
             # Initialize GCS downloader
             downloader = GCSDownloader(
