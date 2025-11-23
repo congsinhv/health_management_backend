@@ -254,5 +254,9 @@ class PdfGeneratorService:
         Returns:
             PDF bytes
         """
+        from weasyprint.text.fonts import FontConfiguration
+
+        # Enable font configuration for better font handling
+        font_config = FontConfiguration()
         html = HTML(string=html_string)
-        return html.write_pdf()
+        return html.write_pdf(font_config=font_config)

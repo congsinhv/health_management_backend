@@ -12,8 +12,8 @@
       }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-          "Oxygen", "Ubuntu", "Cantarell", sans-serif;
+        font-family: "DejaVu Sans", "Noto Sans", "Liberation Sans", "Arial Unicode MS", 
+          "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", sans-serif;
         color: #1a1a1a;
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
@@ -671,16 +671,18 @@
         .sidebar {
           box-shadow: none;
           border: 1px solid #e0e0e0;
-          page-break-after: auto;
+          page-break-after: always;
           page-break-inside: avoid;
           break-inside: avoid;
+          break-after: page;
           order: 1;
         }
 
         .center-content {
           box-shadow: none;
           order: 2;
-          page-break-before: auto;
+          page-break-before: always;
+          break-before: page;
         }
 
         .sidebar-section {
@@ -787,32 +789,31 @@
           </div>
 
           <div class="sidebar-section">
-            <div class="sidebar-section-content">
-              <h4>Thông tin nhân khẩu học (Demographic Information)</h4>
-              <div class="info-container">
-                <div class="info-row">
-                  <span class="info-label">Tên người dùng</span>
-                  <span class="info-value">{{ user_input.name }}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Giới tính</span>
-                  <span class="info-value"
-                    >{% if user_input.gender == 'male' %}Nam{% else %}Nữ{% endif
-                    %}</span
-                  >
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Chiều cao (m)</span>
-                  <span class="info-value">{{ user_input.height }} m</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Cân nặng (kg)</span>
-                  <span class="info-value">{{ user_input.weight }} kg</span>
-                </div>
+            <h4>Thông tin nhân khẩu học (Demographic Information)</h4>
+            <div class="info-container">
+              <div class="info-row">
+                <span class="info-label">Tên người dùng</span>
+                <span class="info-value">{{ user_input.name }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Giới tính</span>
+                <span class="info-value"
+                  >{% if user_input.gender == 'male' %}Nam{% else %}Nữ{% endif
+                  %}</span
+                >
+              </div>
+              <div class="info-row">
+                <span class="info-label">Chiều cao (m)</span>
+                <span class="info-value">{{ user_input.height }} m</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Cân nặng (kg)</span>
+                <span class="info-value">{{ user_input.weight }} kg</span>
               </div>
             </div>
+          </div>
 
-            <div class="sidebar-section">
+          <div class="sidebar-section">
               <h4>Thói quen ăn uống</h4>
               <div class="info-container">
                 <div class="info-row">
@@ -832,7 +833,7 @@
                   <span class="info-value">{{ user_input.waterIntake }}</span>
                 </div>
                 <div class="info-row">
-                  <span class="info-label">Số lớ ăn chính mỗi ngày</span>
+                  <span class="info-label">Số lượng bữa ăn chính mỗi ngày</span>
                   <span class="info-value"
                     >{{ user_input.mainMeals }} bữa/ngày</span
                   >
@@ -861,7 +862,7 @@
                 </div>
                 <div class="info-row">
                   <span class="info-label"
-                    >Mức độ đi dụng thiết bị điện tử/ngày</span
+                    >Mức độ sử dụng thiết bị điện tử/ngày</span
                   >
                   <span class="info-value">{{ user_input.screenTime }}</span>
                 </div>
