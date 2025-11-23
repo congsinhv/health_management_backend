@@ -177,11 +177,3 @@ models_obesity/
 # Q&A Data files (should be in GCS, not tracked in git)
 data.xlsx
 tuvung.txt
-
-# AI
-.claude/
-.opencode/
-docs/
-plans/
-.repomixignore
-repomix-output.xml

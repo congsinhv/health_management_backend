@@ -2,6 +2,7 @@
 Prediction database operations using raw SQL queries.
 """
 
+import json
 import asyncpg
 from typing import Optional, Dict, Any
 from datetime import datetime
@@ -36,11 +37,12 @@ class PredictionRepository(BaseRepository):
             RETURNING id, prediction_id, user_input, prediction_data,
                       pdf_url, created_at, updated_at
         """
+        # Convert dicts to JSON strings for JSONB columns
         return await self.fetch_one(
             query,
             prediction_id,
-            user_input,
-            prediction_data,
+            json.dumps(user_input),
+            json.dumps(prediction_data),
         )
 
     async def get_prediction_by_prediction_id(

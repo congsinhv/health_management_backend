@@ -33,6 +33,8 @@ def prediction_repo(mock_pool):
 @pytest.mark.asyncio
 async def test_create_prediction_success(prediction_repo, mock_connection):
     """Test creating a prediction."""
+    import json
+    
     # Setup
     user_input = {"age": 30, "gender": "male", "weight": 75, "height": 175}
     prediction_data = {
@@ -68,7 +70,13 @@ async def test_create_prediction_success(prediction_repo, mock_connection):
     assert result["prediction_id"] == "pred_12345"
     assert result["user_input"] == user_input
     assert result["prediction_data"] == prediction_data
+    
+    # Verify fetch_one was called with JSON-serialized dicts
     prediction_repo.fetch_one.assert_called_once()
+    call_args = prediction_repo.fetch_one.call_args
+    assert call_args[0][1] == "pred_12345"  # prediction_id
+    assert call_args[0][2] == json.dumps(user_input)  # user_input as JSON
+    assert call_args[0][3] == json.dumps(prediction_data)  # prediction_data as JSON
 
 
 @pytest.mark.asyncio
