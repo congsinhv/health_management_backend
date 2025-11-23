@@ -34,7 +34,7 @@ from app.helpers import (
     create_verification_token,
     verify_verification_token,
 )
-from app.config import settings
+from app.config import logger, settings
 from app.services.email import email_service
 
 
