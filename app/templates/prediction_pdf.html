@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
@@ -12,9 +12,8 @@
       }
 
       body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-          'Ubuntu', 'Cantarell', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+          "Oxygen", "Ubuntu", "Cantarell", sans-serif;
         color: #1a1a1a;
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
@@ -45,7 +44,7 @@
       }
 
       .logo::before {
-        content: '✓';
+        content: "✓";
         background: linear-gradient(135deg, #00d4aa 0%, #00c29a 100%);
         color: white;
         width: 28px;
@@ -102,8 +101,8 @@
 
       /* Main Layout */
       .main-content {
-        display: grid;
-        grid-template-columns: 400px 1fr;
+        display: flex;
+        flex-direction: column;
         gap: 24px;
         margin-bottom: 48px;
       }
@@ -111,23 +110,42 @@
       /* Sidebar */
       .sidebar {
         border-radius: 16px;
-        padding: 16px;
+        padding: 24px;
         border: 2px solid rgba(0, 0, 0, 0.04);
+        order: 1;
+        background: white;
+      }
+
+      .center-content {
+        order: 2;
       }
 
       .sidebar h3 {
-        font-size: 14px;
+        font-size: 18px;
         font-weight: 600;
+        margin-bottom: 24px;
+        color: #1a1a1a;
+      }
+
+      .section-header {
+        margin-bottom: 16px;
+      }
+
+      .section-header h2 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1a1a1a;
+      }
+
+      .sidebar-sections-container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
       }
 
       .sidebar-section {
-        margin-bottom: 32px;
         border: 2px solid rgba(0, 0, 0, 0.04);
         border-radius: 16px;
-      }
-
-      .sidebar-section:last-child {
-        margin-bottom: 0;
       }
 
       .sidebar-section h4 {
@@ -198,7 +216,7 @@
       }
 
       .badge::before {
-        content: '✓';
+        content: "✓";
         display: inline-block;
         width: 16px;
         height: 16px;
@@ -445,7 +463,7 @@
       }
 
       .meal li::before {
-        content: '•';
+        content: "•";
         position: absolute;
         left: 0;
         color: #00d4aa;
@@ -518,7 +536,7 @@
       }
 
       .exercise-item::before {
-        content: '•';
+        content: "•";
         position: absolute;
         left: 0;
         color: #00d4aa;
@@ -544,7 +562,7 @@
       }
 
       .health-card::before {
-        content: '';
+        content: "";
         position: absolute;
         right: -20px;
         top: 10px;
@@ -556,7 +574,7 @@
       }
 
       .health-card::after {
-        content: '';
+        content: "";
         position: absolute;
         left: -30px;
         bottom: -20px;
@@ -630,6 +648,11 @@
 
       /* Print Styles */
       @media print {
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
         body {
           background: white;
         }
@@ -640,74 +663,67 @@
         }
 
         .main-content {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .sidebar {
+          box-shadow: none;
+          border: 1px solid #e0e0e0;
+          page-break-after: auto;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          order: 1;
+        }
+
+        .center-content {
+          box-shadow: none;
+          order: 2;
+          page-break-before: auto;
+        }
+
+        .sidebar-section {
+          page-break-inside: avoid;
           break-inside: avoid;
         }
 
-        .hero {
-          box-shadow: none;
+        .prediction-overview {
+          page-break-inside: avoid;
+          break-inside: avoid;
         }
 
-        .sidebar,
-        .center-content {
-          box-shadow: none;
-          border: 1px solid #e0e0e0;
+        .prediction-chart,
+        .health-cards-container {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+
+        .health-analysis,
+        .diet-section,
+        .exercise-section {
+          page-break-inside: avoid;
+          break-inside: avoid;
         }
 
         @page {
           margin: 1.5cm;
-          size: A4;
+          size: A4 portrait;
         }
       }
 
       /* Responsive */
-      @media (max-width: 1400px) {
-        .main-content {
-          grid-template-columns: 350px 1fr;
-          gap: 20px;
-        }
-
-        .prediction-overview {
-          grid-template-columns: 1fr;
-        }
-      }
-
       @media (max-width: 1200px) {
-        .main-content {
-          grid-template-columns: 320px 1fr;
-          gap: 20px;
+        .sidebar {
+          padding: 20px;
         }
 
-        .hero {
-          padding: 40px 44px;
-        }
-
-        .hero h1 {
-          font-size: 36px;
-        }
-
-        .hero p {
-          font-size: 14px;
+        .container {
+          padding: 20px;
         }
       }
 
       @media (max-width: 992px) {
-        .main-content {
-          grid-template-columns: 1fr;
-        }
-
-        .sidebar {
-          order: 2;
-        }
-
-        .center-content {
-          order: 1;
-        }
-
-        .prediction-overview {
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-        }
-
         .meals {
           grid-template-columns: 1fr;
         }
@@ -716,66 +732,26 @@
           padding: 16px;
         }
 
-        .nav {
-          gap: 20px;
+        .sidebar {
+          padding: 16px;
         }
       }
 
       @media (max-width: 768px) {
         .hero {
           padding: 32px 24px;
-          border-radius: 16px;
         }
 
         .hero h1 {
           font-size: 28px;
         }
 
-        .hero p {
-          font-size: 13px;
-        }
-
         .center-content {
           padding: 24px 20px;
         }
 
-        .prediction-overview {
-          grid-template-columns: 1fr;
-        }
-
-        .health-cards {
-          grid-template-columns: repeat(3, 1fr);
-          gap: 12px;
-        }
-
-        .health-card {
-          padding: 16px 0px;
-        }
-
-        .health-card .icon {
-          height: 60px;
-        }
-
-        .health-card .icon svg {
-          width: 60px;
-          height: auto;
-        }
-
-        .health-card h4 {
-          font-size: 11px;
-        }
-
-        .health-card .value {
-          font-size: 14px;
-        }
-
-        .health-card .unit {
-          font-size: 12px;
-        }
-
         .day-tabs {
           gap: 8px;
-          justify-content: center;
         }
 
         .day-tab {
@@ -784,246 +760,13 @@
           height: 56px;
         }
 
-        .day-tab .day-label {
-          font-size: 9px;
-        }
-
-        .day-tab .day-number {
-          font-size: 18px;
-        }
-
-        .section-header {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 12px;
-        }
-
-        .download-btn {
-          width: 100%;
-          justify-content: center;
-        }
-
-        .chart-circle svg {
-          width: 240px;
-          height: auto;
-        }
-
-        .chart-percentage {
-          font-size: 20px;
-        }
-
-        .chart-label {
-          font-size: 12px;
-        }
-
-        .chart-result {
-          font-size: 12px;
-        }
-
-        .sidebar-section h4 {
-          font-size: 11px;
-          padding: 10px 12px;
-        }
-
-        .info-container {
-          padding: 6px 12px;
-        }
-
-        .info-row {
-          font-size: 11px;
-        }
-      }
-
-      @media (max-width: 576px) {
-        .container {
-          padding: 12px;
-        }
-
-        .header {
-          padding: 12px 0;
-          margin-bottom: 16px;
-        }
-
-        .logo {
-          font-size: 18px;
-        }
-
-        .logo::before {
-          width: 24px;
-          height: 24px;
-          font-size: 14px;
-        }
-
-        .nav {
-          display: none;
-        }
-
-        .hero {
-          padding: 24px 20px;
-          margin-bottom: 24px;
-        }
-
-        .hero h1 {
-          font-size: 24px;
-          margin-bottom: 8px;
-        }
-
-        .hero p {
-          font-size: 12px;
-        }
-
-        .main-content {
-          gap: 16px;
-          margin-bottom: 32px;
-        }
-
-        .sidebar,
-        .prediction-chart,
-        .health-cards-container,
-        .sidebar-section {
-          border-radius: 12px;
-        }
-
-        .health-cards {
+        .sidebar-sections-container {
           grid-template-columns: 1fr;
-          gap: 10px;
+          gap: 16px;
         }
 
-        .health-card {
-          display: grid;
-          grid-template-columns: 80px 1fr;
-          text-align: left;
-          padding: 16px;
-          gap: 12px;
-        }
-
-        .health-card .icon {
-          height: auto;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .health-card .icon svg {
-          width: 70px;
-        }
-
-        .health-card h4 {
-          font-size: 12px;
-          margin-bottom: 4px;
-        }
-
-        .health-card .value {
-          font-size: 20px;
-        }
-
-        .health-card::before,
-        .health-card::after {
-          display: none;
-        }
-
-        .day-tabs {
-          gap: 6px;
-        }
-
-        .day-tab {
-          min-width: 48px;
-          width: 48px;
-          height: 48px;
-          padding: 10px;
-        }
-
-        .day-tab .day-label {
-          font-size: 8px;
-        }
-
-        .day-tab .day-number {
+        .sidebar h3 {
           font-size: 16px;
-        }
-
-        .meal {
-          padding: 16px;
-        }
-
-        .meal h4 {
-          font-size: 13px;
-          margin-bottom: 12px;
-        }
-
-        .meal ul {
-          font-size: 12px;
-        }
-
-        .health-analysis,
-        .diet-section,
-        .exercise-section {
-          margin: 24px 0;
-        }
-
-        .health-analysis h3,
-        .diet-section h3,
-        .exercise-section h3 {
-          font-size: 14px;
-        }
-
-        .health-analysis p {
-          font-size: 11px;
-          padding: 10px;
-        }
-
-        .food-restrictions {
-          padding: 16px;
-          margin: 24px 0;
-        }
-
-        .food-restrictions h4 {
-          font-size: 13px;
-        }
-
-        .food-restrictions p {
-          font-size: 12px;
-        }
-
-        .exercise-item {
-          font-size: 12px;
-        }
-
-        .footer {
-          padding: 24px 16px;
-          font-size: 11px;
-          margin-top: 32px;
-        }
-      }
-
-      @media (max-width: 400px) {
-        .hero h1 {
-          font-size: 20px;
-        }
-
-        .hero p {
-          font-size: 11px;
-        }
-
-        .chart-circle svg {
-          width: 200px;
-        }
-
-        .health-card {
-          grid-template-columns: 60px 1fr;
-        }
-
-        .health-card .icon svg {
-          width: 50px;
-        }
-
-        .day-tab {
-          min-width: 42px;
-          width: 42px;
-          height: 42px;
-        }
-
-        .day-tab .day-number {
-          font-size: 14px;
         }
       }
     </style>
@@ -1044,91 +787,108 @@
           </div>
 
           <div class="sidebar-section">
-            <h4>Thông tin nhân khẩu học (Demographic Information)</h4>
-            <div class="info-container">
-              <div class="info-row">
-                <span class="info-label">Tên người dùng</span>
-                <span class="info-value">{{ user_input.name }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Giới tính</span>
-                <span class="info-value">{% if user_input.gender == 'male' %}Nam{% else %}Nữ{% endif %}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Chiều cao (m)</span>
-                <span class="info-value">{{ user_input.height }} m</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Cân nặng (kg)</span>
-                <span class="info-value">{{ user_input.weight }} kg</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="sidebar-section">
-            <h4>Thói quen ăn uống</h4>
-            <div class="info-container">
-              <div class="info-row">
-                <span class="info-label">Thường xuyên ăn nhiều calo</span>
-                <span class="info-value">{{ user_input.highCalorieFood }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Có thường xuyên ăn rau không?</span>
-                <span class="info-value">{{ user_input.vegetableFrequency }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Uống bao nhiêu nước mỗi ngày?</span>
-                <span class="info-value">{{ user_input.waterIntake }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Số lớ ăn chính mỗi ngày</span>
-                <span class="info-value">{{ user_input.mainMeals }} bữa/ngày</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label"
-                  >Có ăn vặt ăn giữa các bữa ăn chính không?</span
-                >
-                <span class="info-value">{{ user_input.snackFrequency }}</span>
+            <div class="sidebar-section-content">
+              <h4>Thông tin nhân khẩu học (Demographic Information)</h4>
+              <div class="info-container">
+                <div class="info-row">
+                  <span class="info-label">Tên người dùng</span>
+                  <span class="info-value">{{ user_input.name }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Giới tính</span>
+                  <span class="info-value"
+                    >{% if user_input.gender == 'male' %}Nam{% else %}Nữ{% endif
+                    %}</span
+                  >
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Chiều cao (m)</span>
+                  <span class="info-value">{{ user_input.height }} m</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Cân nặng (kg)</span>
+                  <span class="info-value">{{ user_input.weight }} kg</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="sidebar-section">
-            <h4>Thói quen vận động</h4>
-            <div class="info-container">
-              <div class="info-row">
-                <span class="info-label"
-                  >Có thường xuyên tập thể dục không?</span
-                >
-                <span class="info-value">{{ user_input.physicalActivity }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label"
-                  >Mức độ đi dụng thiết bị điện tử/ngày</span
-                >
-                <span class="info-value">{{ user_input.screenTime }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label"
-                  >Phương tiện di chuyển thường dùng</span
-                >
-                <span class="info-value">{{ user_input.transportation }}</span>
+            <div class="sidebar-section">
+              <h4>Thói quen ăn uống</h4>
+              <div class="info-container">
+                <div class="info-row">
+                  <span class="info-label">Thường xuyên ăn nhiều calo</span>
+                  <span class="info-value"
+                    >{{ user_input.highCalorieFood }}</span
+                  >
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Có thường xuyên ăn rau không?</span>
+                  <span class="info-value"
+                    >{{ user_input.vegetableFrequency }}</span
+                  >
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Uống bao nhiêu nước mỗi ngày?</span>
+                  <span class="info-value">{{ user_input.waterIntake }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Số lớ ăn chính mỗi ngày</span>
+                  <span class="info-value"
+                    >{{ user_input.mainMeals }} bữa/ngày</span
+                  >
+                </div>
+                <div class="info-row">
+                  <span class="info-label"
+                    >Có ăn vặt ăn giữa các bữa ăn chính không?</span
+                  >
+                  <span class="info-value"
+                    >{{ user_input.snackFrequency }}</span
+                  >
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="sidebar-section">
-            <h4>Thói quen khác</h4>
-            <div class="info-container">
-              <div class="info-row">
-                <span class="info-label">Bạn có hút thuốc không?</span>
-                <span class="info-value">{{ user_input.smoking }}</span>
+            <div class="sidebar-section">
+              <h4>Thói quen vận động</h4>
+              <div class="info-container">
+                <div class="info-row">
+                  <span class="info-label"
+                    >Có thường xuyên tập thể dục không?</span
+                  >
+                  <span class="info-value"
+                    >{{ user_input.physicalActivity }}</span
+                  >
+                </div>
+                <div class="info-row">
+                  <span class="info-label"
+                    >Mức độ đi dụng thiết bị điện tử/ngày</span
+                  >
+                  <span class="info-value">{{ user_input.screenTime }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label"
+                    >Phương tiện di chuyển thường dùng</span
+                  >
+                  <span class="info-value"
+                    >{{ user_input.transportation }}</span
+                  >
+                </div>
               </div>
-              <div class="info-row">
-                <span class="info-label"
-                  >Bạn có thường xuyên sử dụng rượu bia không?</span
-                >
-                <span class="info-value">{{ user_input.alcohol }}</span>
+            </div>
+
+            <div class="sidebar-section">
+              <h4>Thói quen khác</h4>
+              <div class="info-container">
+                <div class="info-row">
+                  <span class="info-label">Bạn có hút thuốc không?</span>
+                  <span class="info-value">{{ user_input.smoking }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label"
+                    >Bạn có thường xuyên sử dụng rượu bia không?</span
+                  >
+                  <span class="info-value">{{ user_input.alcohol }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1176,9 +936,13 @@
                   </defs>
                 </svg>
                 <div class="chart-content">
-                  <div class="chart-percentage">{{ "%.0f"|format(prediction.confidence or 0) }}%</div>
+                  <div class="chart-percentage">
+                    {{ "%.0f"|format(prediction.confidence or 0) }}%
+                  </div>
                   <div class="chart-label">Dự đoán</div>
-                  <div class="chart-result">{{ prediction.level or 'Không xác định' }}</div>
+                  <div class="chart-result">
+                    {{ prediction.level or 'Không xác định' }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1239,7 +1003,14 @@
                     </svg>
                   </div>
                   <h4>Cân nặng</h4>
-                  <div class="value">{{ health_metrics.weight.value if health_metrics.weight else 'N/A' }} <span class="unit">{{ health_metrics.weight.unit if health_metrics.weight else '' }}</span></div>
+                  <div class="value">
+                    {{ health_metrics.weight.value if health_metrics.weight else
+                    'N/A' }}
+                    <span class="unit"
+                      >{{ health_metrics.weight.unit if health_metrics.weight
+                      else '' }}</span
+                    >
+                  </div>
                 </div>
                 <div class="health-card">
                   <div class="icon">
@@ -1290,7 +1061,10 @@
                     </svg>
                   </div>
                   <h4>BMI</h4>
-                  <div class="value">{{ health_metrics.bmi.value if health_metrics.bmi else 'N/A' }}</div>
+                  <div class="value">
+                    {{ health_metrics.bmi.value if health_metrics.bmi else 'N/A'
+                    }}
+                  </div>
                 </div>
                 <div class="health-card">
                   <div class="icon">
@@ -1345,7 +1119,14 @@
                     </svg>
                   </div>
                   <h4>Chiều cao</h4>
-                  <div class="value">{{ health_metrics.height.value if health_metrics.height else 'N/A' }} <span class="unit">{{ health_metrics.height.unit if health_metrics.height else '' }}</span></div>
+                  <div class="value">
+                    {{ health_metrics.height.value if health_metrics.height else
+                    'N/A' }}
+                    <span class="unit"
+                      >{{ health_metrics.height.unit if health_metrics.height
+                      else '' }}</span
+                    >
+                  </div>
                 </div>
               </div>
             </div>
