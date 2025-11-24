@@ -91,7 +91,6 @@ async def predict_obesity(
 )
 async def export_prediction_pdf(
     prediction_id: str,
-    template_version: str = "v2",
     pdf_service: PdfGeneratorService = Depends(get_pdf_service),
 ):
     """
@@ -118,19 +117,11 @@ async def export_prediction_pdf(
     """
     try:
         # Validate template version
-        if template_version not in ["v1", "v2"]:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Invalid template_version. Use 'v1' for original or 'v2' for improved design"
-            )
 
         # Generate and upload PDF with specified template (PUBLIC - no user authorization needed)
-        pdf_url = await pdf_service.generate_and_upload_pdf(
-            prediction_id=prediction_id,
-            template_version=template_version
-        )
+        pdf_url = await pdf_service.generate_and_upload_pdf(prediction_id=prediction_id)
 
-        logger.info(f"✅ Generated PDF for prediction {prediction_id} using template {template_version}")
+        logger.info(f"Generated PDF for prediction {prediction_id}")
 
         return PdfResponse(pdf_url=pdf_url)
 
@@ -139,25 +130,29 @@ async def export_prediction_pdf(
         if e.error_type == "not_found":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Prediction {prediction_id} not found"
+                detail=f"Prediction {prediction_id} not found",
             )
         elif e.error_type == "infrastructure":
-            logger.error(f"Infrastructure error for PDF generation {prediction_id}: {e.message}")
+            logger.error(
+                f"Infrastructure error for PDF generation {prediction_id}: {e.message}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="PDF service temporarily unavailable"
+                detail="PDF service temporarily unavailable",
             )
         elif e.error_type == "template_error":
-            logger.error(f"Template error for PDF generation {prediction_id}: {e.message}")
+            logger.error(
+                f"Template error for PDF generation {prediction_id}: {e.message}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="PDF template error - please try again later"
+                detail="PDF template error - please try again later",
             )
         else:
             logger.error(f"PDF generation error for {prediction_id}: {e.message}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to generate PDF"
+                detail="Failed to generate PDF",
             )
 
     except HTTPException:
@@ -166,11 +161,12 @@ async def export_prediction_pdf(
 
     except Exception as e:
         logger.error(
-            f"Unexpected error generating PDF for prediction {prediction_id}: {e}", exc_info=True
+            f"Unexpected error generating PDF for prediction {prediction_id}: {e}",
+            exc_info=True,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate PDF"
+            detail="Failed to generate PDF",
         )
 
 

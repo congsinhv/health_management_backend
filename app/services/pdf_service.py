@@ -60,13 +60,12 @@ class PdfGeneratorService:
             self.gcs_uploader = None
             logger.warning("GCS configuration not found - PDF upload disabled")
 
-    async def generate_and_upload_pdf(self, prediction_id: str, template_version: str = "v2") -> Optional[str]:
+    async def generate_and_upload_pdf(self, prediction_id: str) -> Optional[str]:
         """
         Generate PDF for prediction and upload to GCS.
 
         Args:
             prediction_id: External prediction ID from PredictionResponse.id
-            template_version: Template version to use ("v1" for original, "v2" for improved)
 
         Returns:
             Public GCS URL or None if failed
@@ -96,7 +95,7 @@ class PdfGeneratorService:
                 )
 
             # 2. Generate PDF bytes with error handling
-            pdf_bytes = await self._generate_pdf_bytes(prediction_record, template_version)
+            pdf_bytes = await self._generate_pdf_bytes(prediction_record)
 
             if not pdf_bytes:
                 raise PdfGenerationError(
@@ -146,14 +145,13 @@ class PdfGeneratorService:
             )
 
     async def _generate_pdf_bytes(
-        self, prediction_record: asyncpg.Record, template_version: str = "v2"
+        self, prediction_record: asyncpg.Record
     ) -> Optional[bytes]:
         """
         Generate PDF bytes from prediction record.
 
         Args:
             prediction_record: Database prediction record
-            template_version: Template version to use
 
         Returns:
             PDF bytes
@@ -168,7 +166,7 @@ class PdfGeneratorService:
             context = self._prepare_template_context(prediction_record)
 
             # 2. Determine template name
-            template_name = "prediction_pdf_v2.html" if template_version == "v2" else "prediction_pdf.html"
+            template_name = "prediction_pdf.html"
 
             # 3. Render HTML with template validation
             html_string = await self._render_html_safe(template_name, context)
@@ -205,6 +203,20 @@ class PdfGeneratorService:
                 "generation_failed",
                 {"error_type": type(e).__name__}
             )
+
+
+    def _map_status(self, level: str) -> str:
+        mapping = {
+            "Insufficient_Weight": "Thiếu cân",
+            "Normal_Weight": "Bình thường",
+            "Overweight_Level_I": "Thừa cân cấp độ I",
+            "Overweight_Level_II": "Thừa cân cấp độ II",
+            "Obesity_Type_I": "Béo phì độ I",
+            "Obesity_Type_II": "Béo phì độ II",
+            "Obesity_Type_III": "Béo phì độ III",
+        }
+        return mapping.get(level, level)
+
 
     def _prepare_template_context(
         self, prediction_record: asyncpg.Record
@@ -349,6 +361,8 @@ class PdfGeneratorService:
                 "risk_factors": [],
                 "recommendations": []
             }
+        prediction_level = prediction.get("level", "Normal_Weight")
+        prediction["level"] = self._map_status(prediction_level)
 
         # Extract health analysis with multiple fallback locations
         health_analysis = []
@@ -400,6 +414,7 @@ class PdfGeneratorService:
         """
         try:
             template = self.jinja_env.get_template(template_name)
+            logger.info(f"Rendering template {template_name} with context: {context}")
             return template.render(context)
         except Exception as e:
             logger.error(f"Failed to render template {template_name}: {e}")
