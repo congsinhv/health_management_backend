@@ -273,7 +273,42 @@ class PdfGeneratorService:
             family_history_display = family_history or "Không"
 
         # Determine status class for CSS styling (optional, can be used for styling)
-        bmi = health_metrics.get("bmi", prediction_data.get("prediction", {}).get("bmi", 0))
+        # Safely extract BMI value with robust type checking
+        bmi = None
+
+        # Try to get BMI from health_metrics first
+        if isinstance(health_metrics, dict):
+            bmi_candidate = health_metrics.get("bmi")
+            # Only set BMI if it's a valid type
+            if isinstance(bmi_candidate, (int, float, str)):
+                bmi = bmi_candidate
+        elif isinstance(health_metrics, (int, float)):
+            # If health_metrics itself is the BMI value
+            bmi = health_metrics
+
+        # If still no BMI, try to get from prediction_data
+        if bmi is None:
+            if isinstance(prediction_data, dict):
+                prediction = prediction_data.get("prediction", {})
+                if isinstance(prediction, dict):
+                    bmi = prediction.get("bmi")
+
+        # Convert to float if possible, default to 0
+        if bmi is not None:
+            # Check if BMI is a numeric type or string that can be converted
+            if isinstance(bmi, (int, float)):
+                bmi = float(bmi)
+            elif isinstance(bmi, str):
+                try:
+                    bmi = float(bmi)
+                except ValueError:
+                    bmi = 0.0
+            else:
+                # BMI is not a valid type (dict, list, etc.), set to 0
+                bmi = 0.0
+        else:
+            bmi = 0.0
+
         if bmi < 18.5:
             status_class = "warning"  # Underweight
         elif bmi < 25:
