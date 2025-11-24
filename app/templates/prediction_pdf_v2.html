@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kết quả dự đoán - VHealth</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "DejaVu Sans", "Noto Sans", "Liberation Sans", "Arial Unicode MS", "Segoe UI", "Roboto", sans-serif;
+            color: #1a1a1a;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            margin: 0 auto;
+            padding: 16px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a1a;
+            letter-spacing: -0.5px;
+        }
+
+        .logo::before {
+            content: "✓";
+            background: linear-gradient(135deg, #00d4aa 0%, #00c29a 100%);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 2px 12px rgba(0, 212, 170, 0.25);
+        }
+
+        .header-info {
+            text-align: right;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .header-info .date {
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        /* Main Layout */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .sidebar {
+            border-radius: 16px;
+            padding: 24px;
+            border: 2px solid rgba(0, 0, 0, 0.04);
+            order: 1;
+            background: white;
+        }
+
+        .center-content {
+            order: 2;
+        }
+
+        .sidebar h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            color: #1a1a1a;
+        }
+
+        .sidebar-sections-container {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .sidebar-section {
+            border: 2px solid rgba(0, 0, 0, 0.04);
+            border-radius: 16px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .sidebar-section h4 {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: none;
+            letter-spacing: 0;
+            padding: 12px 16px;
+            border-bottom: 2px solid rgba(0, 0, 0, 0.04);
+            margin-bottom: 16px;
+            background: #fafafa;
+        }
+
+        .info-container {
+            padding: 8px 16px 16px 16px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 12px;
+            gap: 12px;
+            padding: 6px 0;
+        }
+
+        .info-label {
+            color: #666;
+            flex: 1;
+            line-height: 1.5;
+        }
+
+        .info-value {
+            font-weight: 500;
+            color: #1a1a1a;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        /* Center Content */
+        .prediction-overview {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .section-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* Prediction Chart */
+        .prediction-chart {
+            border: 2px solid rgba(0, 0, 0, 0.04);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .chart-circle {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding-bottom: 20px;
+        }
+
+        .chart-circle svg {
+            filter: drop-shadow(0 2px 8px rgba(0, 212, 170, 0.15));
+        }
+
+        .chart-content {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .chart-percentage {
+            font-size: 32px;
+            color: #1a1a1a;
+            letter-spacing: -1.5px;
+            line-height: 1;
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .chart-label {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .chart-result {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-top: 4px;
+            letter-spacing: -0.3px;
+        }
+
+        /* Health Cards */
+        .health-cards-container {
+            border: 2px solid rgba(0, 0, 0, 0.04);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .health-cards-container h3 {
+            font-size: 16px;
+            margin-bottom: 24px;
+            font-weight: 600;
+        }
+
+        .health-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .health-card {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-radius: 16px;
+            padding: 32px 0px;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+            height: 180px;
+            border: 1px solid rgba(34, 197, 94, 0.1);
+        }
+
+        .health-card .icon {
+            font-size: 48px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+            position: relative;
+            height: 90px;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .health-card h4 {
+            font-size: 12px;
+            color: #1a1a1a;
+            font-weight: 600;
+            position: relative;
+            z-index: 1;
+            letter-spacing: -0.2px;
+            margin-top: 8px;
+            margin-bottom: 4px;
+        }
+
+        .health-card .value {
+            font-size: 20px;
+            position: relative;
+            z-index: 2;
+            color: #1a1a1a;
+            letter-spacing: -1px;
+            font-weight: 700;
+        }
+
+        .health-card .unit {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        /* Health Analysis */
+        .health-analysis {
+            margin-top: 24px;
+            padding: 24px;
+            border-radius: 16px;
+            border: 2px solid rgba(0, 0, 0, 0.04);
+        }
+
+        .health-analysis h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            letter-spacing: -0.3px;
+            display: flex;
+            align-items: center;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .health-analysis h3 span:last-child {
+            font-size: 12px;
+            color: #999;
+            font-weight: 400;
+        }
+
+        .health-analysis p {
+            font-size: 12px;
+            background-color: #fafafa;
+            padding: 16px;
+            line-height: 1.8;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border-left: 4px solid #00d4aa;
+        }
+
+        .health-analysis p:last-of-type {
+            margin-bottom: 0;
+        }
+
+        /* Risk Factors */
+        .risk-factors {
+            margin-top: 16px;
+            padding: 16px;
+            background-color: #fef2f2;
+            border-radius: 12px;
+            border: 1px solid rgba(239, 68, 68, 0.1);
+        }
+
+        .risk-factors h4 {
+            font-size: 12px;
+            font-weight: 600;
+            color: #dc2626;
+            margin-bottom: 8px;
+        }
+
+        .risk-factors ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .risk-factors li {
+            font-size: 11px;
+            color: #7f1d1d;
+            padding: 2px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+
+        .risk-factors li::before {
+            content: "⚠";
+            position: absolute;
+            left: 0;
+            color: #dc2626;
+        }
+
+        /* Recommendations */
+        .recommendations {
+            margin-top: 16px;
+            padding: 16px;
+            background-color: #f0fdf4;
+            border-radius: 12px;
+            border: 1px solid rgba(34, 197, 94, 0.1);
+        }
+
+        .recommendations h4 {
+            font-size: 12px;
+            font-weight: 600;
+            color: #16a34a;
+            margin-bottom: 8px;
+        }
+
+        .recommendations ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .recommendations li {
+            font-size: 11px;
+            color: #14532d;
+            padding: 2px 0;
+            padding-left: 16px;
+            position: relative;
+        }
+
+        .recommendations li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #16a34a;
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 2px solid rgba(0, 0, 0, 0.06);
+            text-align: center;
+            font-size: 10px;
+            color: #999;
+        }
+
+        /* Print Styles */
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            body {
+                background: white;
+            }
+
+            .main-content {
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            .sidebar {
+                box-shadow: none;
+                border: 2px solid rgba(0, 0, 0, 0.04);
+                order: 1;
+            }
+
+            .center-content {
+                page-break-before: always;
+                break-before: page;
+                order: 2;
+            }
+
+            .footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+            }
+
+            @page {
+                margin: 1.5cm;
+                size: A4 portrait;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">VHealth</div>
+            <div class="header-info">
+                <div class="date">{{ created_at }}</div>
+                <div>ID: {{ prediction_id }}</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Sidebar -->
+            <div class="sidebar">
+                <h3>Thông tin đã điền</h3>
+
+                <div class="sidebar-sections-container">
+                    <div class="sidebar-section">
+                        <h4>Thông tin nhân khẩu học</h4>
+                        <div class="info-container">
+                            <div class="info-row">
+                                <span class="info-label">Tên người dùng</span>
+                                <span class="info-value">{{ user_input.name }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Giới tính</span>
+                                <span class="info-value">{{ user_input.gender }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Tuổi</span>
+                                <span class="info-value">{{ user_input.age }} tuổi</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Chiều cao</span>
+                                <span class="info-value">{{ user_input.height }} m</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Cân nặng</span>
+                                <span class="info-value">{{ user_input.weight }} kg</span>
+                            </div>
+                            {% if user_input.familyHistory %}
+                            <div class="info-row">
+                                <span class="info-label">Tiền sử gia đình</span>
+                                <span class="info-value">{{ user_input.familyHistory }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <h4>Thói quen ăn uống</h4>
+                        <div class="info-container">
+                            <div class="info-row">
+                                <span class="info-label">Thực phẩm nhiều calo</span>
+                                <span class="info-value">{{ user_input.highCalorieFood }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Tần suất ăn rau</span>
+                                <span class="info-value">{{ user_input.vegetableFrequency }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Lượng nước uống</span>
+                                <span class="info-value">{{ user_input.waterIntake }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Bữa ăn chính/ngày</span>
+                                <span class="info-value">{{ user_input.mainMeals }} bữa</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Ăn vặt</span>
+                                <span class="info-value">{{ user_input.snackFrequency }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <h4>Thói quen vận động & Lối sống</h4>
+                        <div class="info-container">
+                            <div class="info-row">
+                                <span class="info-label">Hoạt động thể chất</span>
+                                <span class="info-value">{{ user_input.physicalActivity }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Thời gian sử dụng thiết bị</span>
+                                <span class="info-value">{{ user_input.screenTime }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Phương tiện di chuyển</span>
+                                <span class="info-value">{{ user_input.transportation }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Thuốc lá</span>
+                                <span class="info-value">{{ user_input.smoking }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Rượu bia</span>
+                                <span class="info-value">{{ user_input.alcohol }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center Content -->
+            <div class="center-content">
+                <div class="prediction-overview">
+                    <!-- Prediction Chart -->
+                    <div class="prediction-chart">
+                        <div class="section-header">
+                            <h2>Kết quả dự đoán sức khỏe</h2>
+                        </div>
+                        <div class="chart-circle">
+                            <svg width="320" height="192" viewBox="0 0 320 192">
+                                <!-- Background half circle -->
+                                <path d="M 40 160 A 120 120 0 0 1 280 160"
+                                      stroke="#E5E7EB"
+                                      stroke-width="24"
+                                      fill="none"
+                                      stroke-linecap="round"/>
+                                <!-- Progress half circle with gradient -->
+                                <path d="M 40 160 A 120 120 0 0 1 280 160"
+                                      stroke="url(#progressGradient)"
+                                      stroke-width="24"
+                                      fill="none"
+                                      stroke-dasharray="377"
+                                      stroke-dashoffset="{{ 377 - (377 * (prediction.confidence or 0) / 100) }}"
+                                      stroke-linecap="round"/>
+                                <defs>
+                                    <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#32F6B4"/>
+                                        <stop offset="100%" stop-color="#9DFFEA"/>
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            <div class="chart-content">
+                                <div class="chart-percentage">{{ "%.0f"|format(prediction.confidence or 0) }}%</div>
+                                <div class="chart-label">Mức độ tin cậy</div>
+                                <div class="chart-result">{{ prediction.prediction_level or "Bình thường" }}</div>
+                            </div>
+                        </div>
+
+                        {% if prediction.risk_factors %}
+                        <div class="risk-factors">
+                            <h4>Yếu tố nguy cơ</h4>
+                            <ul>
+                                {% for risk in prediction.risk_factors %}
+                                <li>{{ risk }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% if prediction.recommendations %}
+                        <div class="recommendations">
+                            <h4>Khuyến nghị</h4>
+                            <ul>
+                                {% for rec in prediction.recommendations %}
+                                <li>{{ rec }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Health Cards -->
+                    {% if health_metrics %}
+                    <div class="health-cards-container">
+                        <h3>Các chỉ số sức khỏe</h3>
+                        <div class="health-cards">
+                            <div class="health-card">
+                                <div class="icon">⚖️</div>
+                                <h4>Cân nặng</h4>
+                                <div class="value">{{ health_metrics.weight or user_input.weight }} <span class="unit">kg</span></div>
+                            </div>
+                            <div class="health-card">
+                                <div class="icon">📊</div>
+                                <h4>BMI</h4>
+                                <div class="value">{{ "%.1f"|format(health_metrics.bmi or prediction.bmi or (user_input.weight / (user_input.height * user_input.height))) }}</div>
+                            </div>
+                            <div class="health-card">
+                                <div class="icon">📏</div>
+                                <h4>Chiều cao</h4>
+                                <div class="value">{{ health_metrics.height or user_input.height }} <span class="unit">m</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Health Analysis -->
+                {% if health_analysis %}
+                <div class="health-analysis">
+                    <h3>
+                        <span>Phân tích sức khỏe</span>
+                        <span>* Phân tích chỉ mang tính tham khảo</span>
+                    </h3>
+                    {% for paragraph in health_analysis %}
+                    <p>{{ paragraph }}</p>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>© 2024 VHealth - Báo cáo sức khỏe được tạo tự động. Vui lòng tham khảo ý kiến chuyên gia y tế.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -4,7 +4,7 @@ import asyncpg
 import logging
 from app.schemas.predict import UserInput, PredictionResponse, PdfResponse
 from app.services.predict_service import ObesityPredictorComplete
-from app.services.pdf_service import PdfGeneratorService
+from app.services.pdf_service import PdfGeneratorService, PdfGenerationError
 from app.db.database import get_database_pool
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,7 @@ async def predict_obesity(
 )
 async def export_prediction_pdf(
     prediction_id: str,
+    template_version: str = "v2",
     pdf_service: PdfGeneratorService = Depends(get_pdf_service),
 ):
     """
@@ -101,39 +102,63 @@ async def export_prediction_pdf(
     **Path Parameters**:
     - prediction_id: External prediction ID from PredictionResponse.id
 
+    **Query Parameters**:
+    - template_version: PDF template version ("v1" for original, "v2" for improved design)
+
     **Response**:
     - PDF public URL
 
     **Errors**:
     - 404: Not Found (prediction doesn't exist)
+    - 422: Validation Error (invalid template version)
     - 500: Internal Server Error (PDF generation failed)
 
     **Note**: This endpoint regenerates the PDF each time. If a PDF already
     exists, it will be replaced with a new one.
     """
     try:
-        # Generate and upload PDF (PUBLIC - no user authorization needed)
-        pdf_url = await pdf_service.generate_and_upload_pdf(prediction_id=prediction_id)
-
-        if not pdf_url:
+        # Validate template version
+        if template_version not in ["v1", "v2"]:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to generate PDF",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid template_version. Use 'v1' for original or 'v2' for improved design"
             )
 
-        logger.info(f"Generated PDF for prediction {prediction_id}")
+        # Generate and upload PDF with specified template (PUBLIC - no user authorization needed)
+        pdf_url = await pdf_service.generate_and_upload_pdf(
+            prediction_id=prediction_id,
+            template_version=template_version
+        )
+
+        logger.info(f"✅ Generated PDF for prediction {prediction_id} using template {template_version}")
 
         return PdfResponse(pdf_url=pdf_url)
 
-    except ValueError as e:
-        # Prediction not found
-        if "not found" in str(e).lower():
+    except PdfGenerationError as e:
+        # Handle our custom PDF generation errors with proper status codes
+        if e.error_type == "not_found":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Prediction {prediction_id} not found",
+                detail=f"Prediction {prediction_id} not found"
+            )
+        elif e.error_type == "infrastructure":
+            logger.error(f"Infrastructure error for PDF generation {prediction_id}: {e.message}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="PDF service temporarily unavailable"
+            )
+        elif e.error_type == "template_error":
+            logger.error(f"Template error for PDF generation {prediction_id}: {e.message}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="PDF template error - please try again later"
             )
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+            logger.error(f"PDF generation error for {prediction_id}: {e.message}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate PDF"
+            )
 
     except HTTPException:
         # Re-raise HTTP exceptions
@@ -141,9 +166,25 @@ async def export_prediction_pdf(
 
     except Exception as e:
         logger.error(
-            f"Error generating PDF for prediction {prediction_id}: {e}", exc_info=True
+            f"Unexpected error generating PDF for prediction {prediction_id}: {e}", exc_info=True
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate PDF",
+            detail="Failed to generate PDF"
         )
+
+
+@router.get(
+    "/export/{prediction_id}/v1",
+    response_model=PdfResponse,
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,  # Hidden endpoint for backward compatibility
+)
+async def export_prediction_pdf_v1(
+    prediction_id: str,
+    pdf_service: PdfGeneratorService = Depends(get_pdf_service),
+):
+    """
+    Legacy endpoint for original PDF template (DEPRECATED - use /export/{prediction_id}?template_version=v1).
+    """
+    return await export_prediction_pdf(prediction_id, "v1", pdf_service)
