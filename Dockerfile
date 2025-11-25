@@ -16,6 +16,9 @@ RUN mkdir -p /var/lib/apt/lists/partial && \
     shared-mime-info \
     fonts-dejavu-core \
     fonts-noto-core \
+    fonts-noto-cjk \
+    fontconfig \
+    && fc-cache -fv \
     && rm -rf /var/lib/apt/lists/*
 
 # Create appuser if it doesn't exist (base image may already have it)

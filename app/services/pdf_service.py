@@ -58,9 +58,8 @@ class PdfGeneratorService:
         # Font configuration for better font handling
         self.font_config = FontConfiguration()
 
-        # Use system fonts installed via Docker - Noto Sans is available via fonts-noto-core
-        self.font_available = True
-        logger.info("Using system fonts (Noto Sans available via fonts-noto-core)")
+        # Check and log font availability
+        self._check_font_availability()
 
         # GCS uploader (only if configured)
         if hasattr(settings, "gcp_public_bucket") and settings.gcp_public_bucket:
@@ -71,6 +70,30 @@ class PdfGeneratorService:
         else:
             self.gcs_uploader = None
             logger.warning("GCS configuration not found - PDF upload disabled")
+
+    def _check_font_availability(self) -> None:
+        """Check and log font availability for debugging."""
+        font_regular = FONT_DIR / "SVN-Gilroy-Regular.otf"
+        
+        logger.info(f"Font directory path: {FONT_DIR}")
+        logger.info(f"Font directory exists: {FONT_DIR.exists()}")
+        
+        if FONT_DIR.exists():
+            try:
+                fonts_found = list(FONT_DIR.glob("*.otf"))
+                logger.info(f"OTF fonts found in directory: {[f.name for f in fonts_found]}")
+            except Exception as e:
+                logger.warning(f"Error listing font directory: {e}")
+        
+        if font_regular.exists():
+            logger.info(f"SVN-Gilroy-Regular.otf found at: {font_regular.absolute()}")
+            self.font_available = True
+        else:
+            logger.warning(
+                f"SVN-Gilroy fonts NOT found at {FONT_DIR}. "
+                "Falling back to system fonts (Noto Sans CJK for Vietnamese support)"
+            )
+            self.font_available = False
 
     async def generate_and_upload_pdf(self, prediction_id: str) -> Optional[str]:
         """

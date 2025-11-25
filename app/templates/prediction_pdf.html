@@ -76,15 +76,17 @@
       /* Main Layout */
       .main-content {
         display: block;
+        height: 100%;
       }
 
       /* Sidebar */
       .sidebar {
+        height: 100%;
         flex-shrink: 0;
         background: white;
         border: 2px solid rgba(0, 0, 0, 0.04);
         border-radius: 16px;
-        padding: 20px;
+        padding: 40px;
         margin-bottom: 0;
       }
 
@@ -172,20 +174,22 @@
 
       .chart-circle {
         position: relative;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+        display: block;
+        width: 280px;
+        height: 168px;
+        margin: 0 auto;
+      }
+
+      .chart-circle svg {
+        display: block;
       }
 
       .chart-content {
         position: absolute;
-        top: 60%;
-        left: 50%;
-        transform: translate(-50%, -50%);
+        top: 70px;
+        left: 0;
+        right: 0;
         text-align: center;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
       }
 
       .chart-percentage {
@@ -193,20 +197,23 @@
         color: #1a1a1a;
         letter-spacing: -1.5px;
         line-height: 1;
-        margin-bottom: 2px;
+        margin: 0;
+        padding: 0;
       }
 
       .chart-label {
         font-size: 14px;
         color: #888;
-        margin-bottom: 6px;
+        margin: 4px 0;
+        padding: 0;
       }
 
       .chart-result {
         font-size: 14px;
         font-weight: 500;
         color: #1a1a1a;
-        margin-top: 4px;
+        margin: 0;
+        padding: 0;
         letter-spacing: -0.3px;
       }
 
