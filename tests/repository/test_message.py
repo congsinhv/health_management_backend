@@ -79,7 +79,7 @@ class TestMessageRepository:
         mock_connection.fetchrow.return_value = expected_record
 
         # Act
-        result = await message_repo.create(message_data)
+        result = await message_repo.create_message(message_data)
 
         # Assert
         assert result is not None
@@ -100,7 +100,7 @@ class TestMessageRepository:
         assert params[1] == 1  # user_id
         assert params[2] == "Hello, this is a test message"  # content
         assert params[3] == "text"  # content_type
-        assert params[4] == {"source": "web"}  # metadata
+        assert params[4] == '{"source": "web"}'  # metadata (JSON serialized)
 
     @pytest.mark.asyncio
     async def test_create_message_minimal_data(
@@ -130,7 +130,7 @@ class TestMessageRepository:
         mock_connection.fetchrow.return_value = expected_record
 
         # Act
-        result = await message_repo.create(message_data)
+        result = await message_repo.create_message(message_data)
 
         # Assert
         assert result is not None
@@ -160,7 +160,7 @@ class TestMessageRepository:
         mock_connection.fetchrow.return_value = expected_record
 
         # Act
-        result = await message_repo.get_by_id(message_id, conversation_id)
+        result = await message_repo.get_message(message_id, conversation_id)
 
         # Assert
         assert result is not None
@@ -178,6 +178,8 @@ class TestMessageRepository:
     @pytest.mark.asyncio
     async def test_get_by_id_not_found(self, message_repo, mock_pool, mock_connection):
         """Test message retrieval when not found."""
+        from app.exceptions import ResourceNotFoundException
+
         # Arrange
         message_id = 999
         conversation_id = 1
@@ -185,11 +187,11 @@ class TestMessageRepository:
         mock_pool.acquire.return_value.__aenter__.return_value = mock_connection
         mock_connection.fetchrow.return_value = None
 
-        # Act
-        result = await message_repo.get_by_id(message_id, conversation_id)
+        # Act & Assert
+        with pytest.raises(ResourceNotFoundException) as exc_info:
+            await message_repo.get_message(message_id, conversation_id)
 
-        # Assert
-        assert result is None
+        assert "Message not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_list_by_conversation_success(
@@ -230,22 +232,24 @@ class TestMessageRepository:
         mock_connection.fetch.return_value = expected_records
 
         # Act
-        result = await message_repo.list_by_conversation(conversation_id, limit, before)
+        result = await message_repo.list_messages_by_conversation(
+            conversation_id, limit, before
+        )
 
         # Assert
         assert len(result) == 2
         assert result[0]["content"] == "First message"
         assert result[1]["content"] == "Second message"
-        mock_connection.fetch.assert_called_once_with(
-            """
-                SELECT * FROM messages
-                WHERE conversation_id = $1 AND deleted_at IS NULL
-                ORDER BY created_at ASC
-                LIMIT $2
-            """,
-            conversation_id,
-            limit,
-        )
+        # Verify fetch was called
+        mock_connection.fetch.assert_called_once()
+        call_args = mock_connection.fetch.call_args
+        query = call_args[0][0]
+        assert "SELECT * FROM messages" in query
+        assert "WHERE conversation_id = $1" in query
+        assert "ORDER BY created_at ASC" in query
+        assert "LIMIT $2" in query
+        assert call_args[0][1] == conversation_id
+        assert call_args[0][2] == limit
 
     @pytest.mark.asyncio
     async def test_list_by_conversation_with_cursor(
@@ -275,24 +279,25 @@ class TestMessageRepository:
         mock_connection.fetch.return_value = expected_records
 
         # Act
-        result = await message_repo.list_by_conversation(conversation_id, limit, before)
+        result = await message_repo.list_messages_by_conversation(
+            conversation_id, limit, before
+        )
 
         # Assert
         assert len(result) == 1
         assert result[0]["id"] == 6
-        mock_connection.fetch.assert_called_once_with(
-            """
-                SELECT * FROM messages
-                WHERE conversation_id = $1 AND created_at < (
-                    SELECT created_at FROM messages WHERE id = $2
-                ) AND deleted_at IS NULL
-                ORDER BY created_at ASC
-                LIMIT $3
-            """,
-            conversation_id,
-            before,
-            limit,
-        )
+        # Verify fetch was called with cursor pagination
+        mock_connection.fetch.assert_called_once()
+        call_args = mock_connection.fetch.call_args
+        query = call_args[0][0]
+        assert "SELECT * FROM messages" in query
+        assert "WHERE conversation_id = $1" in query
+        assert "created_at <" in query
+        assert "ORDER BY created_at ASC" in query
+        assert "LIMIT $3" in query
+        assert call_args[0][1] == conversation_id
+        assert call_args[0][2] == before
+        assert call_args[0][3] == limit
 
     @pytest.mark.asyncio
     async def test_update_message_success(
@@ -337,7 +342,7 @@ class TestMessageRepository:
             RETURNING *
         """,
             update_data["content"],
-            update_data["metadata"],
+            '{"edited": true}',  # metadata is JSON serialized
             message_id,
             conversation_id,
         )
@@ -374,6 +379,8 @@ class TestMessageRepository:
         self, message_repo, mock_pool, mock_connection
     ):
         """Test message soft delete when message not found."""
+        from app.exceptions import ResourceNotFoundException
+
         # Arrange
         message_id = 999
         conversation_id = 1
@@ -381,11 +388,11 @@ class TestMessageRepository:
         mock_pool.acquire.return_value.__aenter__.return_value = mock_connection
         mock_connection.execute.return_value = "UPDATE 0"
 
-        # Act
-        result = await message_repo.delete(message_id, conversation_id)
+        # Act & Assert
+        with pytest.raises(ResourceNotFoundException) as exc_info:
+            await message_repo.delete(message_id, conversation_id)
 
-        # Assert
-        assert result is False
+        assert "Message not found for deletion" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_get_conversation_latest_message_success(

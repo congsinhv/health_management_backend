@@ -35,7 +35,7 @@ class AIChatService:
     ) -> AIResponse:
         """Generate AI response for user prompt."""
         # Verify user owns the conversation
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             request.conversation_id, user_id
         )
         if not conversation:
@@ -96,7 +96,7 @@ class AIChatService:
     ) -> Tuple[MessageResponse, Optional[MessageResponse]]:
         """Create user message and AI response pair."""
         # Verify user owns the conversation
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
@@ -111,7 +111,7 @@ class AIChatService:
             metadata={"source": "user_input"},
         )
 
-        user_message_record = await self.message_repo.create(
+        user_message_record = await self.message_repo.create_message(
             {
                 "conversation_id": conversation_id,
                 "user_id": user_id,
@@ -146,7 +146,7 @@ class AIChatService:
             ai_response = await self.generate_ai_response(user_id, ai_request)
 
             # Create AI message
-            ai_message_record = await self.message_repo.create(
+            ai_message_record = await self.message_repo.create_message(
                 {
                     "conversation_id": conversation_id,
                     "user_id": user_id,
@@ -186,14 +186,14 @@ class AIChatService:
         """Get recent messages for conversation context."""
         try:
             # Verify user owns the conversation
-            conversation = await self.conversation_repo.get_by_id_and_user(
+            conversation = await self.conversation_repo.get_conversation_by_id_and_user(
                 conversation_id, user_id
             )
             if not conversation:
                 return []
 
             # Get recent messages
-            message_records = await self.message_repo.list_by_conversation(
+            message_records = await self.message_repo.list_messages_by_conversation(
                 conversation_id, limit=limit
             )
 
@@ -334,14 +334,14 @@ class AIChatService:
         """Get AI-powered health suggestions based on conversation history."""
         try:
             # Verify user owns the conversation
-            conversation = await self.conversation_repo.get_by_id_and_user(
+            conversation = await self.conversation_repo.get_conversation_by_id_and_user(
                 conversation_id, user_id
             )
             if not conversation:
                 return []
 
             # Get conversation messages
-            message_records = await self.message_repo.list_by_conversation(
+            message_records = await self.message_repo.list_messages_by_conversation(
                 conversation_id, limit=20
             )
 

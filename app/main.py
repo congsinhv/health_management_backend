@@ -5,8 +5,26 @@ FastAPI application entrypoint for Health Management API.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.exceptions import (
+    VHealthException,
+    ResourceNotFoundException,
+    ResourceConflictException,
+    AuthenticationException,
+    AuthorizationException,
+    ValidationException,
+    BusinessLogicException,
+    ServiceUnavailableException,
+    DatabaseException,
+    RateLimitException,
+    ConfigurationException,
+    get_http_status_code,
+    sanitize_error_details,
+)
+from app.core.error_context import ErrorContext
 
 from app.api.auth import router as auth_router
 from app.api.qa import router as qa_router
@@ -14,8 +32,6 @@ from app.api.user import router as user_router
 from app.api.upload import router as upload_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
-from app.api.websocket import router as websocket_router
-from app.api import cache_monitoring
 from app.api import predict
 from app.config import settings
 from app.db.database import database
@@ -143,33 +159,10 @@ async def lifespan(app: FastAPI):
         logger.info("Q&A Service is disabled in settings")
         app.state.qa_service = None
 
-    # Initialize WebSocket connection cleanup task
-    import asyncio
-    from app.services.websocket_manager import connection_manager
-
-    async def websocket_cleanup_task():
-        """Background task to clean up stale WebSocket connections."""
-        while True:
-            try:
-                await connection_manager.cleanup_stale_connections()
-                await asyncio.sleep(300)  # Run every 5 minutes
-            except Exception as e:
-                logger.error(f"WebSocket cleanup task error: {e}")
-                await asyncio.sleep(60)  # Retry after 1 minute on error
-
-    # Start cleanup task
-    cleanup_task = asyncio.create_task(websocket_cleanup_task())
-    logger.info("WebSocket connection cleanup task started")
-
     yield
 
     # Shutdown
     logger.info("Shutting down Health Management API")
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
 
     # Close Redis connection if cache is enabled
     if hasattr(app.state, "cache_service") and app.state.cache_service.enabled:
@@ -226,10 +219,6 @@ app.include_router(
 app.include_router(
     messages_router, prefix=f"{settings.api_v1_prefix}/messages", tags=["messages"]
 )
-app.include_router(
-    cache_monitoring.router, prefix=f"{settings.api_v1_prefix}/cache", tags=["cache"]
-)
-app.include_router(websocket_router, tags=["websocket"])
 
 
 @app.get("/")
@@ -242,6 +231,270 @@ async def root():
             "/docs" if settings.debug else "Documentation disabled in production"
         ),
     }
+
+
+# Exception Handlers
+
+
+@app.exception_handler(VHealthException)
+async def vhealth_exception_handler(request: Request, exc: VHealthException):
+    """Handle all custom VHealth exceptions."""
+    # Log the exception with context
+    context = ErrorContext.get_all()
+    logger.warning(
+        f"VHealth exception: {exc.message}",
+        extra={
+            **context,
+            "exception_type": exc.__class__.__name__,
+            "error_code": exc.error_code,
+            "details": sanitize_error_details(exc.details),
+        },
+    )
+
+    # Get appropriate HTTP status code
+    status_code = get_http_status_code(exc)
+
+    # Prepare response with user-safe details
+    user_details = sanitize_error_details(exc.details, user_context=True)
+
+    response_data = {
+        "error": exc.error_code,
+        "message": exc.message,
+        "request_id": ErrorContext.get_request_id(),
+    }
+
+    if user_details:
+        response_data["details"] = user_details
+
+    return JSONResponse(status_code=status_code, content=response_data)
+
+
+@app.exception_handler(ResourceNotFoundException)
+async def resource_not_found_handler(request: Request, exc: ResourceNotFoundException):
+    """Handle resource not found errors."""
+    logger.warning(
+        f"Resource not found: {exc.message}",
+        extra={
+            **ErrorContext.get_all(),
+            "exception_type": "ResourceNotFoundException",
+            "details": sanitize_error_details(exc.details),
+        },
+    )
+
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "ResourceNotFound",
+            "message": exc.message,
+            "request_id": ErrorContext.get_request_id(),
+        },
+    )
+
+
+@app.exception_handler(AuthenticationException)
+async def authentication_handler(request: Request, exc: AuthenticationException):
+    """Handle authentication errors."""
+    logger.warning(
+        f"Authentication failed: {exc.message}",
+        extra={**ErrorContext.get_all(), "exception_type": "AuthenticationException"},
+    )
+
+    return JSONResponse(
+        status_code=401,
+        content={
+            "error": "AuthenticationFailed",
+            "message": exc.message,
+            "request_id": ErrorContext.get_request_id(),
+        },
+    )
+
+
+@app.exception_handler(AuthorizationException)
+async def authorization_handler(request: Request, exc: AuthorizationException):
+    """Handle authorization errors."""
+    logger.warning(
+        f"Authorization failed: {exc.message}",
+        extra={**ErrorContext.get_all(), "exception_type": "AuthorizationException"},
+    )
+
+    return JSONResponse(
+        status_code=403,
+        content={
+            "error": "AuthorizationFailed",
+            "message": exc.message,
+            "request_id": ErrorContext.get_request_id(),
+        },
+    )
+
+
+@app.exception_handler(ValidationException)
+async def validation_handler(request: Request, exc: ValidationException):
+    """Handle validation errors."""
+    logger.warning(
+        f"Validation failed: {exc.message}",
+        extra={
+            **ErrorContext.get_all(),
+            "exception_type": "ValidationException",
+            "details": sanitize_error_details(exc.details),
+        },
+    )
+
+    user_details = sanitize_error_details(exc.details, user_context=True)
+
+    response_data = {
+        "error": "ValidationFailed",
+        "message": exc.message,
+        "request_id": ErrorContext.get_request_id(),
+    }
+
+    if user_details:
+        response_data["details"] = user_details
+
+    return JSONResponse(status_code=422, content=response_data)
+
+
+@app.exception_handler(BusinessLogicException)
+async def business_logic_handler(request: Request, exc: BusinessLogicException):
+    """Handle business logic errors."""
+    logger.warning(
+        f"Business logic error: {exc.message}",
+        extra={
+            **ErrorContext.get_all(),
+            "exception_type": "BusinessLogicException",
+            "details": sanitize_error_details(exc.details),
+        },
+    )
+
+    status_code = 400  # Default for business logic errors
+
+    # Specific status codes for certain business logic errors
+    if "duplicate" in exc.message.lower() or "conflict" in exc.message.lower():
+        status_code = 409
+    elif "quota" in exc.message.lower() or "limit" in exc.message.lower():
+        status_code = 429
+
+    user_details = sanitize_error_details(exc.details, user_context=True)
+
+    response_data = {
+        "error": "BusinessLogicError",
+        "message": exc.message,
+        "request_id": ErrorContext.get_request_id(),
+    }
+
+    if user_details:
+        response_data["details"] = user_details
+
+    return JSONResponse(status_code=status_code, content=response_data)
+
+
+@app.exception_handler(ServiceUnavailableException)
+async def service_unavailable_handler(
+    request: Request, exc: ServiceUnavailableException
+):
+    """Handle service unavailable errors."""
+    logger.error(
+        f"Service unavailable: {exc.message}",
+        extra={
+            **ErrorContext.get_all(),
+            "exception_type": "ServiceUnavailableException",
+            "details": sanitize_error_details(exc.details),
+        },
+    )
+
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "ServiceUnavailable",
+            "message": "Service temporarily unavailable. Please try again later.",
+            "request_id": ErrorContext.get_request_id(),
+        },
+    )
+
+
+@app.exception_handler(DatabaseException)
+async def database_handler(request: Request, exc: DatabaseException):
+    """Handle database errors."""
+    logger.error(
+        f"Database error: {exc.message}",
+        extra={
+            **ErrorContext.get_all(),
+            "exception_type": "DatabaseException",
+            "details": sanitize_error_details(exc.details),
+        },
+    )
+
+    # Don't expose database details to users
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "DatabaseError",
+            "message": "An error occurred while processing your request.",
+            "request_id": ErrorContext.get_request_id(),
+        },
+    )
+
+
+@app.exception_handler(RateLimitException)
+async def rate_limit_handler(request: Request, exc: RateLimitException):
+    """Handle rate limiting errors."""
+    logger.warning(
+        f"Rate limit exceeded: {exc.message}",
+        extra={**ErrorContext.get_all(), "exception_type": "RateLimitException"},
+    )
+
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "RateLimitExceeded",
+            "message": "Too many requests. Please try again later.",
+            "request_id": ErrorContext.get_request_id(),
+        },
+    )
+
+
+@app.exception_handler(ConfigurationException)
+async def configuration_handler(request: Request, exc: ConfigurationException):
+    """Handle configuration errors."""
+    logger.error(
+        f"Configuration error: {exc.message}",
+        extra={
+            **ErrorContext.get_all(),
+            "exception_type": "ConfigurationException",
+            "details": sanitize_error_details(exc.details),
+        },
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "ConfigurationError",
+            "message": "Service configuration error. Please contact support.",
+            "request_id": ErrorContext.get_request_id(),
+        },
+    )
+
+
+# Global exception handler for unhandled exceptions
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle unexpected exceptions."""
+    logger.error(
+        f"Unhandled exception: {str(exc)}",
+        extra={
+            **ErrorContext.get_all(),
+            "exception_type": exc.__class__.__name__,
+        },
+        exc_info=True,
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "InternalServerError",
+            "message": "An unexpected error occurred. Please try again later.",
+            "request_id": ErrorContext.get_request_id(),
+        },
+    )
 
 
 @app.get("/health")
@@ -258,11 +511,6 @@ async def health_check():
             if app.state.qa_service is not None
             else ("disabled" if not settings.qa_enabled else "not initialized")
         )
-
-        # Check WebSocket connection manager status
-        from app.services.websocket_manager import connection_manager
-
-        ws_stats = connection_manager.get_connection_stats()
 
         # Check Cache Service status
         cache_status = "disabled"
@@ -283,11 +531,6 @@ async def health_check():
             "cache": {
                 "status": cache_status,
                 "stats": cache_stats,
-            },
-            "websocket": {
-                "active_connections": ws_stats["total_connections"],
-                "active_conversations": ws_stats["total_conversations"],
-                "active_users": ws_stats["total_users"],
             },
             "version": settings.app_version,
         }

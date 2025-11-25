@@ -5,12 +5,19 @@ File upload API endpoints.
 import logging
 from typing import Optional, Tuple
 from typing_extensions import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, status, UploadFile, File, Form
 from app.auth.dependencies import get_current_active_user
 from app.schemas.user import UserInDB
 from app.schemas.upload import UploadImageResponse
 from app.config import settings
 from app.utils.gcs_uploader import GCSUploader
+from app.core.error_context import ErrorContext
+from app.exceptions import (
+    ValidationException,
+    FileOperationException,
+    StorageException,
+    ConfigurationException,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +48,7 @@ EXTENSION_TO_MIME = {
 def get_gcs_uploader() -> GCSUploader:
     """Dependency to get GCS uploader instance."""
     if not settings.gcp_public_bucket:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="GCS public bucket not configured",
-        )
+        raise ConfigurationException("GCS public bucket not configured")
     return GCSUploader(
         bucket_name=settings.gcp_public_bucket,
         project_id=settings.gcp_project_id,
@@ -62,7 +66,7 @@ def validate_image_file(file: UploadFile) -> Tuple[str, bytes]:
         Tuple of (content_type, file_content)
 
     Raises:
-        HTTPException: If validation fails
+        ValidationException: If validation fails
     """
     # Read file content
     try:
@@ -78,25 +82,24 @@ def validate_image_file(file: UploadFile) -> Tuple[str, bytes]:
         file_size = len(file_content)
 
         if file_size > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File size exceeds maximum allowed size of {MAX_FILE_SIZE / (1024 * 1024):.0f}MB",
+            raise ValidationException(
+                f"File size exceeds maximum allowed size of {MAX_FILE_SIZE / (1024 * 1024):.0f}MB",
+                details={
+                    "max_size_mb": MAX_FILE_SIZE / (1024 * 1024),
+                    "actual_size": file_size,
+                },
             )
 
         if file_size == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File is empty",
+            raise ValidationException(
+                "File is empty", details={"file_name": file.filename}
             )
 
-    except HTTPException:
+    except ValidationException:
         raise
     except Exception as e:
         logger.error(f"Error reading file: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to read file",
-        )
+        raise FileOperationException("Failed to read file", details={"error": str(e)})
 
     # Validate content type
     content_type = file.content_type
@@ -108,9 +111,13 @@ def validate_image_file(file: UploadFile) -> Tuple[str, bytes]:
             content_type = EXTENSION_TO_MIME.get(file_extension)
 
     if not content_type or content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type. Allowed types: {', '.join(sorted(ALLOWED_IMAGE_TYPES))}",
+        raise ValidationException(
+            f"Invalid file type. Allowed types: {', '.join(sorted(ALLOWED_IMAGE_TYPES))}",
+            details={
+                "content_type": content_type,
+                "filename": file.filename,
+                "allowed_types": list(ALLOWED_IMAGE_TYPES),
+            },
         )
 
     # Validate file extension matches content type
@@ -158,9 +165,28 @@ async def upload_image(
     - Returns the public URL of the uploaded image
     - Includes the filename and folder path
     """
-    try:
+    # Set error context for request correlation
+    ErrorContext.set_request_id()
+    ErrorContext.set_user_id(current_user.id)
+    ErrorContext.add_context("endpoint", "upload_image")
+    ErrorContext.add_context("operation", "file_upload")
+    ErrorContext.add_context("folder", folder)
+    ErrorContext.add_context("filename", file.filename)
+    ErrorContext.add_context("content_type", file.content_type)
+
+    with ErrorContext(
+        "upload_image",
+        {
+            "user_id": current_user.id,
+            "filename": file.filename,
+            "content_type": file.content_type,
+            "folder": folder,
+        },
+    ):
         # Validate file
         content_type, file_content = validate_image_file(file)
+        ErrorContext.add_context("file_size", len(file_content))
+        ErrorContext.add_context("validated_content_type", content_type)
 
         # Upload to GCS
         public_url = uploader.upload_file(
@@ -178,20 +204,11 @@ async def upload_image(
             f"User {current_user.id} uploaded image: {filename} to folder: {folder or 'root'}"
         )
 
+        ErrorContext.add_context("upload_url", public_url)
+        ErrorContext.add_context("uploaded_filename", filename)
+
         return UploadImageResponse(
             url=public_url,
             filename=filename,
             folder=folder,
-        )
-
-    except HTTPException:
-        # Re-raise HTTP exceptions (validation errors)
-        raise
-    except Exception as e:
-        logger.error(
-            f"Error uploading image for user {current_user.id}: {e}", exc_info=True
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to upload image",
         )

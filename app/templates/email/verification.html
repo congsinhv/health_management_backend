@@ -1,0 +1,49 @@
+{% extends "email/base.html" %}
+
+{% block title %}Xác thực Email - VHealth{% endblock %}
+
+{% block content %}
+  <h1>Chào mừng, {{ first_name }}!</h1>
+
+  <div class="greeting">Xin chào {{ first_name }},</div>
+
+  <p>
+    Cảm ơn bạn đã đăng ký tài khoản với VHealth. Vui lòng xác thực địa chỉ email
+    bằng cách nhấp vào nút bên dưới:
+  </p>
+
+  <div class="button-container">
+    <a href="{{ verification_url }}" class="button" role="button"
+      >Xác thực Email</a
+    >
+  </div>
+
+  <div class="info-box link-fallback">
+    <p>
+      <strong>Nút không hoạt động?</strong> Sao chép và dán liên kết sau vào trình duyệt:
+    </p>
+    <p>
+      <a href="{{ verification_url }}">{{ verification_url }}</a>
+    </p>
+  </div>
+
+  <div class="info-box warning">
+    <p>
+      Liên kết xác thực này sẽ hết hạn sau {{ expiry_minutes }} phút.
+    </p>
+  </div>
+
+  <div class="info-box security-notice">
+    <p>
+      <strong>Thông báo bảo mật:</strong> Nếu bạn không tạo tài khoản
+      với chúng tôi, vui lòng bỏ qua email này. Tài khoản của bạn vẫn an toàn và không có thay đổi nào được thực hiện.
+    </p>
+  </div>
+
+  <p>
+    Cần hỗ trợ? Liên hệ với chúng tôi tại
+    <a href="mailto:support@vhealth.io.vn" style="color: #00bba7"
+      >support@vhealth.io.vn</a
+    >
+  </p>
+{% endblock %}

@@ -11,6 +11,12 @@ from typing import List, Dict, Any, Optional, Set, Callable
 from datetime import datetime, timedelta
 from enum import Enum
 
+from app.exceptions import (
+    CacheException,
+    CacheUnavailableException,
+    ServiceUnavailableException,
+)
+from app.core.error_context import ErrorContext
 from app.config import logger
 from app.services.cache import CacheService
 

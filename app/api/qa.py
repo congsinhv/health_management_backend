@@ -14,13 +14,21 @@ except ImportError:
     # For Python < 3.9
     from typing_extensions import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import StreamingResponse
 
 from app.auth.dependencies import get_current_active_user
 from app.middleware.rate_limit import get_rate_limiter
 from app.schemas.qa import QuestionRequest, QuestionResponse, QAHealthResponse
 from app.schemas.user import UserInDB
+from app.core.error_context import ErrorContext
+from app.exceptions import (
+    ValidationException,
+    ServiceUnavailableException,
+    RateLimitException,
+    QAModelNotLoadedException,
+    QAServiceException,
+)
 from app.utils.metrics import (
     StructuredLogger,
     end_sse_connection,
@@ -52,15 +60,29 @@ async def ask_question(
     Returns:
         QuestionResponse with answers grouped by field and AI summary
     """
-    try:
+    # Set error context for request correlation
+    ErrorContext.set_request_id()
+    ErrorContext.set_user_id(current_user.id)
+    ErrorContext.add_context("endpoint", "ask_question")
+    ErrorContext.add_context("operation", "qa_inference")
+    ErrorContext.add_context("question_length", len(question_data.question))
+
+    with ErrorContext(
+        "ask_question",
+        {
+            "user_id": current_user.id,
+            "threshold": question_data.threshold,
+            "top_k": question_data.top_k,
+            "question_preview": question_data.question[:100] + "..."
+            if len(question_data.question) > 100
+            else question_data.question,
+        },
+    ):
         # Get QA service from app state
         qa_service = request.app.state.qa_service
 
         if qa_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Q&A service is not available",
-            )
+            raise ServiceUnavailableException("Q&A service is not available")
 
         # Process question
         result = await qa_service.ask_question(
@@ -70,17 +92,6 @@ async def ask_question(
         )
 
         return QuestionResponse(**result)
-
-    except ValueError as e:
-        logger.warning(f"Invalid question from user {current_user.email}: {e}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-    except Exception as e:
-        logger.error(f"Error processing question: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        )
 
 
 @router.post(
@@ -102,41 +113,44 @@ async def ask_question_stream(
     3. SUMMARY_CHUNK - Token-by-token AI summary
     4. STREAM_COMPLETE - Final event with metadata
     """
+    # Set error context for request correlation
+    ErrorContext.set_request_id()
+    ErrorContext.set_user_id(current_user.id)
+    ErrorContext.add_context("endpoint", "ask_question_stream")
+    ErrorContext.add_context("operation", "qa_streaming")
+    ErrorContext.add_context("question_length", len(question_data.question))
 
     # Rate limiting
     rate_limiter = get_rate_limiter()
     if rate_limiter:
         if not await rate_limiter.check_connection_limit(str(current_user.id)):
             StructuredLogger.log_rate_limit(str(current_user.id), "connection")
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many concurrent connections",
-                headers={"Retry-After": "60"},
-            )
+            raise RateLimitException("Too many concurrent connections")
 
         if not await rate_limiter.check_request_rate(str(current_user.id)):
             StructuredLogger.log_rate_limit(str(current_user.id), "request_rate")
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many requests",
-                headers={"Retry-After": "60"},
-            )
+            raise RateLimitException("Too many requests")
 
         await rate_limiter.register_connection(str(current_user.id))
         await rate_limiter.register_request(str(current_user.id))
 
     qa_service = request.app.state.qa_service
     if not qa_service:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Q&A service is not available",
-        )
+        raise ServiceUnavailableException("Q&A service is not available")
 
     # Start monitoring
     start_time = time.time()
     event_count = 0
     start_sse_connection()
     StructuredLogger.log_connection_start(str(current_user.id), question_data.question)
+
+    ErrorContext.add_context("streaming", True)
+    ErrorContext.add_context(
+        "question_preview",
+        question_data.question[:100] + "..."
+        if len(question_data.question) > 100
+        else question_data.question,
+    )
 
     async def event_generator():
         """Generate SSE events with disconnect detection and monitoring."""
@@ -153,6 +167,8 @@ async def ask_question_stream(
                 # Check client disconnect
                 if await request.is_disconnected():
                     duration = time.time() - start_time
+                    ErrorContext.add_context("client_disconnected", True)
+                    ErrorContext.add_context("stream_duration", duration)
                     StructuredLogger.log_disconnect(str(current_user.id), duration)
                     break
 
@@ -165,6 +181,7 @@ async def ask_question_stream(
                     try:
                         event_type = sse_event.split('"event_type":"')[1].split('"')[0]
                         increment_sse_events(event_type)
+                        ErrorContext.add_context("last_event_type", event_type)
                     except (IndexError, AttributeError):
                         pass
 
@@ -176,6 +193,8 @@ async def ask_question_stream(
 
         except Exception as e:
             duration = time.time() - start_time
+            ErrorContext.add_context("stream_error", str(e))
+            ErrorContext.add_context("stream_duration", duration)
             StructuredLogger.log_error(str(current_user.id), str(e), "streaming_error")
             record_sse_error("streaming_error", str(current_user.id))
 
@@ -191,6 +210,9 @@ async def ask_question_stream(
             # Cleanup and final metrics
             duration = time.time() - start_time
             end_sse_connection(duration)
+            ErrorContext.add_context("stream_completed", True)
+            ErrorContext.add_context("stream_duration", duration)
+            ErrorContext.add_context("event_count", event_count)
             StructuredLogger.log_connection_end(
                 str(current_user.id), duration, event_count
             )
@@ -219,24 +241,30 @@ async def qa_health_check(request: Request):
     Returns:
         Status information about the Q&A service
     """
-    qa_service = request.app.state.qa_service
+    # Set error context for request correlation
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "qa_health_check")
+    ErrorContext.add_context("operation", "health_check")
 
-    if qa_service is None:
+    with ErrorContext("qa_health_check"):
+        qa_service = request.app.state.qa_service
+
+        if qa_service is None:
+            return QAHealthResponse(
+                status="unavailable",
+                model_loaded=False,
+                embeddings_loaded=False,
+                streaming_enabled=False,
+                openai_configured=False,
+                message="Q&A service is not initialized",
+            )
+
         return QAHealthResponse(
-            status="unavailable",
-            model_loaded=False,
-            embeddings_loaded=False,
-            streaming_enabled=False,
-            openai_configured=False,
-            message="Q&A service is not initialized",
+            status="healthy",
+            model_loaded=qa_service.model is not None,
+            embeddings_loaded=qa_service.question_embeddings is not None,
+            streaming_enabled=hasattr(qa_service, "stream_ask_question"),
+            openai_configured=hasattr(qa_service, "openai_client")
+            and qa_service.openai_client is not None,
+            message="Q&A service is operational",
         )
-
-    return QAHealthResponse(
-        status="healthy",
-        model_loaded=qa_service.model is not None,
-        embeddings_loaded=qa_service.question_embeddings is not None,
-        streaming_enabled=hasattr(qa_service, "stream_ask_question"),
-        openai_configured=hasattr(qa_service, "openai_client")
-        and qa_service.openai_client is not None,
-        message="Q&A service is operational",
-    )

@@ -3,7 +3,6 @@ Pytest configuration and fixtures for chat system tests.
 """
 
 import pytest
-import asyncio
 import asyncpg
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, MagicMock
@@ -11,26 +10,33 @@ from datetime import datetime, timezone
 from app.main import app
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture
-def mock_database_pool():
-    """Mock database connection pool."""
-    pool = AsyncMock()
-    return pool
-
-
 @pytest.fixture
 def mock_connection():
-    """Mock database connection."""
+    """Mock database connection with all required methods."""
     connection = AsyncMock()
+    connection.fetchrow = AsyncMock(return_value=None)
+    connection.fetch = AsyncMock(return_value=[])
+    connection.fetchval = AsyncMock(return_value=None)
+    connection.execute = AsyncMock(return_value=None)
     return connection
+
+
+@pytest.fixture
+def mock_database_pool(mock_connection):
+    """Mock database connection pool with proper async context manager support."""
+    pool = MagicMock()  # Use MagicMock, not AsyncMock
+
+    # Create async context manager for acquire()
+    class AsyncContextManager:
+        async def __aenter__(self):
+            return mock_connection
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            return None
+
+    # Make acquire() return the async context manager directly (not a coroutine)
+    pool.acquire = MagicMock(return_value=AsyncContextManager())
+    return pool
 
 
 @pytest.fixture
@@ -114,9 +120,16 @@ def asyncpg_record_factory():
 
 # SSE Streaming fixtures
 @pytest.fixture
-def async_client():
-    """Create AsyncClient for testing SSE endpoints."""
-    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+def async_client(mock_qa_service):
+    """Create AsyncClient for testing SSE endpoints with mocked QA service."""
+    # Set up the mock qa_service on app.state
+    app.state.qa_service = mock_qa_service
+
+    client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    yield client
+
+    # Cleanup
+    app.state.qa_service = None
 
 
 @pytest.fixture

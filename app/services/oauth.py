@@ -1,5 +1,14 @@
 """
 OAuth service for handling Google OAuth authentication.
+from app.exceptions import (
+    OAuthException,
+    OAuthTokenException,
+    OAuthProviderException,
+    OAuthStateException,
+    ValidationException,
+    ExternalServiceException,
+)
+from app.core.error_context import ErrorContext
 """
 
 import secrets
@@ -32,7 +41,14 @@ class GoogleOAuthService:
     def get_authorization_url(self, state: Optional[str] = None) -> Tuple[str, str]:
         """Generate Google OAuth authorization URL."""
         if not self.is_configured():
-            raise ValueError("Google OAuth is not configured")
+            raise OAuthException(
+                message="Google OAuth is not configured",
+                details={
+                    "client_id": self.client_id is not None,
+                    "client_secret": self.client_secret is not None,
+                    "redirect_uri": self.redirect_uri is not None,
+                },
+            )
 
         # Generate state if not provided
         if not state:
@@ -69,7 +85,14 @@ class GoogleOAuthService:
     ) -> Optional[GoogleOAuthCallback]:
         """Verify OAuth authorization code and get user info."""
         if not self.is_configured():
-            raise ValueError("Google OAuth is not configured")
+            raise OAuthException(
+                message="Google OAuth is not configured",
+                details={
+                    "client_id": self.client_id is not None,
+                    "client_secret": self.client_secret is not None,
+                    "redirect_uri": self.redirect_uri is not None,
+                },
+            )
 
         try:
             flow = Flow.from_client_config(
@@ -106,7 +129,10 @@ class GoogleOAuthService:
                 "accounts.google.com",
                 "https://accounts.google.com",
             ]:
-                raise ValueError("Invalid issuer")
+                raise OAuthProviderException(
+                    message="Invalid OAuth token issuer",
+                    details={"issuer": id_info.get("iss")},
+                )
 
             # Create user data from Google response
             return GoogleOAuthCallback(
@@ -125,7 +151,14 @@ class GoogleOAuthService:
     async def verify_id_token_only(self, token: str) -> Optional[Dict[str, Any]]:
         """Verify Google ID token directly."""
         if not self.is_configured():
-            raise ValueError("Google OAuth is not configured")
+            raise OAuthException(
+                message="Google OAuth is not configured",
+                details={
+                    "client_id": self.client_id is not None,
+                    "client_secret": self.client_secret is not None,
+                    "redirect_uri": self.redirect_uri is not None,
+                },
+            )
 
         try:
             id_info = id_token.verify_oauth2_token(
@@ -138,7 +171,10 @@ class GoogleOAuthService:
                 "accounts.google.com",
                 "https://accounts.google.com",
             ]:
-                raise ValueError("Invalid issuer")
+                raise OAuthProviderException(
+                    message="Invalid OAuth token issuer",
+                    details={"issuer": id_info.get("iss")},
+                )
 
             return id_info
 

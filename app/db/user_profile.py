@@ -1,5 +1,5 @@
 """
-User profile database operations using raw SQL queries.
+User profile database operations using raw SQL queries with custom exception handling.
 """
 
 import asyncpg
@@ -8,14 +8,18 @@ from datetime import datetime
 from decimal import Decimal
 from app.db.database import BaseRepository
 from app.schemas.user_profile import UserProfileCreate, UserProfileUpdate
+from app.exceptions import (
+    ResourceNotFoundException,
+    DatabaseException,
+    DatabaseConstraintException,
+    DuplicateResourceException,
+)
 
 
 class UserProfileRepository(BaseRepository):
     """Repository for user profile database operations."""
 
-    async def create_profile(
-        self, profile_data: UserProfileCreate
-    ) -> Optional[asyncpg.Record]:
+    async def create_profile(self, profile_data: UserProfileCreate) -> asyncpg.Record:
         """Create a new user profile."""
         now = datetime.utcnow()
         query = """
@@ -29,22 +33,44 @@ class UserProfileRepository(BaseRepository):
                       height_cm, weight_kg, date_of_birth, family_medical_history,
                       goal, created_at, updated_at
         """
-        return await self.fetch_one(
-            query,
-            profile_data.user_id,
-            profile_data.first_name,
-            profile_data.last_name,
-            profile_data.avatar_url,
-            profile_data.gender,
-            profile_data.height_cm,
-            profile_data.weight_kg,
-            profile_data.date_of_birth,
-            profile_data.family_medical_history,
-            profile_data.goal,
-            now,
-        )
+        try:
+            result = await self.fetch_one(
+                query,
+                profile_data.user_id,
+                profile_data.first_name,
+                profile_data.last_name,
+                profile_data.avatar_url,
+                profile_data.gender,
+                profile_data.height_cm,
+                profile_data.weight_kg,
+                profile_data.date_of_birth,
+                profile_data.family_medical_history,
+                profile_data.goal,
+                now,
+            )
+            if not result:
+                raise DatabaseException(
+                    message="Failed to create user profile",
+                    details={"user_id": profile_data.user_id},
+                )
+            return result
+        except asyncpg.UniqueViolationError as e:
+            raise DuplicateResourceException(
+                message="User profile already exists for this user",
+                details={"user_id": profile_data.user_id, "constraint": str(e)},
+            )
+        except asyncpg.ForeignKeyViolationError as e:
+            raise ResourceNotFoundException(
+                message="User not found for profile creation",
+                details={"user_id": profile_data.user_id, "constraint": str(e)},
+            )
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error while creating user profile",
+                details={"user_id": profile_data.user_id, "error": str(e)},
+            )
 
-    async def get_profile_by_user_id(self, user_id: int) -> Optional[asyncpg.Record]:
+    async def get_profile_by_user_id(self, user_id: int) -> asyncpg.Record:
         """Get user profile by user ID."""
         query = """
             SELECT id, user_id, first_name, last_name, avatar_url, gender,
@@ -53,11 +79,22 @@ class UserProfileRepository(BaseRepository):
             FROM user_profiles
             WHERE user_id = $1
         """
-        return await self.fetch_one(query, user_id)
+        try:
+            result = await self.fetch_one(query, user_id)
+            if not result:
+                raise ResourceNotFoundException(
+                    message="User profile not found", details={"user_id": user_id}
+                )
+            return result
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error while fetching user profile",
+                details={"user_id": user_id, "error": str(e)},
+            )
 
     async def update_profile(
         self, user_id: int, profile_data: UserProfileUpdate
-    ) -> Optional[asyncpg.Record]:
+    ) -> asyncpg.Record:
         """Update user profile information."""
         now = datetime.utcnow()
         query = """
@@ -77,20 +114,32 @@ class UserProfileRepository(BaseRepository):
                       height_cm, weight_kg, date_of_birth, family_medical_history,
                       goal, created_at, updated_at
         """
-        return await self.fetch_one(
-            query,
-            user_id,
-            profile_data.first_name,
-            profile_data.last_name,
-            profile_data.avatar_url,
-            profile_data.gender,
-            profile_data.height_cm,
-            profile_data.weight_kg,
-            profile_data.date_of_birth,
-            profile_data.family_medical_history,
-            profile_data.goal,
-            now,
-        )
+        try:
+            result = await self.fetch_one(
+                query,
+                user_id,
+                profile_data.first_name,
+                profile_data.last_name,
+                profile_data.avatar_url,
+                profile_data.gender,
+                profile_data.height_cm,
+                profile_data.weight_kg,
+                profile_data.date_of_birth,
+                profile_data.family_medical_history,
+                profile_data.goal,
+                now,
+            )
+            if not result:
+                raise ResourceNotFoundException(
+                    message="User profile not found for update",
+                    details={"user_id": user_id},
+                )
+            return result
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error while updating user profile",
+                details={"user_id": user_id, "error": str(e)},
+            )
 
     async def delete_profile(self, user_id: int) -> bool:
         """Delete user profile (cascade delete handled by foreign key)."""
@@ -98,5 +147,12 @@ class UserProfileRepository(BaseRepository):
             DELETE FROM user_profiles
             WHERE user_id = $1
         """
-        result = await self.execute(query, user_id)
-        return "DELETE 1" in result or "DELETE 0" in result
+        try:
+            result = await self.execute(query, user_id)
+            success = "DELETE 1" in result or "DELETE 0" in result
+            return success
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error while deleting user profile",
+                details={"user_id": user_id, "error": str(e)},
+            )

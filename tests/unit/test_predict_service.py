@@ -79,6 +79,8 @@ class TestObesityPredictorComplete:
 
     def test_ensure_models_downloaded_no_gcs_config(self, mock_model_files):
         """Test _ensure_models_downloaded raises error when GCS not configured."""
+        from app.exceptions import PredictionModelException
+
         predictor = ObesityPredictorComplete.__new__(ObesityPredictorComplete)
 
         with patch("os.path.exists", return_value=False):
@@ -86,7 +88,7 @@ class TestObesityPredictorComplete:
                 mock_settings.gcp_model_bucket = None
 
                 with pytest.raises(
-                    ValueError,
+                    PredictionModelException,
                     match="Model files not found and GCS bucket not configured",
                 ):
                     predictor._ensure_models_downloaded(
@@ -216,80 +218,7 @@ class TestObesityPredictorComplete:
                 assert "phân_loại_bmi" in result
                 assert result["dự_đoán"] == "Normal_Weight"
 
-    def test_format_bmi(self, mock_model_files, mock_joblib):
-        """Test BMI formatting."""
-        with patch("app.services.predict_service.settings") as mock_settings:
-            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
-            with patch("os.path.exists", return_value=True):
-                predictor = ObesityPredictorComplete()
-
-                assert predictor.format_bmi(22.5) == "22.5"
-                assert predictor.format_bmi("22.5") == "22.5"
-                assert predictor.format_bmi(22.567) == "22.6"
-                assert predictor.format_bmi("invalid") == "invalid"
-
-    def test_build_prompts(self, mock_model_files, mock_joblib):
-        """Test AI prompt building."""
-        with patch("app.services.predict_service.settings") as mock_settings:
-            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
-            with patch("os.path.exists", return_value=True):
-                predictor = ObesityPredictorComplete()
-
-                data = UserInput(
-                    age=25,
-                    height=1.75,
-                    weight=70,
-                    gender="male",
-                    family_history=False,
-                )
-
-                result = {
-                    "dự_đoán": "Normal_Weight",
-                    "độ_tin_cậy": "80.0%",
-                    "bmi": "22.9",
-                    "phân_loại_bmi": "Bình thường",
-                }
-
-                prompts = predictor.build_prompts(data, result, "22.9")
-
-                assert "general" in prompts
-                assert "diet" in prompts
-                assert "exercise" in prompts
-                assert "Normal_Weight" in prompts["general"]
-                assert "Normal_Weight" in prompts["diet"]
-                assert "Normal_Weight" in prompts["exercise"]
-
-    def test_get_ai_suggestion_success(self, mock_model_files, mock_joblib):
-        """Test AI suggestion generation success."""
-        with patch("app.services.predict_service.settings") as mock_settings:
-            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
-            with patch("os.path.exists", return_value=True):
-                predictor = ObesityPredictorComplete()
-
-                mock_response = Mock()
-                mock_response.choices = [Mock()]
-                mock_response.choices[0].message.content = "Test suggestion"
-
-                predictor.client.chat.completions.create = Mock(
-                    return_value=mock_response
-                )
-
-                result = predictor.get_ai_suggestion("Test prompt")
-
-                assert result == "Test suggestion"
-
-    def test_get_ai_suggestion_failure(self, mock_model_files, mock_joblib):
-        """Test AI suggestion generation handles errors."""
-        with patch("app.services.predict_service.settings") as mock_settings:
-            mock_settings.obesity_model_dir = mock_model_files["model_dir"]
-            with patch("os.path.exists", return_value=True):
-                predictor = ObesityPredictorComplete()
-
-                predictor.client.chat.completions.create = Mock(
-                    side_effect=Exception("API Error")
-                )
-
-                result = predictor.get_ai_suggestion("Test prompt")
-
-                assert "Không thể tạo khuyến nghị" in result
-                assert "API Error" in result
+    # Note: The following methods were removed during refactoring:
+    # - format_bmi: BMI formatting is now handled inline
+    # - build_prompts: Prompts are now built in _generate_ai_advice
+    # - get_ai_suggestion: Now using async _generate_ai_advice method

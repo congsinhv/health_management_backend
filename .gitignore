@@ -177,7 +177,6 @@ models_obesity/
 # Q&A Data files (should be in GCS, not tracked in git)
 data.xlsx
 tuvung.txt
-docs/
-plans/
+docs/_build/
 CLAUDE.md
 repomix-output.xml

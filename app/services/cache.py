@@ -17,6 +17,15 @@ from redis.exceptions import ConnectionError, TimeoutError, RedisError
 
 from app.config import settings
 
+from app.exceptions import (
+    CacheException,
+    CacheUnavailableException,
+    CacheTimeoutException,
+    ServiceUnavailableException,
+    DataProcessingException,
+)
+from app.core.error_context import ErrorContext
+
 logger = logging.getLogger(__name__)
 
 

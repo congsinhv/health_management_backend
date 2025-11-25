@@ -44,7 +44,9 @@ def mock_version_repo():
 
 
 @pytest.fixture
-def message_service(mock_db_pool, mock_message_repo, mock_conversation_repo):
+def message_service(
+    mock_db_pool, mock_message_repo, mock_conversation_repo, mock_version_repo
+):
     """Create MessageService with mocked dependencies."""
     service = MessageService(mock_db_pool)
     service.message_repo = mock_message_repo
@@ -62,7 +64,7 @@ def sample_message_record():
         "user_id": 1,
         "content": "Hello, this is a test message",
         "content_type": "text",
-        "metadata": {"source": "user_input"},
+        "metadata": '{"source": "user_input"}',  # JSON string as stored in DB
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
     }
@@ -97,6 +99,14 @@ def sample_version_record():
     }
 
 
+@pytest.fixture
+def mock_ai_chat_service():
+    """Mock AI chat service for title generation."""
+    service = AsyncMock()
+    service._generate_conversation_title = AsyncMock(return_value="Generated Title")
+    return service
+
+
 class TestMessageService:
     """Test cases for MessageService."""
 
@@ -106,6 +116,7 @@ class TestMessageService:
         message_service,
         mock_conversation_repo,
         mock_message_repo,
+        mock_ai_chat_service,
         sample_conversation_record,
         sample_message_record,
     ):
@@ -120,12 +131,14 @@ class TestMessageService:
             content_type="text",
         )
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
-        mock_message_repo.create.return_value = sample_message_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
+        mock_message_repo.create_message.return_value = sample_message_record
 
         # Act
         result = await message_service.create_message(
-            user_id, conversation_id, message_data
+            user_id, conversation_id, message_data, mock_ai_chat_service
         )
 
         # Assert
@@ -134,16 +147,18 @@ class TestMessageService:
         assert result.conversation_id == conversation_id
         assert result.user_id == user_id
         assert result.content == "Hello, this is a test message"
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
-        mock_message_repo.create.assert_called_once()
+        mock_message_repo.create_message.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_message_conversation_not_found(
-        self, message_service, mock_conversation_repo
+        self, message_service, mock_conversation_repo, mock_ai_chat_service
     ):
         """Test message creation with conversation not found."""
+        from app.exceptions import ValidationException
+
         # Arrange
         user_id = 1
         conversation_id = 999
@@ -153,13 +168,15 @@ class TestMessageService:
             content="Hello, this is a test message",
         )
 
-        mock_conversation_repo.get_by_id.return_value = None
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = None
 
         # Act & Assert
-        with pytest.raises(ValueError, match="Conversation not found or access denied"):
-            await message_service.create_message(user_id, conversation_id, message_data)
-
-        mock_message_repo.create.assert_not_called()
+        with pytest.raises(
+            ValidationException, match="Conversation not found or access denied"
+        ):
+            await message_service.create_message(
+                user_id, conversation_id, message_data, mock_ai_chat_service
+            )
 
     @pytest.mark.asyncio
     async def test_create_message_database_error(
@@ -167,9 +184,12 @@ class TestMessageService:
         message_service,
         mock_conversation_repo,
         mock_message_repo,
+        mock_ai_chat_service,
         sample_conversation_record,
     ):
         """Test message creation with database error."""
+        from app.exceptions import DatabaseException
+
         # Arrange
         user_id = 1
         conversation_id = 1
@@ -179,12 +199,16 @@ class TestMessageService:
             content="Hello, this is a test message",
         )
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
-        mock_message_repo.create.return_value = None
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
+        mock_message_repo.create_message.return_value = None
 
         # Act & Assert
-        with pytest.raises(RuntimeError, match="Failed to create message"):
-            await message_service.create_message(user_id, conversation_id, message_data)
+        with pytest.raises(DatabaseException, match="Failed to create message"):
+            await message_service.create_message(
+                user_id, conversation_id, message_data, mock_ai_chat_service
+            )
 
     @pytest.mark.asyncio
     async def test_get_message_by_id_success(
@@ -201,8 +225,10 @@ class TestMessageService:
         conversation_id = 1
         user_id = 1
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
-        mock_message_repo.get_by_id.return_value = sample_message_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
+        mock_message_repo.get_message.return_value = sample_message_record
 
         # Act
         result = await message_service.get_message_by_id(
@@ -214,14 +240,16 @@ class TestMessageService:
         assert result.id == message_id
         assert result.conversation_id == conversation_id
         assert result.user_id == user_id
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
-        mock_message_repo.get_by_id.assert_called_once_with(message_id, conversation_id)
+        mock_message_repo.get_message.assert_called_once_with(
+            message_id, conversation_id
+        )
 
     @pytest.mark.asyncio
     async def test_get_message_by_id_conversation_not_found(
-        self, message_service, mock_conversation_repo
+        self, message_service, mock_conversation_repo, mock_message_repo
     ):
         """Test message retrieval when conversation not found."""
         # Arrange
@@ -229,7 +257,7 @@ class TestMessageService:
         conversation_id = 999
         user_id = 1
 
-        mock_conversation_repo.get_by_id.return_value = None
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = None
 
         # Act
         result = await message_service.get_message_by_id(
@@ -238,7 +266,7 @@ class TestMessageService:
 
         # Assert
         assert result is None
-        mock_message_repo.get_by_id.assert_not_called()
+        mock_message_repo.get_message.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_list_conversation_messages_success(
@@ -257,8 +285,10 @@ class TestMessageService:
         before = None
         records = [sample_message_record]
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
-        mock_message_repo.list_by_conversation.return_value = records
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
+        mock_message_repo.list_messages_by_conversation.return_value = records
 
         # Act
         result = await message_service.list_conversation_messages(
@@ -268,33 +298,37 @@ class TestMessageService:
         # Assert
         assert result is not None
         assert len(result.messages) == 1
-        assert result.has_more is True  # len(messages) == limit
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        assert result.has_more is False  # len(messages) < limit
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
-        mock_message_repo.list_by_conversation.assert_called_once_with(
-            conversation_id, limit, before
+        mock_message_repo.list_messages_by_conversation.assert_called_once_with(
+            conversation_id, limit=limit, before=before
         )
 
     @pytest.mark.asyncio
     async def test_list_conversation_messages_access_denied(
-        self, message_service, mock_conversation_repo
+        self, message_service, mock_conversation_repo, mock_message_repo
     ):
         """Test conversation message listing with access denied."""
+        from app.exceptions import ValidationException
+
         # Arrange
         conversation_id = 1
         user_id = 1
         limit = 50
 
-        mock_conversation_repo.get_by_id.return_value = None
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = None
 
         # Act & Assert
-        with pytest.raises(ValueError, match="Conversation not found or access denied"):
+        with pytest.raises(
+            ValidationException, match="Conversation not found or access denied"
+        ):
             await message_service.list_conversation_messages(
                 conversation_id, user_id, limit
             )
 
-        mock_message_repo.list_by_conversation.assert_not_called()
+        mock_message_repo.list_messages_by_conversation.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_update_message_success(
@@ -314,7 +348,9 @@ class TestMessageService:
         updated_record = sample_message_record.copy()
         updated_record["content"] = "Updated message content"
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
         mock_message_repo.can_user_edit_message.return_value = True
         mock_message_repo.update.return_value = updated_record
 
@@ -326,7 +362,7 @@ class TestMessageService:
         # Assert
         assert result is not None
         assert result.content == "Updated message content"
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
         mock_message_repo.can_user_edit_message.assert_called_once_with(
@@ -339,6 +375,8 @@ class TestMessageService:
         self, message_service, mock_message_repo
     ):
         """Test message update with access denied."""
+        from app.exceptions import ValidationException
+
         # Arrange
         message_id = 1
         conversation_id = 1
@@ -348,7 +386,9 @@ class TestMessageService:
         mock_message_repo.can_user_edit_message.return_value = False
 
         # Act & Assert
-        with pytest.raises(ValueError, match="Cannot edit message: access denied"):
+        with pytest.raises(
+            ValidationException, match="Cannot edit message: access denied"
+        ):
             await message_service.update_message(
                 message_id, conversation_id, user_id, update_data
             )
@@ -369,7 +409,9 @@ class TestMessageService:
         conversation_id = 1
         user_id = 1
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
         mock_message_repo.can_user_edit_message.return_value = True
         mock_message_repo.delete.return_value = True
 
@@ -380,7 +422,7 @@ class TestMessageService:
 
         # Assert
         assert result is True
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
         mock_message_repo.can_user_edit_message.assert_called_once_with(
@@ -406,9 +448,11 @@ class TestMessageService:
         user_id = 1
         version_records = [sample_version_record]
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
-        mock_message_repo.get_by_id.return_value = sample_message_record
-        mock_version_repo.list_by_message.return_value = version_records
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
+        mock_message_repo.get_message.return_value = sample_message_record
+        mock_version_repo.list_message_versions.return_value = version_records
 
         # Act
         result = await message_service.get_message_version_history(
@@ -441,11 +485,11 @@ class TestMessageService:
         restored_record = sample_message_record.copy()
         restored_record["content"] = sample_version_record["content"]
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
-        mock_message_repo.can_user_edit_message.return_value = True
-        mock_version_repo.get_by_message_and_version.return_value = (
-            sample_version_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
         )
+        mock_message_repo.can_user_edit_message.return_value = True
+        mock_version_repo.get_message_version.return_value = sample_version_record
         mock_message_repo.update.return_value = restored_record
 
         # Act
@@ -456,9 +500,7 @@ class TestMessageService:
         # Assert
         assert result is not None
         assert result.content == sample_version_record["content"]
-        mock_version_repo.get_by_message_and_version.assert_called_once_with(
-            message_id, 1
-        )
+        mock_version_repo.get_message_version.assert_called_once_with(message_id, 1)
 
     @pytest.mark.asyncio
     async def test_get_latest_message_success(
@@ -474,7 +516,9 @@ class TestMessageService:
         conversation_id = 1
         user_id = 1
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
         mock_message_repo.get_conversation_latest_message.return_value = (
             sample_message_record
         )
@@ -485,7 +529,7 @@ class TestMessageService:
         # Assert
         assert result is not None
         assert result.id == sample_message_record["id"]
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
         mock_message_repo.get_conversation_latest_message.assert_called_once_with(
@@ -506,7 +550,9 @@ class TestMessageService:
         user_id = 1
         expected_count = 5
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
         mock_message_repo.count_by_conversation.return_value = expected_count
 
         # Act
@@ -516,21 +562,21 @@ class TestMessageService:
 
         # Assert
         assert result == expected_count
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
         mock_message_repo.count_by_conversation.assert_called_once_with(conversation_id)
 
     @pytest.mark.asyncio
     async def test_count_messages_in_conversation_not_found(
-        self, message_service, mock_conversation_repo
+        self, message_service, mock_conversation_repo, mock_message_repo
     ):
         """Test message counting when conversation not found."""
         # Arrange
         conversation_id = 999
         user_id = 1
 
-        mock_conversation_repo.get_by_id.return_value = None
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = None
 
         # Act
         result = await message_service.count_messages_in_conversation(

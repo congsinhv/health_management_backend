@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, Depends, status
 from typing_extensions import Annotated
 import asyncpg
 import logging
@@ -6,13 +6,22 @@ from app.schemas.predict import UserInput, PredictionResponse, PdfResponse
 from app.services.predict_service import ObesityPredictorComplete
 from app.services.pdf_service import PdfGeneratorService, PdfGenerationError
 from app.db.database import get_database_pool
+from app.core.error_context import ErrorContext
+from app.exceptions import (
+    ServiceUnavailableException,
+    ValidationException,
+    ResourceNotFoundException,
+    FileNotFoundException,
+    StorageException,
+    PredictionException,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 # Service initialization with dependency injection
-def get_predict_service(
+def create_predict_service(
     db_pool: asyncpg.Pool = Depends(get_database_pool),
 ) -> ObesityPredictorComplete:
     """
@@ -28,13 +37,12 @@ def get_predict_service(
             return ObesityPredictorComplete(pool=None)
         except Exception as fallback_error:
             logger.error(f"Failed to initialize prediction service: {fallback_error}")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Prediction service unavailable - models not loaded",
+            raise ServiceUnavailableException(
+                "Prediction service unavailable - models not loaded"
             )
 
 
-def get_pdf_service(
+def create_pdf_service(
     db_pool: asyncpg.Pool = Depends(get_database_pool),
 ) -> PdfGeneratorService:
     """Dependency to get PDF generator service."""
@@ -44,7 +52,7 @@ def get_pdf_service(
 @router.post("/", response_model=PredictionResponse, status_code=status.HTTP_200_OK)
 async def predict_obesity(
     data: UserInput,
-    predict_service: ObesityPredictorComplete = Depends(get_predict_service),
+    predict_service: ObesityPredictorComplete = Depends(create_predict_service),
 ):
     """
     Generate obesity prediction (PUBLIC endpoint - no authentication required).
@@ -60,11 +68,22 @@ async def predict_obesity(
     - 503: Service unavailable (models not loaded)
     - 500: Internal server error
     """
-    try:
+    # Set error context for request correlation
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "predict_obesity")
+    ErrorContext.add_context("operation", "obesity_prediction")
+
+    with ErrorContext(
+        "predict_obesity",
+        {
+            "has_data": bool(data),
+            "age": data.age if hasattr(data, "age") else None,
+            "gender": data.gender if hasattr(data, "gender") else None,
+        },
+    ):
         if predict_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Prediction service unavailable - models not loaded",
+            raise ServiceUnavailableException(
+                "Prediction service unavailable - models not loaded"
             )
 
         # Generate prediction with database save
@@ -72,16 +91,8 @@ async def predict_obesity(
             data=data, save_to_db=True
         )
 
+        ErrorContext.add_context("prediction_id", prediction.id)
         return prediction
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error generating prediction: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate prediction",
-        )
 
 
 @router.get(
@@ -91,7 +102,7 @@ async def predict_obesity(
 )
 async def export_prediction_pdf(
     prediction_id: str,
-    pdf_service: PdfGeneratorService = Depends(get_pdf_service),
+    pdf_service: PdfGeneratorService = Depends(create_pdf_service),
 ):
     """
     Export prediction as PDF (PUBLIC endpoint - no authentication required).
@@ -115,59 +126,22 @@ async def export_prediction_pdf(
     **Note**: This endpoint regenerates the PDF each time. If a PDF already
     exists, it will be replaced with a new one.
     """
-    try:
+    # Set error context for request correlation
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "export_prediction_pdf")
+    ErrorContext.add_context("operation", "pdf_generation")
+    ErrorContext.add_context("prediction_id", prediction_id)
+
+    with ErrorContext("export_prediction_pdf", {"prediction_id": prediction_id}):
         # Validate template version
 
         # Generate and upload PDF with specified template (PUBLIC - no user authorization needed)
         pdf_url = await pdf_service.generate_and_upload_pdf(prediction_id=prediction_id)
 
         logger.info(f"Generated PDF for prediction {prediction_id}")
+        ErrorContext.add_context("pdf_url", pdf_url)
 
         return PdfResponse(pdf_url=pdf_url)
-
-    except PdfGenerationError as e:
-        # Handle our custom PDF generation errors with proper status codes
-        if e.error_type == "not_found":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Prediction {prediction_id} not found",
-            )
-        elif e.error_type == "infrastructure":
-            logger.error(
-                f"Infrastructure error for PDF generation {prediction_id}: {e.message}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="PDF service temporarily unavailable",
-            )
-        elif e.error_type == "template_error":
-            logger.error(
-                f"Template error for PDF generation {prediction_id}: {e.message}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="PDF template error - please try again later",
-            )
-        else:
-            logger.error(f"PDF generation error for {prediction_id}: {e.message}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to generate PDF",
-            )
-
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
-
-    except Exception as e:
-        logger.error(
-            f"Unexpected error generating PDF for prediction {prediction_id}: {e}",
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate PDF",
-        )
 
 
 @router.get(
@@ -178,9 +152,16 @@ async def export_prediction_pdf(
 )
 async def export_prediction_pdf_v1(
     prediction_id: str,
-    pdf_service: PdfGeneratorService = Depends(get_pdf_service),
+    pdf_service: PdfGeneratorService = Depends(create_pdf_service),
 ):
     """
     Legacy endpoint for original PDF template (DEPRECATED - use /export/{prediction_id}?template_version=v1).
     """
-    return await export_prediction_pdf(prediction_id, "v1", pdf_service)
+    # Set error context for request correlation
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "export_prediction_pdf_v1")
+    ErrorContext.add_context("operation", "pdf_generation_legacy")
+    ErrorContext.add_context("prediction_id", prediction_id)
+
+    with ErrorContext("export_prediction_pdf_v1", {"prediction_id": prediction_id}):
+        return await export_prediction_pdf(prediction_id, pdf_service)

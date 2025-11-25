@@ -10,6 +10,16 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+from app.exceptions import (
+    ResourceNotFoundException,
+    ResourceConflictException,
+    AuthenticationException,
+    ValidationException,
+    BusinessLogicException,
+    DatabaseException,
+    ServiceUnavailableException,
+)
+from app.core.error_context import ErrorContext
 
 from app.db.conversation import ConversationRepository
 from app.db.message import MessageRepository
@@ -101,7 +111,13 @@ class ConversationService:
         try:
             # Validate user ownership
             if conversation_data.user_id != user_id:
-                raise ValueError("User ID mismatch")
+                raise ValidationException(
+                    message="User ID mismatch",
+                    details={
+                        "expected_user_id": user_id,
+                        "provided_user_id": conversation_data.user_id,
+                    },
+                )
 
             # Create conversation
             conv_data = {
@@ -110,9 +126,9 @@ class ConversationService:
                 "user_id": user_id,
             }
 
-            record = await self.conversation_repo.create(conv_data)
+            record = await self.conversation_repo.create_conversation(conv_data)
             if not record:
-                raise Exception("Failed to create conversation")
+                raise DatabaseException(message="Failed to create conversation")
 
             conversation_response = ConversationResponse(
                 **self._transform_conversation_record(record)
@@ -120,9 +136,6 @@ class ConversationService:
 
             # Invalidate conversation caches for this user
             await self._invalidate_conversation_caches(user_id)
-
-            # Broadcast conversation creation to user's WebSocket connections
-            await self._broadcast_conversation_update(user_id, conversation_response)
 
             return conversation_response
         except Exception as e:
@@ -148,7 +161,7 @@ class ConversationService:
                     )
 
             # Fetch from database
-            record = await self.conversation_repo.get_by_id_and_user(
+            record = await self.conversation_repo.get_conversation_by_id_and_user(
                 conversation_id, user_id
             )
             if not record:
@@ -186,7 +199,7 @@ class ConversationService:
                 return None
 
             # Get messages
-            message_records = await self.message_repo.list_by_conversation(
+            message_records = await self.message_repo.list_messages_by_conversation(
                 conversation_id, limit=message_limit
             )
 
@@ -254,7 +267,7 @@ class ConversationService:
                     )
 
             # Fetch from database
-            records = await self.conversation_repo.list_by_user(
+            records = await self.conversation_repo.list_conversations_by_user(
                 user_id, limit=limit, offset=offset
             )
 
@@ -314,7 +327,7 @@ class ConversationService:
         """Update conversation information."""
         # Check if conversation exists and user owns it
         try:
-            existing = await self.conversation_repo.get_by_id_and_user(
+            existing = await self.conversation_repo.get_conversation_by_id_and_user(
                 conversation_id, user_id
             )
             if not existing:
@@ -340,7 +353,7 @@ class ConversationService:
                 conversation_id, user_id, conv_update
             )
             if not record:
-                raise RuntimeError("Failed to update conversation")
+                raise DatabaseException(message="Failed to update conversation")
 
             conversation_response = ConversationResponse(
                 **self._transform_conversation_record(record)
@@ -348,9 +361,6 @@ class ConversationService:
 
             # Invalidate conversation caches for this user and conversation
             await self._invalidate_conversation_caches(user_id, conversation_id)
-
-            # Broadcast conversation update to user's WebSocket connections
-            await self._broadcast_conversation_update(user_id, conversation_response)
 
             return conversation_response
         except Exception as e:
@@ -377,9 +387,6 @@ class ConversationService:
             # Invalidate conversation caches for this user (pinning affects lists)
             await self._invalidate_conversation_caches(user_id, conversation_id)
 
-            # Broadcast conversation update to user's WebSocket connections
-            await self._broadcast_conversation_update(user_id, conversation_response)
-
             return conversation_response
         except Exception as e:
             raise Exception(f"Failed to pin conversation: {e}")
@@ -388,7 +395,7 @@ class ConversationService:
         """Soft delete a conversation."""
         # Check if conversation exists and user owns it
         try:
-            existing = await self.conversation_repo.get_by_id_and_user(
+            existing = await self.conversation_repo.get_conversation_by_id_and_user(
                 conversation_id, user_id
             )
             if not existing:
@@ -411,7 +418,7 @@ class ConversationService:
         """Get message count for a conversation."""
         # Verify conversation ownership
         try:
-            conversation = await self.conversation_repo.get_by_id_and_user(
+            conversation = await self.conversation_repo.get_conversation_by_id_and_user(
                 conversation_id, user_id
             )
             if not conversation:
@@ -458,7 +465,7 @@ class ConversationService:
                     )
 
             # Fetch from database
-            records = await self.conversation_repo.list_by_user(
+            records = await self.conversation_repo.list_conversations_by_user(
                 user_id, limit=limit, offset=0
             )
 
@@ -518,15 +525,3 @@ class ConversationService:
             return await self.update_conversation(conversation_id, user_id, update_data)
         except Exception as e:
             raise Exception(f"Failed to archive conversation: {e}")
-
-    async def _broadcast_conversation_update(
-        self, user_id: int, conversation: ConversationResponse
-    ) -> None:
-        """Broadcast conversation update to user's WebSocket connections."""
-        try:
-            from app.utils.websocket_helpers import send_conversation_update
-
-            await send_conversation_update(str(user_id), conversation)
-        except Exception as e:
-            # Don't fail the main operation if WebSocket broadcast fails
-            logger.error(f"Failed to broadcast conversation update: {e}")
