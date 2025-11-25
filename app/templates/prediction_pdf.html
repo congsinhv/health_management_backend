@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kết quả dự đoán - VHealth</title>
+    {% if font_path %}
+    <style>
+      @font-face {
+        font-family: 'Noto Sans';
+        src: url('{{ font_path }}') format('woff2');
+      }
+    </style>
+    {% endif %}
     <style>
       * {
         margin: 0;

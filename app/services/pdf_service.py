@@ -50,6 +50,15 @@ class PdfGeneratorService:
         # Font configuration for better font handling
         self.font_config = FontConfiguration()
 
+        # Check font availability
+        self.font_path = FONT_DIR / "NotoSans-Regular.ttf"
+        self.font_available = self.font_path.exists()
+
+        if self.font_available:
+            logger.info(f"✅ Font file found at {self.font_path}")
+        else:
+            logger.warning(f"⚠️ Font file not found at {self.font_path} - will use system fonts")
+
         # GCS uploader (only if configured)
         if hasattr(settings, "gcp_public_bucket") and settings.gcp_public_bucket:
             self.gcs_uploader = GCSUploader(
@@ -384,7 +393,7 @@ class PdfGeneratorService:
             "health_analysis": health_analysis,
             "health_metrics": health_metrics,
             "status_class": status_class,
-            "font_path": str(FONT_DIR / "NotoSans-Regular.ttf"),
+            "font_path": str(self.font_path) if self.font_available else None,
         }
 
     def _map_boolean_display(self, value: Any, true_value: str = "Có", false_value: str = "Không") -> str:
@@ -437,20 +446,25 @@ class PdfGeneratorService:
             # Create HTML object with optimizations
             html = HTML(string=html_string)
 
-            # Use optimized CSS for better PDF generation
+            # Use optimized CSS for better PDF generation without unsupported properties
             css = CSS(string="""
                 @page {
                     margin: 1.5cm;
                     size: A4 portrait;
                 }
 
-                * {
-                    -webkit-print-color-adjust: exact !important;
-                    print-color-adjust: exact !important;
+                body {
+                    font-family: "DejaVu Sans", "Noto Sans", Arial, sans-serif;
+                    line-height: 1.6;
                 }
 
-                body {
-                    font-family: "DejaVu Sans", "Noto Sans", sans-serif;
+                /* Remove unsupported properties - WeasyPrint will ignore these */
+                .no-box-shadow {
+                    box-shadow: none !important;
+                }
+
+                .no-filter {
+                    filter: none !important;
                 }
             """)
 

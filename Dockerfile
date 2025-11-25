@@ -35,6 +35,8 @@ WORKDIR /app
 # Copy application code with correct structure
 COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser scripts/migrations/ ./migrations/
+# Ensure the font file is copied and available
+COPY --chown=appuser:appuser app/static/fonts/NotoSans-Regular.ttf ./app/static/fonts/
 
 # Add app directory to Python path
 ENV PYTHONPATH=/app
