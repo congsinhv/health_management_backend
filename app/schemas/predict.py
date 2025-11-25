@@ -65,11 +65,11 @@ class Exercise(BaseModel):
     sets: Optional[int] = None
     reps: Optional[int] = None
 
-    @field_validator('sets', 'reps', mode='before')
+    @field_validator("sets", "reps", mode="before")
     @classmethod
     def convert_na_to_none(cls, v):
         """Convert 'N/A' string to None for integer fields."""
-        if isinstance(v, str) and v.upper() in ('N/A', 'NA', 'NONE', ''):
+        if isinstance(v, str) and v.upper() in ("N/A", "NA", "NONE", ""):
             return None
         return v
 
