@@ -14,6 +14,8 @@ RUN mkdir -p /var/lib/apt/lists/partial && \
     libcairo2 \
     libglib2.0-0 \
     shared-mime-info \
+    fonts-dejavu-core \
+    fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Create appuser if it doesn't exist (base image may already have it)
