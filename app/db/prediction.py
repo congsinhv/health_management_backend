@@ -1,5 +1,5 @@
 """
-Prediction database operations using raw SQL queries.
+Prediction database operations using raw SQL queries with custom exception handling.
 """
 
 import json
@@ -7,6 +7,13 @@ import asyncpg
 from typing import Optional, Dict, Any
 from datetime import datetime
 from app.db.database import BaseRepository
+from app.exceptions import (
+    ResourceNotFoundException,
+    DatabaseException,
+    DatabaseConstraintException,
+    DuplicateResourceException,
+    PredictionException,
+)
 
 
 class PredictionRepository(BaseRepository):
@@ -17,7 +24,7 @@ class PredictionRepository(BaseRepository):
         prediction_id: str,
         user_input: Dict[str, Any],
         prediction_data: Dict[str, Any],
-    ) -> Optional[asyncpg.Record]:
+    ) -> asyncpg.Record:
         """
         Create a new prediction record.
 
@@ -27,7 +34,7 @@ class PredictionRepository(BaseRepository):
             prediction_data: PredictionResponse schema as dict
 
         Returns:
-            Created prediction record or None
+            Created prediction record
         """
         query = """
             INSERT INTO predictions (
@@ -37,17 +44,34 @@ class PredictionRepository(BaseRepository):
             RETURNING id, prediction_id, user_input, prediction_data,
                       pdf_url, created_at, updated_at
         """
-        # Convert dicts to JSON strings for JSONB columns
-        return await self.fetch_one(
-            query,
-            prediction_id,
-            json.dumps(user_input),
-            json.dumps(prediction_data),
-        )
+        try:
+            # Convert dicts to JSON strings for JSONB columns
+            result = await self.fetch_one(
+                query,
+                prediction_id,
+                json.dumps(user_input),
+                json.dumps(prediction_data),
+            )
+            if not result:
+                raise DatabaseException(
+                    message="Failed to create prediction",
+                    details={"prediction_id": prediction_id},
+                )
+            return result
+        except asyncpg.UniqueViolationError as e:
+            raise DuplicateResourceException(
+                message="Prediction with this ID already exists",
+                details={"prediction_id": prediction_id, "constraint": str(e)},
+            )
+        except asyncpg.PostgresError as e:
+            raise PredictionException(
+                message="Database error while creating prediction",
+                details={"prediction_id": prediction_id, "error": str(e)},
+            )
 
     async def get_prediction_by_prediction_id(
         self, prediction_id: str
-    ) -> Optional[asyncpg.Record]:
+    ) -> asyncpg.Record:
         """
         Get prediction by prediction_id (PUBLIC - no auth).
 
@@ -55,7 +79,7 @@ class PredictionRepository(BaseRepository):
             prediction_id: External prediction ID from PredictionResponse.id
 
         Returns:
-            Prediction record or None
+            Prediction record
         """
         query = """
             SELECT id, prediction_id, user_input, prediction_data,
@@ -63,11 +87,21 @@ class PredictionRepository(BaseRepository):
             FROM predictions
             WHERE prediction_id = $1 AND deleted_at IS NULL
         """
-        return await self.fetch_one(query, prediction_id)
+        try:
+            result = await self.fetch_one(query, prediction_id)
+            if not result:
+                raise ResourceNotFoundException(
+                    message="Prediction not found",
+                    details={"prediction_id": prediction_id},
+                )
+            return result
+        except asyncpg.PostgresError as e:
+            raise PredictionException(
+                message="Database error while fetching prediction",
+                details={"prediction_id": prediction_id, "error": str(e)},
+            )
 
-    async def update_pdf_url(
-        self, prediction_id: str, pdf_url: str
-    ) -> Optional[asyncpg.Record]:
+    async def update_pdf_url(self, prediction_id: str, pdf_url: str) -> asyncpg.Record:
         """
         Update prediction with generated PDF URL.
 
@@ -76,7 +110,7 @@ class PredictionRepository(BaseRepository):
             pdf_url: GCS public URL to PDF
 
         Returns:
-            Updated prediction record or None
+            Updated prediction record
         """
         query = """
             UPDATE predictions
@@ -85,9 +119,25 @@ class PredictionRepository(BaseRepository):
             RETURNING id, prediction_id, user_input, prediction_data,
                       pdf_url, created_at, updated_at
         """
-        return await self.fetch_one(query, prediction_id, pdf_url)
+        try:
+            result = await self.fetch_one(query, prediction_id, pdf_url)
+            if not result:
+                raise ResourceNotFoundException(
+                    message="Prediction not found for PDF URL update",
+                    details={"prediction_id": prediction_id, "pdf_url": pdf_url},
+                )
+            return result
+        except asyncpg.PostgresError as e:
+            raise PredictionException(
+                message="Database error while updating prediction PDF URL",
+                details={
+                    "prediction_id": prediction_id,
+                    "pdf_url": pdf_url,
+                    "error": str(e),
+                },
+            )
 
-    async def delete_prediction(self, prediction_id: str) -> Optional[asyncpg.Record]:
+    async def delete_prediction(self, prediction_id: str) -> asyncpg.Record:
         """
         Soft delete a prediction (optional feature).
 
@@ -95,7 +145,7 @@ class PredictionRepository(BaseRepository):
             prediction_id: External prediction ID
 
         Returns:
-            Deleted prediction record or None
+            Deleted prediction record
         """
         query = """
             UPDATE predictions
@@ -104,4 +154,16 @@ class PredictionRepository(BaseRepository):
             RETURNING id, prediction_id, user_input, prediction_data,
                       pdf_url, created_at, updated_at, deleted_at
         """
-        return await self.fetch_one(query, prediction_id)
+        try:
+            result = await self.fetch_one(query, prediction_id)
+            if not result:
+                raise ResourceNotFoundException(
+                    message="Prediction not found for deletion",
+                    details={"prediction_id": prediction_id},
+                )
+            return result
+        except asyncpg.PostgresError as e:
+            raise PredictionException(
+                message="Database error while deleting prediction",
+                details={"prediction_id": prediction_id, "error": str(e)},
+            )

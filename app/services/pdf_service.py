@@ -6,7 +6,7 @@ import logging
 import asyncio
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Union
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
@@ -74,17 +74,19 @@ class PdfGeneratorService:
     def _check_font_availability(self) -> None:
         """Check and log font availability for debugging."""
         font_regular = FONT_DIR / "SVN-Gilroy-Regular.otf"
-        
+
         logger.info(f"Font directory path: {FONT_DIR}")
         logger.info(f"Font directory exists: {FONT_DIR.exists()}")
-        
+
         if FONT_DIR.exists():
             try:
                 fonts_found = list(FONT_DIR.glob("*.otf"))
-                logger.info(f"OTF fonts found in directory: {[f.name for f in fonts_found]}")
+                logger.info(
+                    f"OTF fonts found in directory: {[f.name for f in fonts_found]}"
+                )
             except Exception as e:
                 logger.warning(f"Error listing font directory: {e}")
-        
+
         if font_regular.exists():
             logger.info(f"SVN-Gilroy-Regular.otf found at: {font_regular.absolute()}")
             self.font_available = True
@@ -137,7 +139,7 @@ class PdfGeneratorService:
 
             # 3. Upload to GCS if available
             if self.gcs_uploader:
-                timestamp = int(datetime.utcnow().timestamp())
+                timestamp = int(datetime.now(timezone.utc).timestamp())
                 filename = f"prediction_{prediction_id}_{timestamp}.pdf"
                 folder = "predictions"
 

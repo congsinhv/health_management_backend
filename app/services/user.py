@@ -24,7 +24,7 @@ from app.schemas.user import (
     GoogleOAuthCallback,
 )
 from app.schemas.user_profile import UserProfileCreate, UserProfileResponse
-from app.helpers import (
+from app.core.security import (
     hash_password,
     verify_password,
     create_access_token,

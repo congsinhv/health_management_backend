@@ -67,7 +67,7 @@ class QAMessages:
 QA_VOCAB_FILE = "tuvung.txt"  # Vietnamese vocabulary file
 
 
-def hash_question(question: str) -> str:
+def __hash_question(question: str) -> str:
     """
     Normalize and hash question for consistent cache keys.
 
@@ -86,7 +86,7 @@ def hash_question(question: str) -> str:
     return hashlib.md5(normalized.encode("utf-8")).hexdigest()[:16]
 
 
-def hash_content_for_summary(question: str, answers: List[Dict]) -> str:
+def __hash_content_for_summary(question: str, answers: List[Dict]) -> str:
     """
     Hash question and answers for summary caching.
 
@@ -426,7 +426,7 @@ class QAService:
         # Check cache for AI summary if available
         if self.cache_service and self.cache_service.enabled:
             try:
-                content_hash = hash_content_for_summary(
+                content_hash = _hash_content_for_summary(
                     user_question, collected_answers
                 )
                 cache_key = f"qa:summary:{content_hash}"
@@ -480,7 +480,7 @@ class QAService:
             # Cache the AI summary if available (30 days TTL)
             if self.cache_service and self.cache_service.enabled:
                 try:
-                    content_hash = hash_content_for_summary(
+                    content_hash = _hash_content_for_summary(
                         user_question, collected_answers
                     )
                     cache_key = f"qa:summary:{content_hash}"
@@ -528,7 +528,7 @@ class QAService:
         # Check cache first if available
         if self.cache_service and self.cache_service.enabled:
             try:
-                question_hash = hash_question(user_question)
+                question_hash = _hash_question(user_question)
                 cache_key = f"qa:answers:{question_hash}:{threshold}:{top_k}"
 
                 cached_result = await self.cache_service.get(cache_key)
@@ -608,7 +608,7 @@ class QAService:
         # Cache the result if available
         if self.cache_service and self.cache_service.enabled:
             try:
-                question_hash = hash_question(user_question)
+                question_hash = _hash_question(user_question)
                 cache_key = f"qa:answers:{question_hash}:{threshold}:{top_k}"
 
                 await self.cache_service.set_json(

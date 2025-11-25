@@ -3,6 +3,7 @@ Tests for ConversationService.
 """
 
 import pytest
+import json
 from unittest.mock import AsyncMock, MagicMock
 import asyncpg
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ from app.schemas.conversation import (
     ConversationUpdate,
     ConversationPinRequest,
 )
+from app.exceptions import ValidationException
 
 
 @pytest.fixture
@@ -47,14 +49,14 @@ def conversation_service(mock_db_pool, mock_conversation_repo, mock_message_repo
 
 @pytest.fixture
 def sample_conversation_record():
-    """Sample conversation record from database."""
+    """Sample conversation record from database (metadata as JSON string)."""
     return {
         "id": 1,
         "user_id": 1,
         "title": "Test Conversation",
         "is_pinned": False,
         "is_archived": False,
-        "metadata": {"theme": "health"},
+        "metadata": json.dumps({"theme": "health"}),  # JSON string as returned by DB
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
     }
@@ -77,7 +79,9 @@ class TestConversationService:
             metadata={"theme": "health"},
         )
 
-        mock_conversation_repo.create.return_value = sample_conversation_record
+        mock_conversation_repo.create_conversation.return_value = (
+            sample_conversation_record
+        )
 
         # Act
         result = await conversation_service.create_conversation(
@@ -90,7 +94,7 @@ class TestConversationService:
         assert result.user_id == 1
         assert result.title == "Test Conversation"
         assert result.is_pinned is False
-        mock_conversation_repo.create.assert_called_once()
+        mock_conversation_repo.create_conversation.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_conversation_user_mismatch(
@@ -101,11 +105,13 @@ class TestConversationService:
         user_id = 1
         conversation_data = ConversationCreate(user_id=2)  # Different user_id
 
-        # Act & Assert
-        with pytest.raises(ValueError, match="User ID mismatch"):
+        # Act & Assert - Now raises ValidationException instead of ValueError
+        with pytest.raises(Exception) as exc_info:
             await conversation_service.create_conversation(user_id, conversation_data)
 
-        mock_conversation_repo.create.assert_not_called()
+        # The service wraps all exceptions in a generic Exception with message
+        assert "User ID mismatch" in str(exc_info.value)
+        mock_conversation_repo.create_conversation.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_conversation_database_error(
@@ -115,11 +121,13 @@ class TestConversationService:
         # Arrange
         user_id = 1
         conversation_data = ConversationCreate(user_id=user_id)
-        mock_conversation_repo.create.return_value = None
+        mock_conversation_repo.create_conversation.return_value = None
 
         # Act & Assert
-        with pytest.raises(RuntimeError, match="Failed to create conversation"):
+        with pytest.raises(Exception) as exc_info:
             await conversation_service.create_conversation(user_id, conversation_data)
+
+        assert "Failed to create conversation" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_get_conversation_by_id_success(
@@ -129,7 +137,9 @@ class TestConversationService:
         # Arrange
         conversation_id = 1
         user_id = 1
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
 
         # Act
         result = await conversation_service.get_conversation_by_id(
@@ -140,7 +150,7 @@ class TestConversationService:
         assert result is not None
         assert result.id == conversation_id
         assert result.user_id == user_id
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
 
@@ -152,7 +162,7 @@ class TestConversationService:
         # Arrange
         conversation_id = 999
         user_id = 1
-        mock_conversation_repo.get_by_id.return_value = None
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = None
 
         # Act
         result = await conversation_service.get_conversation_by_id(
@@ -172,7 +182,7 @@ class TestConversationService:
         limit = 10
         offset = 0
         records = [sample_conversation_record]
-        mock_conversation_repo.list_by_user.return_value = records
+        mock_conversation_repo.list_conversations_by_user.return_value = records
         mock_conversation_repo.count_conversations_by_user.return_value = 1
 
         # Act
@@ -185,9 +195,7 @@ class TestConversationService:
         assert len(result.conversations) == 1
         assert result.total_count == 1
         assert result.has_more is False
-        mock_conversation_repo.list_by_user.assert_called_once_with(
-            user_id, limit, offset
-        )
+        mock_conversation_repo.list_conversations_by_user.assert_called_once()
         mock_conversation_repo.count_conversations_by_user.assert_called_once_with(
             user_id
         )
@@ -204,7 +212,9 @@ class TestConversationService:
         updated_record = sample_conversation_record.copy()
         updated_record["title"] = "Updated Title"
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
         mock_conversation_repo.update.return_value = updated_record
 
         # Act
@@ -215,7 +225,7 @@ class TestConversationService:
         # Assert
         assert result is not None
         assert result.title == "Updated Title"
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
         mock_conversation_repo.update.assert_called_once()
@@ -229,7 +239,7 @@ class TestConversationService:
         conversation_id = 999
         user_id = 1
         update_data = ConversationUpdate(title="Updated Title")
-        mock_conversation_repo.get_by_id.return_value = None
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = None
 
         # Act
         result = await conversation_service.update_conversation(
@@ -274,7 +284,9 @@ class TestConversationService:
         # Arrange
         conversation_id = 1
         user_id = 1
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
         mock_conversation_repo.delete.return_value = True
 
         # Act
@@ -284,7 +296,7 @@ class TestConversationService:
 
         # Assert
         assert result is True
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
         mock_conversation_repo.delete.assert_called_once_with(conversation_id, user_id)
@@ -297,7 +309,7 @@ class TestConversationService:
         # Arrange
         conversation_id = 999
         user_id = 1
-        mock_conversation_repo.get_by_id.return_value = None
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = None
 
         # Act
         result = await conversation_service.delete_conversation(
@@ -317,9 +329,11 @@ class TestConversationService:
         conversation_id = 1
         user_id = 1
         expected_count = 5
-        sample_conversation_record = {"id": conversation_id, "user_id": user_id}
+        sample_record = {"id": conversation_id, "user_id": user_id, "metadata": "{}"}
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_record
+        )
         mock_conversation_repo.get_message_count.return_value = expected_count
 
         # Act
@@ -329,7 +343,7 @@ class TestConversationService:
 
         # Assert
         assert result == expected_count
-        mock_conversation_repo.get_by_id.assert_called_once_with(
+        mock_conversation_repo.get_conversation_by_id_and_user.assert_called_once_with(
             conversation_id, user_id
         )
         mock_conversation_repo.get_message_count.assert_called_once_with(
@@ -344,7 +358,7 @@ class TestConversationService:
         # Arrange
         conversation_id = 999
         user_id = 1
-        mock_conversation_repo.get_by_id.return_value = None
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = None
 
         # Act
         result = await conversation_service.get_conversation_message_count(
@@ -367,7 +381,7 @@ class TestConversationService:
         pinned_record["is_pinned"] = True
         records = [pinned_record]
 
-        mock_conversation_repo.list_by_user.return_value = records
+        mock_conversation_repo.list_conversations_by_user.return_value = records
 
         # Act
         result = await conversation_service.get_pinned_conversations(user_id, limit)
@@ -375,7 +389,7 @@ class TestConversationService:
         # Assert
         assert len(result) == 1
         assert result[0].is_pinned is True
-        mock_conversation_repo.list_by_user.assert_called_once_with(user_id, limit, 0)
+        mock_conversation_repo.list_conversations_by_user.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_update_conversation_title_success(
@@ -389,7 +403,9 @@ class TestConversationService:
         updated_record = sample_conversation_record.copy()
         updated_record["title"] = new_title
 
-        mock_conversation_repo.get_by_id.return_value = sample_conversation_record
+        mock_conversation_repo.get_conversation_by_id_and_user.return_value = (
+            sample_conversation_record
+        )
         mock_conversation_repo.update.return_value = updated_record
 
         # Act

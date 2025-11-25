@@ -1,3 +1,14 @@
+from app.exceptions import (
+    PredictionException,
+    PredictionModelException,
+    PredictionDataException,
+    ModelNotLoadedException,
+    ExternalServiceException,
+    DatabaseException,
+    ValidationException,
+    ServiceUnavailableException,
+)
+from app.core.error_context import ErrorContext
 import os
 import joblib
 import pandas as pd
@@ -95,7 +106,10 @@ class ObesityPredictorComplete:
                 "GCS bucket not configured. Please set gcp_model_bucket in settings "
                 "or place model files manually in models_obesity/ directory"
             )
-            raise ValueError("Model files not found and GCS bucket not configured")
+            raise PredictionModelException(
+                message="Model files not found and GCS bucket not configured",
+                details={"gcp_model_bucket": settings.gcp_model_bucket},
+            )
 
         logger.info("Downloading obesity prediction models from GCS...")
 

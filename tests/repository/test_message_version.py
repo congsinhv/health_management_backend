@@ -77,7 +77,7 @@ class TestMessageVersionRepository:
         mock_connection.fetchrow.return_value = expected_record
 
         # Act
-        result = await message_version_repo.create(version_data)
+        result = await message_version_repo.create_message_version(version_data)
 
         # Assert
         assert result is not None
@@ -97,7 +97,7 @@ class TestMessageVersionRepository:
         assert params[0] == 1  # message_id
         assert params[1] == 2  # version_number
         assert params[2] == "Edited message content"  # content
-        assert params[3] == {"edited": True}  # metadata
+        assert params[3] == '{"edited": true}'  # metadata (JSON serialized)
         assert params[4] == 1  # user_id
 
     @pytest.mark.asyncio
@@ -127,7 +127,7 @@ class TestMessageVersionRepository:
         mock_connection.fetchrow.return_value = expected_record
 
         # Act
-        result = await message_version_repo.create(version_data)
+        result = await message_version_repo.create_message_version(version_data)
 
         # Assert
         assert result is not None
@@ -175,7 +175,7 @@ class TestMessageVersionRepository:
         mock_connection.fetch.return_value = expected_records
 
         # Act
-        result = await message_version_repo.list_by_message(message_id)
+        result = await message_version_repo.list_message_versions(message_id)
 
         # Assert
         assert len(result) == 3
@@ -260,7 +260,9 @@ class TestMessageVersionRepository:
         mock_connection.fetchrow.return_value = expected_record
 
         # Act
-        result = await message_version_repo.get_by_version(message_id, version_number)
+        result = await message_version_repo.get_message_version(
+            message_id, version_number
+        )
 
         # Assert
         assert result is not None
@@ -281,6 +283,8 @@ class TestMessageVersionRepository:
         self, message_version_repo, mock_pool, mock_connection
     ):
         """Test specific version retrieval when version not found."""
+        from app.exceptions import ResourceNotFoundException
+
         # Arrange
         message_id = 1
         version_number = 999
@@ -288,11 +292,11 @@ class TestMessageVersionRepository:
         mock_pool.acquire.return_value.__aenter__.return_value = mock_connection
         mock_connection.fetchrow.return_value = None
 
-        # Act
-        result = await message_version_repo.get_by_version(message_id, version_number)
+        # Act & Assert
+        with pytest.raises(ResourceNotFoundException) as exc_info:
+            await message_version_repo.get_message_version(message_id, version_number)
 
-        # Assert
-        assert result is None
+        assert "Message version not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_count_versions_success(
@@ -454,6 +458,8 @@ class TestMessageVersionRepository:
         self, message_version_repo, mock_pool, mock_connection
     ):
         """Test version restoration when version not found."""
+        from app.exceptions import ResourceNotFoundException
+
         # Arrange
         message_id = 1
         version_number = 999
@@ -462,13 +468,13 @@ class TestMessageVersionRepository:
         mock_pool.acquire.return_value.__aenter__.return_value = mock_connection
         mock_connection.fetchrow.return_value = None
 
-        # Act
-        result = await message_version_repo.restore_version(
-            message_id, version_number, user_id
-        )
+        # Act & Assert
+        with pytest.raises(ResourceNotFoundException) as exc_info:
+            await message_version_repo.restore_version(
+                message_id, version_number, user_id
+            )
 
-        # Assert
-        assert result is None
+        assert "Message version not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_versions_for_message_success(

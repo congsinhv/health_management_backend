@@ -1,135 +1,125 @@
 """
-Utility functions for the application.
+DEPRECATED: This module is deprecated. Use the following instead:
+- app.core.security for password and JWT functions
+- app.auth.utils for authentication helpers
+- app.core.utils for general utilities
+
+This module provides backward compatibility through redirect imports
+with deprecation warnings. Please update your imports to use the new modules.
+
+Migration guide:
+- from app.helpers import hash_password → from app.core.security import hash_password
+- from app.helpers import verify_password → from app.core.security import verify_password
+- from app.helpers import create_access_token → from app.core.security import create_access_token
+- from app.helpers import verify_access_token → from app.core.security import verify_access_token
+- from app.helpers import create_refresh_token → from app.core.security import create_refresh_token
+- from app.helpers import verify_refresh_token → from app.core.security import verify_refresh_token
+- from app.helpers import hash_refresh_token → from app.core.security import hash_refresh_token
+- from app.helpers import create_verification_token → from app.core.security import create_verification_token
+- from app.helpers import verify_verification_token → from app.core.security import verify_verification_token
 """
 
-from datetime import datetime, timedelta
-from typing import Optional, Any, Dict
-from passlib.context import CryptContext
-from jose import JWTError, jwt
-import hashlib
-from app.config import settings
-
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import warnings
 
 
-def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
-    return pwd_context.hash(password)
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def create_access_token(
-    data: Dict[str, Any], expires_delta: Optional[timedelta] = None
-) -> str:
-    """Create a JWT access token."""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=settings.access_token_expire_minutes
-        )
-
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
-        to_encode, settings.secret_key, algorithm=settings.algorithm
+def hash_password(*args, **kwargs):
+    warnings.warn(
+        "helpers.hash_password is deprecated. Use app.core.security.hash_password",
+        DeprecationWarning,
+        stacklevel=2,
     )
-    return encoded_jwt
+    from app.core.security import hash_password as _hash_password
+
+    return _hash_password(*args, **kwargs)
 
 
-def verify_access_token(token: str) -> Optional[Dict[str, Any]]:
-    """Verify and decode a JWT access token."""
-    try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
-        return payload
-    except JWTError:
-        return None
-
-
-def create_refresh_token(
-    data: Dict[str, Any], expires_delta: Optional[timedelta] = None
-) -> str:
-    """Create a JWT refresh token."""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
-
-    to_encode.update({"exp": expire, "type": "refresh"})
-    encoded_jwt = jwt.encode(
-        to_encode, settings.secret_key, algorithm=settings.algorithm
+def verify_password(*args, **kwargs):
+    warnings.warn(
+        "helpers.verify_password is deprecated. Use app.core.security.verify_password",
+        DeprecationWarning,
+        stacklevel=2,
     )
-    return encoded_jwt
+    from app.core.security import verify_password as _verify_password
+
+    return _verify_password(*args, **kwargs)
 
 
-def verify_refresh_token(token: str) -> Optional[Dict[str, Any]]:
-    """Verify and decode a JWT refresh token."""
-    try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+def create_access_token(*args, **kwargs):
+    warnings.warn(
+        "helpers.create_access_token is deprecated. Use app.core.security.create_access_token",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from app.core.security import create_access_token as _create_access_token
 
-        # Check if this is a refresh token
-        if payload.get("type") != "refresh":
-            return None
-
-        return payload
-    except JWTError:
-        return None
+    return _create_access_token(*args, **kwargs)
 
 
-def hash_refresh_token(token: str) -> str:
-    """Hash a refresh token for secure database storage using SHA256.
+def verify_access_token(*args, **kwargs):
+    warnings.warn(
+        "helpers.verify_access_token is deprecated. Use app.core.security.verify_access_token",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from app.core.security import verify_access_token as _verify_access_token
 
-    Uses SHA256 (deterministic) instead of bcrypt so we can verify tokens
-    by comparing hashes directly.
-    """
-    return hashlib.sha256(token.encode()).hexdigest()
+    return _verify_access_token(*args, **kwargs)
 
 
-def create_verification_token(
-    email: str, token_type: str = "email_verification"
-) -> str:
-    """Create a token for email verification or password reset."""
-    expire_minutes = (
-        settings.email_verification_expire_minutes
-        if token_type == "email_verification"
-        else settings.password_reset_expire_minutes
+def create_refresh_token(*args, **kwargs):
+    warnings.warn(
+        "helpers.create_refresh_token is deprecated. Use app.core.security.create_refresh_token",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from app.core.security import create_refresh_token as _create_refresh_token
+
+    return _create_refresh_token(*args, **kwargs)
+
+
+def verify_refresh_token(*args, **kwargs):
+    warnings.warn(
+        "helpers.verify_refresh_token is deprecated. Use app.core.security.verify_refresh_token",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from app.core.security import verify_refresh_token as _verify_refresh_token
+
+    return _verify_refresh_token(*args, **kwargs)
+
+
+def hash_refresh_token(*args, **kwargs):
+    warnings.warn(
+        "helpers.hash_refresh_token is deprecated. Use app.core.security.hash_refresh_token",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from app.core.security import hash_refresh_token as _hash_refresh_token
+
+    return _hash_refresh_token(*args, **kwargs)
+
+
+def create_verification_token(*args, **kwargs):
+    warnings.warn(
+        "helpers.create_verification_token is deprecated. Use app.core.security.create_verification_token",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from app.core.security import (
+        create_verification_token as _create_verification_token,
     )
 
-    expire = datetime.utcnow() + timedelta(minutes=expire_minutes)
-    to_encode = {
-        "sub": email,
-        "exp": expire,
-        "type": token_type,
-    }
+    return _create_verification_token(*args, **kwargs)
 
-    encoded_jwt = jwt.encode(
-        to_encode, settings.secret_key, algorithm=settings.algorithm
+
+def verify_verification_token(*args, **kwargs):
+    warnings.warn(
+        "helpers.verify_verification_token is deprecated. Use app.core.security.verify_verification_token",
+        DeprecationWarning,
+        stacklevel=2,
     )
-    return encoded_jwt
+    from app.core.security import (
+        verify_verification_token as _verify_verification_token,
+    )
 
-
-def verify_verification_token(token: str, expected_type: str) -> Optional[str]:
-    """Verify email verification or password reset token."""
-    try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
-
-        # Check token type
-        if payload.get("type") != expected_type:
-            return None
-
-        # Return email from token
-        return payload.get("sub")
-    except JWTError:
-        return None
+    return _verify_verification_token(*args, **kwargs)

@@ -8,6 +8,13 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
 from app.config import logger
+from app.exceptions import (
+    ResourceNotFoundException,
+    ValidationException,
+    DatabaseException,
+    ServiceUnavailableException,
+)
+from app.core.error_context import ErrorContext
 from app.db.message import MessageRepository
 from app.db.message_version import MessageVersionRepository
 from app.db.conversation import ConversationRepository
@@ -101,11 +108,14 @@ class MessageService:
     ) -> MessageResponse:
         """Create a new message."""
         # Validate user ownership of conversation
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
-            raise ValueError("Conversation not found or access denied")
+            raise ValidationException(
+                message="Conversation not found or access denied",
+                details={"conversation_id": conversation_id, "user_id": user_id},
+            )
         elif conversation.get("is_archived"):
             raise ValueError("Conversation is archived")
         elif conversation.get("title") == "Cuộc trò chuyện mới":
@@ -128,19 +138,14 @@ class MessageService:
             "metadata": message_data.metadata,
         }
 
-        record = await self.message_repo.create(msg_data)
+        record = await self.message_repo.create_message(msg_data)
         if not record:
-            raise RuntimeError("Failed to create message")
+            raise DatabaseException(message="Failed to create message")
 
         message_response = MessageResponse(**self._transform_message_record(record))
 
         # Invalidate caches for this conversation
         await self._invalidate_message_caches(conversation_id)
-
-        # Broadcast message creation to conversation participants
-        await self._broadcast_message_created(
-            message_response, conversation_id, exclude_user=str(user_id)
-        )
 
         return message_response
 
@@ -149,14 +154,14 @@ class MessageService:
     ) -> Optional[MessageResponse]:
         """Get message by ID with user authorization."""
         # First verify user owns the conversation
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
             return None
 
         # Get message
-        record = await self.message_repo.get_by_id(message_id, conversation_id)
+        record = await self.message_repo.get_message(message_id, conversation_id)
         if not record:
             return None
 
@@ -171,11 +176,14 @@ class MessageService:
     ) -> MessageList:
         """List messages for a conversation with cursor pagination."""
         # Verify user owns the conversation
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
-            raise ValueError("Conversation not found or access denied")
+            raise ValidationException(
+                message="Conversation not found or access denied",
+                details={"conversation_id": conversation_id, "user_id": user_id},
+            )
 
         # Check cache (only cache recent messages without pagination for better performance)
         cache_key = None
@@ -193,7 +201,7 @@ class MessageService:
                     logger.warning(f"Cache retrieval failed for {cache_key}: {e}")
 
         # Cache miss or pagination - get from database
-        records = await self.message_repo.list_by_conversation(
+        records = await self.message_repo.list_messages_by_conversation(
             conversation_id, limit=limit, before=before
         )
 
@@ -230,14 +238,20 @@ class MessageService:
         # Verify user can edit the message
         can_edit = await self.message_repo.can_user_edit_message(message_id, user_id)
         if not can_edit:
-            raise ValueError("Cannot edit message: access denied")
+            raise ValidationException(
+                message="Cannot edit message: access denied",
+                details={"message_id": message_id, "user_id": user_id},
+            )
 
         # Verify conversation ownership
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
-            raise ValueError("Conversation not found or access denied")
+            raise ValidationException(
+                message="Conversation not found or access denied",
+                details={"conversation_id": conversation_id, "user_id": user_id},
+            )
 
         # Update message
         msg_update = {
@@ -254,11 +268,6 @@ class MessageService:
         # Invalidate caches for this conversation
         await self._invalidate_message_caches(conversation_id)
 
-        # Broadcast message update to conversation participants
-        await self._broadcast_message_updated(
-            message_response, conversation_id, exclude_user=str(user_id)
-        )
-
         return message_response
 
     async def delete_message(
@@ -271,22 +280,20 @@ class MessageService:
             raise ValueError("Cannot delete message: access denied")
 
         # Verify conversation ownership
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
-            raise ValueError("Conversation not found or access denied")
+            raise ValidationException(
+                message="Conversation not found or access denied",
+                details={"conversation_id": conversation_id, "user_id": user_id},
+            )
 
         success = await self.message_repo.delete(message_id, conversation_id)
 
         if success:
             # Invalidate caches for this conversation
             await self._invalidate_message_caches(conversation_id)
-
-            # Broadcast message deletion to conversation participants
-            await self._broadcast_message_deleted(
-                message_id, conversation_id, exclude_user=str(user_id)
-            )
 
         return success
 
@@ -300,7 +307,7 @@ class MessageService:
             return None
 
         # Get version history
-        version_records = await self.version_repo.list_by_message(message_id)
+        version_records = await self.version_repo.list_message_versions(message_id)
         versions = []
         for version_record in version_records:
             version_data = {
@@ -326,7 +333,7 @@ class MessageService:
             return None
 
         # Get version history
-        version_records = await self.version_repo.list_by_message(message_id)
+        version_records = await self.version_repo.list_message_versions(message_id)
         versions = []
         for version_record in version_records:
             version_data = {
@@ -356,14 +363,17 @@ class MessageService:
             raise ValueError("Cannot restore message: access denied")
 
         # Verify conversation ownership
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
-            raise ValueError("Conversation not found or access denied")
+            raise ValidationException(
+                message="Conversation not found or access denied",
+                details={"conversation_id": conversation_id, "user_id": user_id},
+            )
 
         # Get version to restore
-        version = await self.version_repo.get_by_message_and_version(
+        version = await self.version_repo.get_message_version(
             message_id, restore_request.version_number
         )
         if not version:
@@ -386,7 +396,7 @@ class MessageService:
     ) -> Optional[MessageResponse]:
         """Get the latest message in a conversation."""
         # Verify conversation ownership
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
@@ -429,7 +439,7 @@ class MessageService:
     ) -> Optional[int]:
         """Count messages in a conversation."""
         # Verify conversation ownership
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
@@ -442,11 +452,14 @@ class MessageService:
     ) -> List[MessageResponse]:
         """Get all messages from a specific user in a conversation."""
         # Verify conversation ownership
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
-            raise ValueError("Conversation not found or access denied")
+            raise ValidationException(
+                message="Conversation not found or access denied",
+                details={"conversation_id": conversation_id, "user_id": user_id},
+            )
 
         records = await self.message_repo.get_user_messages_in_conversation(
             conversation_id, target_user_id
@@ -480,11 +493,14 @@ class MessageService:
     ) -> List[MessageResponse]:
         """Get messages created after a timestamp."""
         # Verify conversation ownership
-        conversation = await self.conversation_repo.get_by_id_and_user(
+        conversation = await self.conversation_repo.get_conversation_by_id_and_user(
             conversation_id, user_id
         )
         if not conversation:
-            raise ValueError("Conversation not found or access denied")
+            raise ValidationException(
+                message="Conversation not found or access denied",
+                details={"conversation_id": conversation_id, "user_id": user_id},
+            )
 
         records = await self.message_repo.get_messages_after_timestamp(
             conversation_id, timestamp, limit
@@ -496,45 +512,3 @@ class MessageService:
             messages.append(MessageResponse(**msg_data))
 
         return messages
-
-    async def _broadcast_message_created(
-        self,
-        message: MessageResponse,
-        conversation_id: int,
-        exclude_user: Optional[str] = None,
-    ) -> None:
-        """Broadcast message creation to conversation participants."""
-        try:
-            from app.utils.websocket_helpers import broadcast_message_created
-
-            await broadcast_message_created(message, conversation_id, exclude_user)
-        except Exception as e:
-            # Don't fail the main operation if WebSocket broadcast fails
-            pass
-
-    async def _broadcast_message_updated(
-        self,
-        message: MessageResponse,
-        conversation_id: int,
-        exclude_user: Optional[str] = None,
-    ) -> None:
-        """Broadcast message update to conversation participants."""
-        try:
-            from app.utils.websocket_helpers import broadcast_message_updated
-
-            await broadcast_message_updated(message, conversation_id, exclude_user)
-        except Exception as e:
-            # Don't fail the main operation if WebSocket broadcast fails
-            pass
-
-    async def _broadcast_message_deleted(
-        self, message_id: int, conversation_id: int, exclude_user: Optional[str] = None
-    ) -> None:
-        """Broadcast message deletion to conversation participants."""
-        try:
-            from app.utils.websocket_helpers import broadcast_message_deleted
-
-            await broadcast_message_deleted(message_id, conversation_id, exclude_user)
-        except Exception as e:
-            # Don't fail the main operation if WebSocket broadcast fails
-            pass
