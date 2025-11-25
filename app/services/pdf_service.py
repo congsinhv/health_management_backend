@@ -546,7 +546,7 @@ class PdfGeneratorService:
                 {font_css}
                 
                 @page {{
-                    margin: 1.5cm;
+                    margin: 1cm;
                     size: A4 portrait;
                 }}
 

@@ -33,7 +33,7 @@
       {% endif %}
 
       @page {
-        margin: 1.5cm;
+        margin: 1cm;
         size: A4 portrait;
       }
 
@@ -44,10 +44,24 @@
         padding: 0;
         background: white;
         color: #1a1a1a;
+        font-size: 12px;
       }
 
       .container {
         margin: 0 auto;
+      }
+
+      /* Page break utilities */
+      .page-break-before {
+        page-break-before: always;
+      }
+
+      .page-break-after {
+        page-break-after: always;
+      }
+
+      .avoid-break {
+        page-break-inside: avoid;
       }
 
       /* Header */
@@ -61,9 +75,7 @@
 
       /* Main Layout */
       .main-content {
-        display: flex;
-        flex-direction: column;
-        gap: 24px;
+        display: block;
       }
 
       /* Sidebar */
@@ -71,12 +83,12 @@
         border-radius: 16px;
         padding: 24px;
         border: 2px solid rgba(0, 0, 0, 0.04);
-        order: 1;
         background: white;
+        margin-bottom: 20px;
       }
 
       .center-content {
-        order: 2;
+        margin-bottom: 20px;
       }
 
       .sidebar h3 {
@@ -135,9 +147,7 @@
 
       /* Center Content */
       .prediction-overview {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 24px;
+        margin-bottom: 20px;
       }
 
       .section-header {
@@ -156,6 +166,7 @@
         border: 2px solid rgba(0, 0, 0, 0.04);
         border-radius: 16px;
         padding: 16px;
+        margin-bottom: 20px;
       }
 
       .chart-circle {
@@ -211,13 +222,17 @@
         font-weight: 600;
         margin-bottom: 24px;
         letter-spacing: -0.3px;
-        display: flex;
-        align-items: center;
-        flex-direction: column;
-        gap: 4px;
+        display: block;
+        text-align: center;
       }
 
-      .health-analysis h3 span:last-child {
+      .health-analysis h3 .title-main {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .health-analysis h3 .title-note {
+        display: block;
         font-size: 12px;
         color: #999;
         font-weight: 400;
@@ -301,6 +316,7 @@
         border: 2px solid rgba(0, 0, 0, 0.04);
         border-radius: 16px;
         padding: 16px 16px 0 16px;
+        margin-bottom: 20px;
       }
 
       .health-cards-container h3 {
@@ -313,16 +329,11 @@
       @media print {
         body {
           margin: 0;
-          padding: 10px;
+          padding: 0;
         }
         .container {
           margin: 0;
-        }
-        .sidebar,
-        .prediction-chart,
-        .health-cards-container,
-        .health-analysis {
-          page-break-inside: avoid;
+          padding: 0;
         }
       }
     </style>
@@ -683,8 +694,8 @@
           <!-- Health Analysis -->
           <div class="health-analysis">
             <h3>
-              <span>Phân tích sức khỏe qua trên kết quả dự đoán</span>
-              <span>* Phân tích chỉ mang tính tham khảo </span>
+              <span class="title-main">Phân tích sức khỏe qua trên kết quả dự đoán</span>
+              <span class="title-note">* Phân tích chỉ mang tính tham khảo</span>
             </h3>
 
             {% for paragraph in health_analysis %}
