@@ -486,6 +486,7 @@ class PdfGeneratorService:
                     box-shadow: none !important;
                     filter: none !important;
                     text-shadow: none !important;
+                    transform: none !important;
                 }
 
                 /* Force readable colors */
