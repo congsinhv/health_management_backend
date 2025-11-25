@@ -2,6 +2,8 @@
 
 A modern FastAPI application for health management with intelligent Q&A capabilities powered by Vietnamese sentence transformers (SBERT).
 
+**For Claude Code Users:** See [CLAUDE.md](./CLAUDE.md) for development commands, architecture patterns, and critical implementation details.
+
 ## Overview
 
 Health Management API provides accessible Vietnamese health information through semantic search and AI-powered summarization. The system supports conversation-based interactions, comprehensive user management, and real-time health question answering.
@@ -405,12 +407,26 @@ See [`docs/system-architecture.md`](docs/system-architecture.md) for detailed ar
 
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
+Comprehensive technical documentation is available in the `docs/` directory:
 
-- **[Project Overview & PDR](docs/project-overview-pdr.md)** - Project goals, features, requirements, and success criteria
-- **[Codebase Summary](docs/codebase-summary.md)** - Complete codebase structure, components, and technology stack
-- **[Code Standards](docs/code-standards.md)** - Coding conventions, architecture patterns, and best practices
-- **[System Architecture](docs/system-architecture.md)** - High-level architecture, data flows, and deployment infrastructure
+### For Developers
+
+- **[CLAUDE.md](./CLAUDE.md)** - Claude Code instance guide with development commands, architecture patterns, and critical gotchas
+- **[Code Standards](docs/code-standards.md)** - Coding conventions, naming standards, testing guidelines, best practices, and Git workflow
+- **[Deployment Guide](docs/deployment-guide.md)** - Comprehensive deployment instructions, Jenkins pipeline, Docker builds, and troubleshooting
+
+### Core Documentation
+
+- **[Project Overview & PDR](docs/project-overview-pdr.md)** - Vision, goals, features, functional/non-functional requirements, target users, business context, and roadmap
+- **[System Architecture](docs/system-architecture.md)** - High-level architecture, component design, data flows, infrastructure, security, performance, and deployment
+- **[Codebase Summary](docs/codebase-summary.md)** - Complete directory structure, key modules, dependencies, code organization patterns, and development workflow
+- **[Project Roadmap](docs/project-roadmap.md)** - Development status, completed features, planned enhancements, and technical debt
+
+### Additional Resources
+
+- **[Redis Caching Guide](docs/redis-caching-implementation.md)** - Cache implementation, performance optimization, and monitoring
+- **[Cache Developer Guide](docs/cache-handoff-guide.md)** - Developer-focused caching guide with examples
+- **[Terraform Infrastructure](terraform/README.md)** - Infrastructure as Code documentation for GCP deployment
 
 ## Development Guidelines
 
