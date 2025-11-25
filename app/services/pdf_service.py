@@ -467,11 +467,44 @@ class PdfGeneratorService:
             Exception: If PDF generation fails
         """
         try:
+            logger.info(f"HTML string length: {len(html_string)} characters")
+
             # Create HTML object with optimizations
             html = HTML(string=html_string)
 
+            logger.info("HTML object created successfully")
+
+            # WeasyPrint-compatible CSS override
+            css = CSS(string="""
+                @page {
+                    margin: 1.5cm;
+                    size: A4 portrait;
+                }
+
+                /* Disable unsupported properties */
+                * {
+                    box-shadow: none !important;
+                    filter: none !important;
+                    text-shadow: none !important;
+                }
+
+                /* Force readable colors */
+                body {
+                    font-family: "Noto Sans", "DejaVu Sans", Arial, sans-serif !important;
+                    color: #1a1a1a !important;
+                    background: white !important;
+                }
+
+                /* Ensure text visibility */
+                h1, h2, h3, h4, h5, h6, p, span, div {
+                    color: inherit !important;
+                }
+            """)
+
             # Generate PDF with font configuration and CSS
-            pdf_bytes = html.write_pdf(font_config=self.font_config)
+            logger.info("Starting PDF generation with WeasyPrint")
+            pdf_bytes = html.write_pdf(stylesheets=[css], font_config=self.font_config)
+            logger.info(f"PDF generation successful: {len(pdf_bytes)} bytes")
 
             return pdf_bytes
 
@@ -509,6 +542,34 @@ class PdfGeneratorService:
         font_config = FontConfiguration()
         html = HTML(string=html_string)
         return html.write_pdf(font_config=font_config)
+
+    async def test_simple_pdf(self) -> Optional[bytes]:
+        """
+        Generate a simple test PDF to verify WeasyPrint functionality.
+
+        Returns:
+            PDF bytes or None if failed
+        """
+        try:
+            # Render simple test template
+            context = {
+                "test": True,
+                "font_path": None
+            }
+            html_string = await self._render_html_safe("test_pdf.html", context)
+
+            # Generate PDF
+            pdf_bytes = await asyncio.get_event_loop().run_in_executor(
+                self.executor_pool,
+                partial(self._html_to_pdf_optimized, html_string, context)
+            )
+
+            logger.info(f"Test PDF generated successfully: {len(pdf_bytes)} bytes")
+            return pdf_bytes
+
+        except Exception as e:
+            logger.error(f"Test PDF generation failed: {e}", exc_info=True)
+            return None
 
     async def cleanup(self):
         """Clean up resources when the service is shut down."""
