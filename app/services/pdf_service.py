@@ -404,6 +404,36 @@ class PdfGeneratorService:
             elif isinstance(health_analysis_obj, list):
                 health_analysis = health_analysis_obj
 
+        # Get font paths for Vietnamese support (SVN-Gilroy family)
+        font_regular = FONT_DIR / "SVN-Gilroy-Regular.otf"
+        font_medium = FONT_DIR / "SVN-Gilroy-Medium.otf"
+        font_semibold = FONT_DIR / "SVN-Gilroy-SemiBold.otf"
+        font_bold = FONT_DIR / "SVN-Gilroy-Bold.otf"
+
+        fonts = {}
+        if font_regular.exists():
+            fonts["regular"] = f"file://{font_regular.absolute()}"
+            fonts["medium"] = (
+                f"file://{font_medium.absolute()}"
+                if font_medium.exists()
+                else fonts["regular"]
+            )
+            fonts["semibold"] = (
+                f"file://{font_semibold.absolute()}"
+                if font_semibold.exists()
+                else fonts["regular"]
+            )
+            fonts["bold"] = (
+                f"file://{font_bold.absolute()}"
+                if font_bold.exists()
+                else fonts["regular"]
+            )
+            logger.info(f"Using SVN-Gilroy Vietnamese fonts from {FONT_DIR}")
+        else:
+            logger.warning(
+                f"SVN-Gilroy fonts not found at {FONT_DIR}, falling back to system fonts"
+            )
+
         return {
             "prediction_id": prediction_record["prediction_id"],
             "created_at": prediction_record["created_at"].strftime("%d/%m/%Y %H:%M"),
@@ -412,7 +442,7 @@ class PdfGeneratorService:
             "health_analysis": health_analysis,
             "health_metrics": health_metrics,
             "status_class": status_class,
-            "font_path": None,
+            "fonts": fonts,
         }
 
     def _map_boolean_display(
@@ -474,33 +504,72 @@ class PdfGeneratorService:
 
             logger.info("HTML object created successfully")
 
+            # Build font-face CSS if fonts are available (SVN-Gilroy family)
+            fonts = context.get("fonts", {})
+            font_css = ""
+            font_family = '"Noto Sans", "DejaVu Sans", Arial, sans-serif'
+
+            if fonts:
+                font_css = f"""
+                @font-face {{
+                    font-family: 'SVN-Gilroy';
+                    src: url('{fonts.get("regular")}') format('opentype');
+                    font-weight: 400;
+                    font-style: normal;
+                }}
+                @font-face {{
+                    font-family: 'SVN-Gilroy';
+                    src: url('{fonts.get("medium")}') format('opentype');
+                    font-weight: 500;
+                    font-style: normal;
+                }}
+                @font-face {{
+                    font-family: 'SVN-Gilroy';
+                    src: url('{fonts.get("semibold")}') format('opentype');
+                    font-weight: 600;
+                    font-style: normal;
+                }}
+                @font-face {{
+                    font-family: 'SVN-Gilroy';
+                    src: url('{fonts.get("bold")}') format('opentype');
+                    font-weight: 700;
+                    font-style: normal;
+                }}
+                """
+                font_family = (
+                    '"SVN-Gilroy", "Noto Sans", "DejaVu Sans", Arial, sans-serif'
+                )
+
             # WeasyPrint-compatible CSS override
-            css = CSS(string="""
-                @page {
+            css = CSS(
+                string=f"""
+                {font_css}
+                
+                @page {{
                     margin: 1.5cm;
                     size: A4 portrait;
-                }
+                }}
 
                 /* Disable unsupported properties */
-                * {
+                * {{
                     box-shadow: none !important;
                     filter: none !important;
                     text-shadow: none !important;
-                    transform: none !important;
-                }
+                }}
 
                 /* Force readable colors */
-                body {
-                    font-family: "Noto Sans", "DejaVu Sans", Arial, sans-serif !important;
+                body {{
+                    font-family: {font_family} !important;
                     color: #1a1a1a !important;
                     background: white !important;
-                }
+                }}
 
                 /* Ensure text visibility */
-                h1, h2, h3, h4, h5, h6, p, span, div {
+                h1, h2, h3, h4, h5, h6, p, span, div {{
                     color: inherit !important;
-                }
-            """)
+                }}
+            """
+            )
 
             # Generate PDF with font configuration and CSS
             logger.info("Starting PDF generation with WeasyPrint")
@@ -552,17 +621,29 @@ class PdfGeneratorService:
             PDF bytes or None if failed
         """
         try:
+            # Get font paths for Vietnamese support (SVN-Gilroy family)
+            font_regular = FONT_DIR / "SVN-Gilroy-Regular.otf"
+            fonts = {}
+            if font_regular.exists():
+                fonts["regular"] = f"file://{font_regular.absolute()}"
+                fonts[
+                    "medium"
+                ] = f"file://{(FONT_DIR / 'SVN-Gilroy-Medium.otf').absolute()}"
+                fonts[
+                    "semibold"
+                ] = f"file://{(FONT_DIR / 'SVN-Gilroy-SemiBold.otf').absolute()}"
+                fonts[
+                    "bold"
+                ] = f"file://{(FONT_DIR / 'SVN-Gilroy-Bold.otf').absolute()}"
+
             # Render simple test template
-            context = {
-                "test": True,
-                "font_path": None
-            }
+            context = {"test": True, "fonts": fonts}
             html_string = await self._render_html_safe("test_pdf.html", context)
 
             # Generate PDF
             pdf_bytes = await asyncio.get_event_loop().run_in_executor(
                 self.executor_pool,
-                partial(self._html_to_pdf_optimized, html_string, context)
+                partial(self._html_to_pdf_optimized, html_string, context),
             )
 
             logger.info(f"Test PDF generated successfully: {len(pdf_bytes)} bytes")

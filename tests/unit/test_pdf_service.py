@@ -80,7 +80,12 @@ async def test_render_html(pdf_service):
         "workout_plan": [],
         "health_metrics": {},
         "status_class": "normal",
-        "font_path": "/path/to/font.ttf",
+        "fonts": {
+            "regular": "/path/to/SVN-Gilroy-Regular.otf",
+            "medium": "/path/to/SVN-Gilroy-Medium.otf",
+            "semibold": "/path/to/SVN-Gilroy-SemiBold.otf",
+            "bold": "/path/to/SVN-Gilroy-Bold.otf",
+        },
     }
 
     html = pdf_service._render_html("prediction_pdf.html", context)

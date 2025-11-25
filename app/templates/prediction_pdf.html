@@ -5,13 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kết quả dự đoán - VHealth</title>
     <style>
+      {% if fonts %}
+      @font-face {
+        font-family: 'SVN-Gilroy';
+        src: url('{{ fonts.regular }}') format('opentype');
+        font-weight: 400;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'SVN-Gilroy';
+        src: url('{{ fonts.medium }}') format('opentype');
+        font-weight: 500;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'SVN-Gilroy';
+        src: url('{{ fonts.semibold }}') format('opentype');
+        font-weight: 600;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'SVN-Gilroy';
+        src: url('{{ fonts.bold }}') format('opentype');
+        font-weight: 700;
+        font-style: normal;
+      }
+      {% endif %}
+
       @page {
         margin: 1.5cm;
         size: A4 portrait;
       }
 
       body {
-        font-family: "Noto Sans", "DejaVu Sans", Arial, sans-serif;
+        font-family: {% if fonts %}'SVN-Gilroy', {% endif %}"Noto Sans", "DejaVu Sans", Arial, sans-serif;
         line-height: 1.6;
         margin: 0;
         padding: 0;
