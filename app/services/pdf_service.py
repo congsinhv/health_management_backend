@@ -58,16 +58,9 @@ class PdfGeneratorService:
         # Font configuration for better font handling
         self.font_config = FontConfiguration()
 
-        # Check font availability
-        self.font_path = FONT_DIR / "NotoSans-Regular.ttf"
-        self.font_available = self.font_path.exists()
-
-        if self.font_available:
-            logger.info(f"✅ Font file found at {self.font_path}")
-        else:
-            logger.warning(
-                f"⚠️ Font file not found at {self.font_path} - will use system fonts"
-            )
+        # Use system fonts installed via Docker - Noto Sans is available via fonts-noto-core
+        self.font_available = True
+        logger.info("Using system fonts (Noto Sans available via fonts-noto-core)")
 
         # GCS uploader (only if configured)
         if hasattr(settings, "gcp_public_bucket") and settings.gcp_public_bucket:
@@ -419,7 +412,7 @@ class PdfGeneratorService:
             "health_analysis": health_analysis,
             "health_metrics": health_metrics,
             "status_class": status_class,
-            "font_path": str(self.font_path) if self.font_available else None,
+            "font_path": None,
         }
 
     def _map_boolean_display(
@@ -477,63 +470,8 @@ class PdfGeneratorService:
             # Create HTML object with optimizations
             html = HTML(string=html_string)
 
-            # Build CSS string dynamically based on font availability
-            css_string = """
-                @page {
-                    margin: 1.5cm;
-                    size: A4 portrait;
-                }
-
-                body {
-                    font-family: "DejaVu Sans", "Noto Sans", Arial, sans-serif;
-                    line-height: 1.6;
-                    -webkit-print-color-adjust: exact;
-                }
-
-                /* Simplified styling for PDF */
-                .hero {
-                    background: #f0f9ff !important;
-                    border: 2px solid #00d4aa;
-                }
-
-                .logo::before {
-                    background: #00d4aa !important;
-                    color: white;
-                }
-
-                .badge {
-                    background: #e8f9f5 !important;
-                    color: #00d4aa;
-                    border: 1px solid #00d4aa;
-                }
-
-                /* Print-specific styles */
-                @media print {
-                    body {
-                        background: white !important;
-                    }
-                    .download-btn {
-                        display: none !important;
-                    }
-                }
-            """
-
-            # Add font CSS if font is available
-            if self.font_available and context.get("font_path"):
-                css_string += f"""
-                    @font-face {{
-                        font-family: 'Noto Sans';
-                        src: url('file://{context["font_path"]}') format('truetype');
-                    }}
-                    body {{
-                        font-family: "Noto Sans", "DejaVu Sans", Arial, sans-serif;
-                    }}
-                """
-
-            css = CSS(string=css_string)
-
             # Generate PDF with font configuration and CSS
-            pdf_bytes = html.write_pdf(stylesheets=[css], font_config=self.font_config)
+            pdf_bytes = html.write_pdf(font_config=self.font_config)
 
             return pdf_bytes
 

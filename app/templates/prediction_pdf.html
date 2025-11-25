@@ -5,20 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kết quả dự đoán - VHealth</title>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
+      @page {
+        margin: 1.5cm;
+        size: A4 portrait;
       }
 
       body {
-        font-family: "DejaVu Sans", "Noto Sans", "Liberation Sans",
-          "Arial Unicode MS", "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
-          "Cantarell", sans-serif;
-        color: #1a1a1a;
+        font-family: "Noto Sans", "DejaVu Sans", Arial, sans-serif;
         line-height: 1.6;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        margin: 0;
+        padding: 0;
+        background: white;
+        color: #1a1a1a;
       }
 
       .container {
@@ -32,69 +30,6 @@
         align-items: center;
         padding: 16px 0;
         margin-bottom: 24px;
-      }
-
-      .logo {
-        display: flex;
-        align-items: center;
-        font-size: 22px;
-        font-weight: 600;
-        color: #1a1a1a;
-        letter-spacing: -0.5px;
-      }
-
-      .logo::before {
-        content: "✓";
-        background: linear-gradient(135deg, #00d4aa 0%, #00c29a 100%);
-        color: white;
-        width: 28px;
-        height: 28px;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 6px;
-        font-weight: bold;
-        font-size: 16px;
-      }
-
-      .nav {
-        display: flex;
-        gap: 32px;
-        font-size: 14px;
-      }
-
-      .nav a {
-        color: #666;
-        text-decoration: none;
-        transition: color 0.2s;
-      }
-
-      .nav a:hover {
-        color: #00d4aa;
-      }
-
-      /* Hero Section */
-      .hero {
-        background: linear-gradient(135deg, #00d4aa 0%, #5ce1e6 100%);
-        border-radius: 24px;
-        padding: 48px 56px;
-        margin-bottom: 32px;
-        color: white;
-      }
-
-      .hero h1 {
-        font-size: 40px;
-        margin-bottom: 12px;
-        font-weight: 600;
-        letter-spacing: -1px;
-      }
-
-      .hero p {
-        font-size: 14.5px;
-        opacity: 0.95;
-        max-width: 650px;
-        line-height: 1.7;
       }
 
       /* Main Layout */
@@ -124,25 +59,15 @@
         color: #1a1a1a;
       }
 
-      .section-header {
-        margin-bottom: 16px;
-      }
-
-      .section-header h2 {
-        font-size: 16px;
-        font-weight: 600;
-        color: #1a1a1a;
-      }
-
       .sidebar-sections-container {
         display: flex;
         flex-direction: column;
-        gap: 20px;
       }
 
       .sidebar-section {
         border: 2px solid rgba(0, 0, 0, 0.04);
         border-radius: 16px;
+        margin-bottom: 20px;
       }
 
       .sidebar-section h4 {
@@ -152,6 +77,7 @@
         letter-spacing: 0;
         padding: 12px 16px;
         border-bottom: 2px solid rgba(0, 0, 0, 0.04);
+        margin: 0;
       }
 
       .info-container {
@@ -191,66 +117,12 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 16px;
       }
 
       .section-header h2 {
         font-size: 14px;
+        margin: 0;
         font-weight: 600;
-      }
-
-      .badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        background: #e8f9f5;
-        color: #00d4aa;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 0;
-      }
-
-      .badge::before {
-        content: "✓";
-        display: inline-block;
-        width: 16px;
-        height: 16px;
-        background: #00d4aa;
-        color: white;
-        border-radius: 50%;
-        text-align: center;
-        line-height: 16px;
-        font-size: 10px;
-        font-weight: bold;
-      }
-
-      .download-btn {
-        background: #1a1a1a;
-        color: white;
-        padding: 11px 24px;
-        border-radius: 24px;
-        font-size: 13px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        border: none;
-        cursor: pointer;
-        font-weight: 500;
-        transition: all 0.2s;
-      }
-
-      .download-btn:hover {
-        background: #2a2a2a;
-        transform: translateY(-1px);
-      }
-
-      /* Prediction Chart */
-      .health-cards {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        position: relative;
       }
 
       .prediction-chart {
@@ -264,8 +136,6 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        padding-bottom: 20px;
-        padding-left: 30px;
       }
 
       .chart-content {
@@ -277,7 +147,6 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding-left: 30px;
       }
 
       .chart-percentage {
@@ -356,210 +225,26 @@
         border-top-right-radius: 0;
       }
 
-      /* Diet Recommendations */
-      .diet-section {
-        margin: 48px 0;
-      }
-
-      .diet-section h3 {
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 6px;
-        letter-spacing: -0.3px;
-      }
-
-      .diet-section .subtitle {
-        font-size: 11px;
-        color: #999;
-        margin-bottom: 24px;
-      }
-
-      .day-tabs {
-        display: flex;
-        gap: 12px;
-        margin-bottom: 32px;
-        flex-wrap: wrap;
-      }
-
-      .day-tab {
-        text-align: center;
-        padding: 14px;
-        border-radius: 50%;
-        background: #f5f5f5;
-        min-width: 64px;
-        width: 64px;
-        height: 64px;
-        cursor: pointer;
-        transition: all 0.2s;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        border: 2px solid transparent;
-      }
-
-      .day-tab:hover {
-        background: #ebebeb;
-      }
-
-      .day-tab.active {
-        background: #1a1a1a;
-        color: white;
-      }
-
-      .day-tab .day-label {
-        font-size: 10px;
-        display: block;
-        margin-bottom: 2px;
-        font-weight: 500;
-      }
-
-      .day-tab .day-number {
-        font-size: 20px;
-        font-weight: 700;
-        display: block;
-        line-height: 1;
-      }
-
-      .meals {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 24px;
-        margin-bottom: 36px;
-      }
-
-      .meal {
-        padding: 24px;
-        background: #fafbfc;
-        border-radius: 12px;
-        border: 1px solid #f0f0f0;
-      }
-
-      .meal h4 {
-        font-size: 14px;
-        font-weight: 600;
-        margin-bottom: 16px;
-        color: #1a1a1a;
-        letter-spacing: -0.2px;
-      }
-
-      .meal ul {
-        list-style: none;
-        font-size: 13px;
-        color: #555;
-      }
-
-      .meal li {
-        padding: 6px 0;
-        padding-left: 18px;
-        position: relative;
-        line-height: 1.6;
-      }
-
-      .meal li::before {
-        content: "•";
-        position: absolute;
-        left: 0;
-        color: #00d4aa;
-        font-weight: bold;
-        font-size: 16px;
-      }
-
-      .food-restrictions {
-        margin: 32px 0;
-        padding: 20px 24px;
-        background: #fafbfc;
-        border-radius: 12px;
-        border: 1px solid #f0f0f0;
-      }
-
-      .food-restrictions h4 {
-        font-size: 14px;
-        font-weight: 600;
-        margin-bottom: 10px;
-        color: #1a1a1a;
-        letter-spacing: -0.2px;
-      }
-
-      .food-restrictions p {
-        font-size: 13px;
-        color: #555;
-        line-height: 1.7;
-      }
-
-      /* Exercise Plan */
-      .exercise-section {
-        margin: 48px 0 0 0;
-        padding-top: 48px;
-        border-top: 1px solid #f0f0f0;
-      }
-
-      .exercise-section h3 {
-        font-size: 16px;
-        font-weight: 600;
-        margin-bottom: 6px;
-        letter-spacing: -0.3px;
-      }
-
-      .exercise-section .subtitle {
-        font-size: 11px;
-        color: #999;
-        margin-bottom: 24px;
-      }
-
-      .exercise-section h4 {
-        font-size: 14px;
-        font-weight: 600;
-        margin-bottom: 16px;
-        margin-top: 32px;
-        color: #1a1a1a;
-        letter-spacing: -0.2px;
-      }
-
-      .exercise-list {
-        margin-top: 16px;
-      }
-
-      .exercise-item {
-        font-size: 13px;
-        color: #555;
-        padding: 10px 0;
-        padding-left: 18px;
-        position: relative;
-        line-height: 1.7;
-      }
-
-      .exercise-item::before {
-        content: "•";
-        position: absolute;
-        left: 0;
-        color: #00d4aa;
-        font-weight: bold;
-        font-size: 16px;
-      }
-
       /* Health Cards */
       .health-cards {
         display: grid;
         gap: 16px;
         padding-bottom: 16px;
+        grid-template-columns: repeat(3, 1fr);
+        position: relative;
       }
 
       .health-card {
         background: #97ffdc80;
         border-radius: 20px;
-        padding: 24px 0px;
+        padding: 12px 0px;
         text-align: center;
-        position: relative;
-        overflow: hidden;
         border: none;
       }
 
       .health-card .icon {
         font-size: 48px;
-        position: relative;
         height: 90px;
-        z-index: 1;
       }
 
       .health-card:first-child .icon {
@@ -574,32 +259,14 @@
         font-size: 12px;
         color: #1a1a1a;
         font-weight: 600;
-        position: relative;
-        z-index: 1;
         letter-spacing: -0.2px;
+        margin: 0;
       }
 
-      .health-card .value {
-        font-size: 16px;
-        position: relative;
-        z-index: 1;
-        letter-spacing: -1px;
-      }
-
+      .health-card .value,
       .health-card .unit {
-        font-size: 13px;
-        color: #555;
+        font-size: 14px;
         font-weight: 500;
-      }
-
-      /* Footer */
-      .footer {
-        background: #0a0e1a;
-        color: #999;
-        text-align: center;
-        padding: 16px;
-        font-size: 12px;
-        border-radius: 16px 16px 0 0;
       }
 
       /* Right Sidebar Heading */
@@ -615,68 +282,20 @@
         font-weight: 600;
       }
 
-      /* Print Styles */
+      /* Print-specific */
       @media print {
-        * {
-          -webkit-print-color-adjust: exact !important;
-        }
-
         body {
-          background: white;
-        }
-
-        .download-btn {
-          display: none;
-        }
-
-        .header {
-          position: running(header-logo);
-          display: flex;
-          justify-content: flex-start;
-          align-items: center;
-          padding-top: 42px;
-          padding-bottom: 16px;
           margin: 0;
-          height: 30px;
+          padding: 10px;
         }
-
-        .logo {
-          display: flex;
+        .container {
+          margin: 0;
         }
-
-        .logo::before {
-          display: none !important;
-        }
-
-        .main-content {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .sidebar {
-          border: 1px solid #e0e0e0;
-          page-break-after: always;
-          break-after: page;
-          order: 1;
-        }
-
-        .sidebar-sections-container {
-          /* Allow breaking between sections */
-        }
-
-        .sidebar-section {
+        .sidebar,
+        .prediction-chart,
+        .health-cards-container,
+        .health-analysis {
           page-break-inside: avoid;
-          break-inside: avoid;
-        }
-
-        .sidebar-section:not(:last-child) {
-          margin-bottom: 20px;
-        }
-
-        @page {
-          margin: 1.5cm;
-          size: A4 portrait;
         }
       }
     </style>
