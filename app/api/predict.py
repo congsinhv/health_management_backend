@@ -142,26 +142,3 @@ async def export_prediction_pdf(
         ErrorContext.add_context("pdf_url", pdf_url)
 
         return PdfResponse(pdf_url=pdf_url)
-
-
-@router.get(
-    "/export/{prediction_id}/v1",
-    response_model=PdfResponse,
-    status_code=status.HTTP_200_OK,
-    include_in_schema=False,  # Hidden endpoint for backward compatibility
-)
-async def export_prediction_pdf_v1(
-    prediction_id: str,
-    pdf_service: PdfGeneratorService = Depends(create_pdf_service),
-):
-    """
-    Legacy endpoint for original PDF template (DEPRECATED - use /export/{prediction_id}?template_version=v1).
-    """
-    # Set error context for request correlation
-    ErrorContext.set_request_id()
-    ErrorContext.add_context("endpoint", "export_prediction_pdf_v1")
-    ErrorContext.add_context("operation", "pdf_generation_legacy")
-    ErrorContext.add_context("prediction_id", prediction_id)
-
-    with ErrorContext("export_prediction_pdf_v1", {"prediction_id": prediction_id}):
-        return await export_prediction_pdf(prediction_id, pdf_service)
