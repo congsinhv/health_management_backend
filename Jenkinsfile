@@ -362,20 +362,6 @@ AI summarization will not be available without this secret.
             }
         }
 
-        stage('Approve Cloud Run Deployment') {
-            when {
-                expression { return params.ENVIRONMENT == 'prod' }
-            }
-            steps {
-                script {
-                    echo 'Production deployment detected. Manual approval required.'
-                    input message: 'Deploy to Cloud Run PRODUCTION?',
-                          ok: 'Deploy',
-                          submitter: 'admin'
-                }
-            }
-        }
-
         stage('Deploy to Cloud Run') {
             steps {
                 script {
