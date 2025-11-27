@@ -265,20 +265,6 @@ AI summarization will not be available without this secret.
             }
         }
 
-        stage('Approve Terraform Apply') {
-            when {
-                expression { return params.ENVIRONMENT == 'prod' }
-            }
-            steps {
-                script {
-                    echo 'Production deployment detected. Manual approval required.'
-                    input message: 'Apply Terraform changes to PRODUCTION?',
-                          ok: 'Deploy',
-                          submitter: 'admin'
-                }
-            }
-        }
-
         stage('Terraform Apply') {
             steps {
                 dir('terraform') {
