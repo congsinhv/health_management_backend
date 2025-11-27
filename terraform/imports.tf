@@ -6,6 +6,11 @@ import {
 }
 
 import {
+  id = "vhealth-prod roles/cloudsql.client serviceAccount:vhealth-backend-prod@vhealth-prod.iam.gserviceaccount.com"
+  to = google_project_iam_member.cloud_run_sql_client
+}
+
+import {
   id = "projects/vhealth-prod/serviceAccounts/vhealth-scheduler-prod@vhealth-prod.iam.gserviceaccount.com"
   to = google_service_account.cloud_scheduler_sa
 }
