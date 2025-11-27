@@ -27,8 +27,8 @@ cloud_sql_deletion_protection = true
 # Cloud Run
 cloud_run_service_name    = "vhealth-backend-prod"
 cloud_run_image           = "asia-southeast1-docker.pkg.dev/vhealth-prod/vhealth-backend-prod/health-api:latest"
-cloud_run_cpu_limit       = "1000m"
-cloud_run_memory_limit    = "512Mi"
+cloud_run_cpu_limit       = "2000m"
+cloud_run_memory_limit    = "4Gi"
 cloud_run_max_instances   = 10
 cloud_run_min_instances   = 0
 cloud_run_timeout_seconds = 300
