@@ -1,6 +1,6 @@
 # Project Configuration
 project_id  = "vhealth-prod"
-region      = "asia-southeast1" # Singapore - closest to Vietnam (~1000km, ~10-20ms latency)
+region      = "asia-southeast1"
 environment = "prod"
 
 # Artifact Registry
@@ -11,38 +11,28 @@ vpc_connector_name          = "vhealth-vpc-conn-prod"
 vpc_network                 = "default"
 vpc_connector_ip_range      = "10.9.0.0/28"
 vpc_connector_min_instances = 2
-vpc_connector_max_instances = 10
-vpc_connector_machine_type  = "e2-standard-4"
+vpc_connector_max_instances = 3
+vpc_connector_machine_type  = "e2-micro"
 
-# Cloud SQL (now uses public IP with restricted authorized networks recommended)
+# Cloud SQL
 cloud_sql_instance_name       = "vhealth-backend-db-prod"
 cloud_sql_database_version    = "POSTGRES_15"
-cloud_sql_tier                = "db-custom-2-7680"
-cloud_sql_availability_type   = "REGIONAL" # Multi-zone in asia-southeast1 for high availability
+cloud_sql_tier                = "db-f1-micro"
+cloud_sql_availability_type   = "ZONAL"
 cloud_sql_backup_enabled      = true
-cloud_sql_backup_start_time   = "20:00" # 3 AM Vietnam time (UTC+7)
+cloud_sql_backup_start_time   = "20:00"
 cloud_sql_database_name       = "health_management"
 cloud_sql_deletion_protection = true
-# Note: cloud_sql_private_ip_name removed - using public IP now
-# IMPORTANT: For production, restrict authorized_networks in modules/cloud_sql/main.tf
 
 # Cloud Run
 cloud_run_service_name    = "vhealth-backend-prod"
 cloud_run_image           = "asia-southeast1-docker.pkg.dev/vhealth-prod/vhealth-backend-prod/health-api:latest"
-cloud_run_cpu_limit       = "2000m"
-cloud_run_memory_limit    = "4Gi"
-cloud_run_max_instances   = 100
-cloud_run_min_instances   = 1
+cloud_run_cpu_limit       = "1000m"
+cloud_run_memory_limit    = "512Mi"
+cloud_run_max_instances   = 10
+cloud_run_min_instances   = 0
 cloud_run_timeout_seconds = 300
-cloud_run_concurrency     = 15
-
-# Secret Manager (These should be provided via environment variables or secure injection)
-# database_url         = "postgresql://user:password@host:5432/dbname"
-# secret_key          = "your-jwt-secret-key"
-# google_client_id    = "your-google-oauth-client-id"
-# google_client_secret = "your-google-oauth-client-secret"
-# mail_username       = "your-email@gmail.com"
-# mail_password       = "your-email-password"
+cloud_run_concurrency     = 80
 
 # Application Settings
 debug       = "false"
@@ -54,23 +44,20 @@ mail_port   = "587"
 mail_from   = "congsynh.vo@gmail.com"
 webui_url   = "https://vhealth.io.vn"
 
-# Domain Configuration (Optional - set enable_custom_domain = true to activate)
-enable_custom_domain = true  # Set to true when ready to configure custom domain
+# Domain Configuration
+enable_custom_domain = true
 custom_domain        = "vhealth.io.vn"
-api_subdomain        = "api"  # This will create api.vhealth.io.vn
+api_subdomain        = "api"
 enable_cdn           = true
 
 # Cloud Scheduler Configuration
-# Note: Update this URL after deploying your Cloud Run service
-# For prod with custom domain: https://api.vhealth.io.vn/api/v1/scheduler/hello-world
-# For prod without custom domain: https://vhealth-backend-prod-HASH.asia-southeast1.run.app/api/v1/scheduler/hello-world
 scheduler_endpoint_url    = "https://api.vhealth.io.vn/api/v1/scheduler/hello-world"
-scheduler_cron_schedule   = "*/30 * * * *"  # Every 30 minutes
-scheduler_time_zone       = "Asia/Ho_Chi_Minh"  # Vietnam time zone (UTC+7)
-scheduler_use_oidc_auth   = false  # Set to true if Cloud Run requires authentication
-scheduler_paused          = false  # Set to true to pause the scheduler
+scheduler_cron_schedule   = "*/30 * * * *"
+scheduler_time_zone       = "Asia/Ho_Chi_Minh"
+scheduler_use_oidc_auth   = false
+scheduler_paused          = false
 
-# Redis Configuration for Production
-redis_tier           = "STANDARD_HA"
-redis_memory_size_gb = 5
+# Redis Configuration
+redis_tier           = "BASIC"
+redis_memory_size_gb = 1
 enable_redis_cache   = true
