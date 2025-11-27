@@ -155,7 +155,9 @@ pipeline {
                     script {
                         echo 'Importing existing VPC peering connection (if not already imported)...'
                         sh """
-                            terraform import google_service_networking_connection.private_vpc_connection \
+                            terraform import \
+                                -var-file="environments/${params.ENVIRONMENT}.tfvars" \
+                                google_service_networking_connection.private_vpc_connection \
                                 ${GCP_PROJECT_ID}:default:servicenetworking.googleapis.com || true
                         """
                     }
@@ -180,8 +182,9 @@ pipeline {
                                 echo "Creating GCS bucket: ${GCS_MODEL_BUCKET}"
                                 sh """
                                     gsutil mb -p ${GCP_PROJECT_ID} -l ${GCP_REGION} gs://${GCS_MODEL_BUCKET}
-                                    gsutil lifecycle set - gs://${GCS_MODEL_BUCKET} <<EOF
-{
+                                """
+                                // Set lifecycle policy using a temp file (heredocs don't work reliably in Jenkins sh blocks)
+                                writeFile file: 'lifecycle.json', text: '''{
   "lifecycle": {
     "rule": [
       {
@@ -190,8 +193,10 @@ pipeline {
       }
     ]
   }
-}
-EOF
+}'''
+                                sh """
+                                    gsutil lifecycle set lifecycle.json gs://${GCS_MODEL_BUCKET}
+                                    rm -f lifecycle.json
                                 """
                             } else {
                                 echo "GCS bucket already exists: ${GCS_MODEL_BUCKET}"
