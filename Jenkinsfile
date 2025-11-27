@@ -216,18 +216,18 @@ The service will attempt to download from Hugging Face as fallback.
                             } else {
                                 echo "Model files found in GCS bucket"
                             }
-                            // Ensure OpenRouter API key secret exists
+                            // Ensure OpenAI API key secret exists
                             def secretExists = sh(
-                                script: "gcloud secrets describe vhealth-${params.ENVIRONMENT}-openrouter-api-key --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'not_found'",
+                                script: "gcloud secrets describe vhealth-${params.ENVIRONMENT}-openai-api-key --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'not_found'",
                                 returnStdout: true
                             ).trim()
                             if (secretExists.contains('not_found')) {
                                 echo """
 ========================================
-WARNING: OpenRouter API key secret not found!
+WARNING: OpenAI API key secret not found!
 ========================================
 To create the secret, run:
-  echo -n 'your-api-key-here' | gcloud secrets create vhealth-${params.ENVIRONMENT}-openrouter-api-key \\
+  echo -n 'your-api-key-here' | gcloud secrets create vhealth-${params.ENVIRONMENT}-openai-api-key \\
     --project=${GCP_PROJECT_ID} \\
     --data-file=- \\
     --replication-policy=automatic
@@ -236,7 +236,7 @@ AI summarization will not be available without this secret.
 ========================================
                                 """
                             } else {
-                                echo "OpenRouter API key secret exists"
+                                echo "OpenAI API key secret exists"
                             }
                         }
                     }

@@ -1,5 +1,5 @@
 """
-Q&A Service using SBERT and OpenRouter AI.
+Q&A Service using SBERT and OpenAI API.
 """
 
 import hashlib
@@ -411,7 +411,7 @@ class QAService:
         self, user_question: str, collected_answers: List[str]
     ) -> str:
         """
-        Summarize answers using OpenRouter AI.
+        Summarize answers using OpenAI API.
 
         Args:
             user_question: The user's original question
