@@ -155,10 +155,10 @@ pipeline {
                     script {
                         echo 'Importing existing VPC peering connection (if not already imported)...'
                         sh """
-                            terraform import \
+                            terraform import -no-color \
                                 -var-file="environments/${params.ENVIRONMENT}.tfvars" \
                                 google_service_networking_connection.private_vpc_connection \
-                                ${GCP_PROJECT_ID}:default:servicenetworking.googleapis.com || true
+                                ${GCP_PROJECT_ID}:servicenetworking.googleapis.com:default || true
                         """
                     }
                 }
