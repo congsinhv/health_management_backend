@@ -1,0 +1,223 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'ENVIRONMENT', defaultValue: 'prod', description: 'Target environment (dev/prod)')
+        string(name: 'BRANCH_NAME', defaultValue: 'feature/deploy-prod', description: 'Git branch to build')
+        booleanParam(name: 'REBUILD_BASE_IMAGE', defaultValue: false, description: 'Rebuild Docker base image')
+        string(name: 'GCP_PROJECT_ID', defaultValue: 'vhealth-prod', description: 'GCP Project ID')
+        string(name: 'GCP_REGION', defaultValue: 'us-central1', description: 'GCP Region')
+    }
+
+    environment {
+        DOCKER_REGISTRY = 'us-central1-docker.pkg.dev'
+        DOCKER_IMAGE_NAME = 'vhealth-backend'
+        CLOUD_RUN_SERVICE = 'vhealth-backend-prod'
+        ARTIFACT_REGISTRY_REPO = 'vhealth-repo'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    // Override branch if parameter is provided
+                    if (params.BRANCH_NAME != env.BRANCH_NAME) {
+                        sh "git checkout ${params.BRANCH_NAME}"
+                    }
+                }
+            }
+        }
+
+        stage('Setup Environment') {
+            steps {
+                script {
+                    // Set environment-specific variables
+                    if (params.ENVIRONMENT == 'prod') {
+                        env.ENVIRONMENT_SUFFIX = 'prod'
+                        env.CLOUD_RUN_SERVICE = 'vhealth-backend-prod'
+                    } else {
+                        env.ENVIRONMENT_SUFFIX = 'dev'
+                        env.CLOUD_RUN_SERVICE = 'vhealth-backend-dev'
+                    }
+
+                    echo "Deploying to ${params.ENVIRONMENT} environment"
+                    echo "Using branch: ${params.BRANCH_NAME}"
+                    echo "Cloud Run Service: ${env.CLOUD_RUN_SERVICE}"
+                }
+            }
+        }
+
+        stage('Authenticate GCP') {
+            steps {
+                script {
+                    // Authenticate with GCP using service account
+                    sh """
+                        gcloud auth activate-service-account jenkins-sa@${params.GCP_PROJECT_ID}.iam.gserviceaccount.com \
+                            --key-file=/etc/google/key.json
+                        gcloud config set project ${params.GCP_PROJECT_ID}
+                        gcloud config set compute/region ${params.GCP_REGION}
+                    """
+                }
+            }
+        }
+
+        stage('Terraform Init & Validate') {
+            steps {
+                dir('terraform') {
+                    sh 'terraform init -upgrade'
+                    sh 'terraform fmt -check'
+                    sh 'terraform validate'
+                }
+            }
+        }
+
+        stage('Build Base Image (Optional)') {
+            when {
+                expression { params.REBUILD_BASE_IMAGE }
+            }
+            steps {
+                dir('terraform') {
+                    sh """
+                        docker build --no-cache -f Dockerfile.base -t base:latest .
+                        docker tag base:latest ${env.DOCKER_REGISTRY}/${params.GCP_PROJECT_ID}/${env.ARTIFACT_REGISTRY_REPO}/base:latest
+                        docker push ${env.DOCKER_REGISTRY}/${params.GCP_PROJECT_ID}/${env.ARTIFACT_REGISTRY_REPO}/base:latest
+                    """
+                }
+            }
+        }
+
+        stage('Build Application Image') {
+            steps {
+                dir('terraform') {
+                    script {
+                        def imageTag = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(8)}"
+                        env.IMAGE_TAG = imageTag
+
+                        sh """
+                            docker build -t ${env.DOCKER_IMAGE_NAME}:${imageTag} .
+                            docker tag ${env.DOCKER_IMAGE_NAME}:${imageTag} ${env.DOCKER_REGISTRY}/${params.GCP_PROJECT_ID}/${env.ARTIFACT_REGISTRY_REPO}/${env.DOCKER_IMAGE_NAME}:${imageTag}
+                            docker push ${env.DOCKER_REGISTRY}/${params.GCP_PROJECT_ID}/${env.ARTIFACT_REGISTRY_REPO}/${env.DOCKER_IMAGE_NAME}:${imageTag}
+
+                            # Also push latest tag
+                            docker tag ${env.DOCKER_IMAGE_NAME}:${imageTag} ${env.DOCKER_REGISTRY}/${params.GCP_PROJECT_ID}/${env.ARTIFACT_REGISTRY_REPO}/${env.DOCKER_IMAGE_NAME}:latest
+                            docker push ${env.DOCKER_REGISTRY}/${params.GCP_PROJECT_ID}/${env.ARTIFACT_REGISTRY_REPO}/${env.DOCKER_IMAGE_NAME}:latest
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Cloud Run') {
+            steps {
+                script {
+                    def imageUrl = "${env.DOCKER_REGISTRY}/${params.GCP_PROJECT_ID}/${env.ARTIFACT_REGISTRY_REPO}/${env.DOCKER_IMAGE_NAME}:${env.IMAGE_TAG}"
+
+                    sh """
+                        # Deploy to Cloud Run
+                        gcloud run deploy ${env.CLOUD_RUN_SERVICE} \
+                            --image=${imageUrl} \
+                            --region=${params.GCP_REGION} \
+                            --platform=managed \
+                            --allow-unauthenticated \
+                            --memory=1Gi \
+                            --cpu=1 \
+                            --timeout=300 \
+                            --concurrency=80 \
+                            --min-instances=0 \
+                            --max-instances=10 \
+                            --set-env-vars="ENVIRONMENT=${params.ENVIRONMENT}" \
+                            --set-env-vars="ENABLE_REDIS_CACHE=true" \
+                            --service-account="vhealth-backend-${params.ENVIRONMENT}@${params.GCP_PROJECT_ID}.iam.gserviceaccount.com"
+                    """
+                }
+            }
+        }
+
+        stage('Smoke Tests') {
+            steps {
+                script {
+                    // Get Cloud Run service URL
+                    def serviceUrl = sh(
+                        script: """
+                            gcloud run services describe ${env.CLOUD_RUN_SERVICE} \
+                                --region=${params.GCP_REGION} \
+                                --format='value(status.url)'
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Testing deployment at: ${serviceUrl}"
+
+                    // Wait for service to be ready
+                    sleep(30)
+
+                    // Health check
+                    sh """
+                        curl -f "${serviceUrl}/health" || exit 1
+                        curl -f "${serviceUrl}/api/v1/health" || exit 1
+                    """
+                }
+            }
+        }
+
+        stage('Database Migration') {
+            steps {
+                // This would run database migrations if needed
+                echo "Database migrations should be handled separately via Cloud SQL"
+                echo "Current setup uses alembic - run 'alembic upgrade head' manually if needed"
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                def serviceUrl = sh(
+                    script: """
+                        gcloud run services describe ${env.CLOUD_RUN_SERVICE} \
+                            --region=${params.GCP_REGION} \
+                            --format='value(status.url)'
+                    """,
+                    returnStdout: true
+                ).trim()
+
+                echo """
+                ✅ Deployment successful!
+
+                Environment: ${params.ENVIRONMENT}
+                Service URL: ${serviceUrl}
+                API Docs: ${serviceUrl}/docs
+                Image Tag: ${env.IMAGE_TAG}
+
+                Next steps:
+                1. Test the application
+                2. Run database migrations if needed
+                3. Monitor the deployment in GCP Console
+                """
+            }
+        }
+
+        failure {
+            script {
+                echo """
+                ❌ Deployment failed!
+
+                Environment: ${params.ENVIRONMENT}
+                Branch: ${params.BRANCH_NAME}
+                Build Number: ${env.BUILD_NUMBER}
+
+                Check the logs above for failure details.
+                """
+            }
+
+            // Clean up on failure
+            cleanWs()
+        }
+
+        always {
+            // Clean up Docker images
+            sh 'docker system prune -f || true'
+        }
+    }
+}

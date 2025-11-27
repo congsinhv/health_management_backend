@@ -58,11 +58,11 @@ resource "google_sql_database_instance" "instance" {
   }
 }
 
-# Database
-resource "google_sql_database" "database" {
-  name     = var.database_name
-  instance = google_sql_database_instance.instance.name
-}
+# Database - commented out since it already exists
+# resource "google_sql_database" "database" {
+#   name     = var.database_name
+#   instance = google_sql_database_instance.instance.name
+# }
 
 # Database User
 resource "google_sql_user" "user" {

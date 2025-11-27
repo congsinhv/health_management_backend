@@ -9,7 +9,7 @@ artifact_registry_repository_id = "vhealth-backend-prod"
 # VPC Connector
 vpc_connector_name          = "vhealth-vpc-conn-prod"
 vpc_network                 = "default"
-vpc_connector_ip_range      = "10.9.0.0/28"
+vpc_connector_ip_range      = "10.10.0.0/28"
 vpc_connector_min_instances = 2
 vpc_connector_max_instances = 3
 vpc_connector_machine_type  = "e2-micro"

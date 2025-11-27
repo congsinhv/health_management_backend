@@ -78,20 +78,21 @@ resource "google_storage_bucket_iam_member" "cloud_run_storage_writer" {
   ]
 }
 
-module "artifact_registry" {
-  source = "./modules/artifact_registry"
+# Temporarily commented out due to existing resources
+# module "artifact_registry" {
+#   source = "./modules/artifact_registry"
 
-  project_id            = var.project_id
-  region                = var.region
-  repository_id         = var.artifact_registry_repository_id
-  environment           = var.environment
-  service_account_email = google_service_account.cloud_run_sa.email
+#   project_id            = var.project_id
+#   region                = var.region
+#   repository_id         = var.artifact_registry_repository_id
+#   environment           = var.environment
+#   service_account_email = google_service_account.cloud_run_sa.email
 
-  depends_on = [
-    google_project_service.required_apis,
-    google_service_account.cloud_run_sa
-  ]
-}
+#   depends_on = [
+#     google_project_service.required_apis,
+#     google_service_account.cloud_run_sa
+#   ]
+# }
 
 module "vpc_connector" {
   source = "./modules/vpc_connector"
@@ -117,13 +118,13 @@ module "secret_manager" {
   service_account_email = google_service_account.cloud_run_sa.email
   secrets = {
     # Database credentials stored separately for flexibility
-    db_name     = module.cloud_sql.database_name
+    db_name     = "health_management"  # Hardcoded since database already exists
     db_username = module.cloud_sql.db_user
     db_password = module.cloud_sql.db_password
     db_host     = module.cloud_sql.public_ip_address
     # Construct DATABASE_URL for Cloud Run to connect to Cloud SQL via public IP
     # Note: Password is URL-encoded to handle special characters
-    database_url         = "postgresql://${module.cloud_sql.db_user}:${urlencode(module.cloud_sql.db_password)}@${module.cloud_sql.public_ip_address}:5432/${module.cloud_sql.database_name}?sslmode=require"
+    database_url         = "postgresql://${module.cloud_sql.db_user}:${urlencode(module.cloud_sql.db_password)}@${module.cloud_sql.public_ip_address}:5432/health_management?sslmode=require"
     secret_key           = var.secret_key
     google_client_id     = var.google_client_id
     google_client_secret = var.google_client_secret
@@ -227,41 +228,42 @@ resource "google_service_account" "cloud_scheduler_sa" {
   depends_on = [google_project_service.required_apis]
 }
 
-# Cloud Scheduler module for periodic tasks
-module "cloud_scheduler" {
-  source = "./modules/cloud_scheduler"
+# Temporarily commented out due to existing resources
+# # Cloud Scheduler module for periodic tasks
+# module "cloud_scheduler" {
+#   source = "./modules/cloud_scheduler"
 
-  project_id      = var.project_id
-  region          = var.region
-  environment     = var.environment
-  job_name        = "vhealth-scheduler-${var.environment}"
-  description     = "Periodic task that runs every 30 minutes - ${var.environment}"
-  schedule        = var.scheduler_cron_schedule
-  time_zone       = var.scheduler_time_zone
-  http_target_uri = var.scheduler_endpoint_url
-  http_method     = "POST"
-  http_headers = {
-    "Content-Type" = "application/json"
-  }
+#   project_id      = var.project_id
+#   region          = var.region
+#   environment     = var.environment
+#   job_name        = "vhealth-scheduler-${var.environment}"
+#   description     = "Periodic task that runs every 30 minutes - ${var.environment}"
+#   schedule        = var.scheduler_cron_schedule
+#   time_zone       = var.scheduler_time_zone
+#   http_target_uri = var.scheduler_endpoint_url
+#   http_method     = "POST"
+#   http_headers = {
+#     "Content-Type" = "application/json"
+#   }
 
-  # Enable OIDC authentication if Cloud Run requires authentication
-  oidc_token            = var.scheduler_use_oidc_auth
-  service_account_email = var.scheduler_use_oidc_auth ? google_service_account.cloud_scheduler_sa.email : null
+#   # Enable OIDC authentication if Cloud Run requires authentication
+#   oidc_token            = var.scheduler_use_oidc_auth
+#   service_account_email = var.scheduler_use_oidc_auth ? google_service_account.cloud_scheduler_sa.email : null
 
-  # Retry configuration
-  retry_config = {
-    retry_count          = 3
-    max_retry_duration   = "0s"
-    min_backoff_duration = "5s"
-    max_backoff_duration = "3600s"
-    max_doublings        = 5
-  }
+#   # Retry configuration
+#   retry_config = {
+#     retry_count          = 3
+#     max_retry_duration   = "0s"
+#     min_backoff_duration = "5s"
+#     max_backoff_duration = "3600s"
+#     max_doublings        = 5
+#   }
 
-  paused = var.scheduler_paused
+#   paused = var.scheduler_paused
 
-  depends_on = [
-    google_project_service.required_apis,
-    google_service_account.cloud_scheduler_sa
-  ]
-}
+#   depends_on = [
+#     google_project_service.required_apis,
+#     google_service_account.cloud_scheduler_sa
+#   ]
+# }
 
