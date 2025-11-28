@@ -180,5 +180,3 @@ tuvung.txt
 docs/_build/
 CLAUDE.md
 repomix-output.xml
-terraform/environments/*.auto.tfvars
-terraform/environments/*.tfvars
