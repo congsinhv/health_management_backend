@@ -22,7 +22,7 @@ pipeline {
     environment {
         GCP_REGION = 'asia-southeast1'
         ENV = "${params.ENVIRONMENT}"
-        GCP_PROJECT_ID = "${params.ENVIRONMENT == 'prod' ? 'vhealth-prod' : 'vhealth-dev'}"
+        GCP_PROJECT_ID = "vhealth-${params.ENVIRONMENT}"
         TF_BACKEND_BUCKET = "${GCP_PROJECT_ID}-backend-tfstate"
 
         ARTIFACT_REGISTRY_REPO = "vhealth-backend-${params.ENVIRONMENT}"
@@ -35,7 +35,7 @@ pipeline {
 
         TF_IN_AUTOMATION = 'true'
         TF_VAR_FILE = "terraform/environments/${params.ENVIRONMENT}.tfvars"
-        GOOGLE_APPLICATION_CREDENTIALS = credentials('gcp-service-account-key')
+        ENV_CREDENTIAL = "gcp-service-account-key-${params.ENVIRONMENT}"
     }
 
     options {
@@ -80,13 +80,15 @@ pipeline {
         stage('Authenticate to GCP') {
             steps {
                 script {
-                    echo 'Authenticating to GCP...'
-                    sh '''
-                        gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
-                        gcloud config set project ${GCP_PROJECT_ID}
-                        gcloud config set compute/region ${GCP_REGION}
-                        gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet
-                    '''
+                    withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                        sh """
+                            echo 'Using credentials: ${ENV_CREDENTIAL}'
+                            gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+                            gcloud config set project "${GCP_PROJECT_ID}"
+                            gcloud config set compute/region "${GCP_REGION}"
+                            gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+                        """
+                    }
                 }
             }
         }
