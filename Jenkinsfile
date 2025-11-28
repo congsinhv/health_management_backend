@@ -4,7 +4,7 @@ pipeline {
     parameters {
         choice(
             name: 'ENVIRONMENT',
-            choices: ['dev', 'prod'],
+            choices: ['test', 'prod'],
             description: 'Target environment for deployment'
         )
         string(
