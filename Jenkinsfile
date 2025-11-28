@@ -398,6 +398,15 @@ AI summarization will not be available without this secret.
                         ).trim()
 
                         def revisionSuffix = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
+                        
+                        // Check if service already exists
+                        def serviceExists = sh(
+                            script: "gcloud run services describe ${cloudRunService} --region=${GCP_REGION} --project=${GCP_PROJECT_ID} --format='value(name)' 2>/dev/null || echo ''",
+                            returnStdout: true
+                        ).trim()
+                        
+                        def noTrafficFlag = serviceExists ? '--no-traffic' : ''
+                        
                         sh """
                             gcloud run deploy ${cloudRunService} \
                                 --image ${IMAGE_FULL} \
@@ -436,16 +445,20 @@ AI summarization will not be available without this secret.
                                 --concurrency 15 \
                                 --allow-unauthenticated \
                                 --revision-suffix ${revisionSuffix} \
-                                --no-traffic \
+                                ${noTrafficFlag} \
                                 --quiet
                         """
-                        sh """
-                            gcloud run services update-traffic ${cloudRunService} \
-                                --to-revisions ${cloudRunService}-${revisionSuffix}=100 \
-                                --region ${GCP_REGION} \
-                                --project ${GCP_PROJECT_ID} \
-                                --quiet
-                        """
+                        
+                        // Only update traffic if service already existed (blue-green deployment)
+                        if (serviceExists) {
+                            sh """
+                                gcloud run services update-traffic ${cloudRunService} \
+                                    --to-revisions ${cloudRunService}-${revisionSuffix}=100 \
+                                    --region ${GCP_REGION} \
+                                    --project ${GCP_PROJECT_ID} \
+                                    --quiet
+                            """
+                        }
 
                         def serviceUrl = sh(
                             script: "gcloud run services describe ${cloudRunService} --region=${GCP_REGION} --project=${GCP_PROJECT_ID} --format='value(status.url)'",
