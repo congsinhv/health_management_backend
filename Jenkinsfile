@@ -416,7 +416,7 @@ AI summarization will not be available without this secret.
                                 --service-account ${serviceAccount} \
                                 --vpc-connector ${vpcConnector} \
                                 --vpc-egress private-ranges-only \
-                                --set-env-vars "DEBUG=${params.ENVIRONMENT == 'dev' ? 'True' : 'False'}" \
+                                --set-env-vars "DEBUG=${params.ENVIRONMENT == 'test' ? 'True' : 'False'}" \
                                 --set-env-vars "LOG_LEVEL=INFO" \
                                 --set-env-vars "APP_NAME=VHealth Backend" \
                                 --set-env-vars "ENVIRONMENT=${params.ENVIRONMENT}" \
