@@ -25,7 +25,7 @@ output "backend_service_name" {
 
 output "dns_configuration" {
   description = "DNS configuration instructions"
-  value = <<-EOT
+  value       = <<-EOT
     Add the following A record to your DNS provider (matbao.net):
     
     Type: A

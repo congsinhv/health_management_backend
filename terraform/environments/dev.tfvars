@@ -54,20 +54,20 @@ mail_from   = "congsynh.vo@gmail.com"
 webui_url   = "https://dev.vhealth.io.vn"
 
 # Domain Configuration (Optional - set enable_custom_domain = true to activate)
-enable_custom_domain = true  # Set to true when ready to configure custom domain
+enable_custom_domain = true # Set to true when ready to configure custom domain
 custom_domain        = "vhealth.io.vn"
-api_subdomain        = "dev.api"  # This will create dev.api.vhealth.io.vn
+api_subdomain        = "dev.api" # This will create dev.api.vhealth.io.vn
 enable_cdn           = true
 
 # Cloud Scheduler Configuration
 # Note: Update this URL after deploying your Cloud Run service
 # For dev with custom domain: https://dev.api.vhealth.io.vn/api/v1/scheduler/hello-world
 # For dev without custom domain: https://vhealth-backend-dev-HASH.asia-southeast1.run.app/api/v1/scheduler/hello-world
-scheduler_endpoint_url    = "https://dev.api.vhealth.io.vn/api/v1/scheduler/hello-world"
-scheduler_cron_schedule   = "*/30 * * * *"  # Every 30 minutes
-scheduler_time_zone       = "Asia/Ho_Chi_Minh"  # Vietnam time zone (UTC+7)
-scheduler_use_oidc_auth   = false  # Set to true if Cloud Run requires authentication
-scheduler_paused          = false  # Set to true to pause the scheduler
+scheduler_endpoint_url  = "https://dev.api.vhealth.io.vn/api/v1/scheduler/hello-world"
+scheduler_cron_schedule = "*/30 * * * *"     # Every 30 minutes
+scheduler_time_zone     = "Asia/Ho_Chi_Minh" # Vietnam time zone (UTC+7)
+scheduler_use_oidc_auth = false              # Set to true if Cloud Run requires authentication
+scheduler_paused        = false              # Set to true to pause the scheduler
 
 # Redis Configuration for Development
 redis_tier           = "BASIC"

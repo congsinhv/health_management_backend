@@ -51,11 +51,11 @@ api_subdomain        = "api"
 enable_cdn           = true
 
 # Cloud Scheduler Configuration
-scheduler_endpoint_url    = "https://api.vhealth.io.vn/api/v1/scheduler/hello-world"
-scheduler_cron_schedule   = "*/30 * * * *"
-scheduler_time_zone       = "Asia/Ho_Chi_Minh"
-scheduler_use_oidc_auth   = false
-scheduler_paused          = false
+scheduler_endpoint_url  = "https://api.vhealth.io.vn/api/v1/scheduler/hello-world"
+scheduler_cron_schedule = "*/30 * * * *"
+scheduler_time_zone     = "Asia/Ho_Chi_Minh"
+scheduler_use_oidc_auth = false
+scheduler_paused        = false
 
 # Redis Configuration
 redis_tier           = "BASIC"

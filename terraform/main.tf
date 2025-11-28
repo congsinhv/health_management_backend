@@ -118,7 +118,7 @@ module "secret_manager" {
   service_account_email = google_service_account.cloud_run_sa.email
   secrets = {
     # Database credentials stored separately for flexibility
-    db_name     = "health_management"  # Hardcoded since database already exists
+    db_name     = "health_management" # Hardcoded since database already exists
     db_username = module.cloud_sql.db_user
     db_password = module.cloud_sql.db_password
     db_host     = module.cloud_sql.public_ip_address
@@ -149,6 +149,19 @@ module "secret_manager" {
   ]
 }
 
+# Grant Cloud Run service account access to pre-existing OpenAI API key secret
+# This secret was created manually and is not managed by Terraform
+resource "google_secret_manager_secret_iam_member" "openai_secret_access" {
+  secret_id = "vhealth-${var.environment}-openai-api-key"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_service_account.cloud_run_sa
+  ]
+}
+
 module "cloud_sql" {
   source = "./modules/cloud_sql"
 
@@ -176,8 +189,8 @@ data "google_compute_global_address" "private_ip_alloc" {
 # Manage existing VPC peering connection
 # IMPORTANT: Must be imported first: terraform import google_service_networking_connection.private_vpc_connection vhealth-dev:servicenetworking.googleapis.com:default
 resource "google_service_networking_connection" "private_vpc_connection" {
-  network                 = "projects/${var.project_id}/global/networks/${var.vpc_network}"
-  service                 = "servicenetworking.googleapis.com"
+  network = "projects/${var.project_id}/global/networks/${var.vpc_network}"
+  service = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [
     data.google_compute_global_address.private_ip_alloc.name
   ]
