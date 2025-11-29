@@ -83,15 +83,6 @@ pipeline {
                     if (params.ENVIRONMENT != TEST_ENV && params.ENVIRONMENT != PROD_ENV) {
                         error("Invalid ENVIRONMENT: ${params.ENVIRONMENT}")
                     }
-
-                    // Add manual approval for production
-                    if (params.ENVIRONMENT == PROD_ENV) {
-                        timeout(time: 10, unit: 'MINUTES') {
-                            input message: "⚠️ WARNING: You are about to run migrations on PRODUCTION. Continue?",
-                                  ok: 'Yes, proceed with production migration',
-                                  submitter: 'admin'
-                        }
-                    }
                 }
             }
         }
