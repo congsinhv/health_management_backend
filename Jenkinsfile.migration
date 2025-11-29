@@ -34,6 +34,7 @@ pipeline {
         string(
             name: 'BRANCH_NAME',
             description: 'Git branch to checkout for migration scripts',
+            defaultValue: 'develop',
         )
         choice(
             name: 'MIGRATION_ACTION',
