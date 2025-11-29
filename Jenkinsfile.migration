@@ -51,6 +51,7 @@ pipeline {
         GCP_PROJECT = "${getGCPProject(params.ENVIRONMENT)}"
         VENV_PATH = "${WORKSPACE}/venv"
         PYTHONPATH = "${WORKSPACE}/scripts"
+        ENV_CREDENTIAL = "gcp-service-account-key-${params.ENVIRONMENT}"
     }
 
     stages {
@@ -128,30 +129,29 @@ pipeline {
         stage('Fetch Database Credentials') {
             steps {
                 script {
-                    echo "Fetching database credentials from GCP Secret Manager..."
-                    echo "GCP Project: ${env.GCP_PROJECT}"
+                    withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                        sh """
+                            # Fetch secrets from GCP Secret Manager
+                            echo "Fetching DB credentials for environment: ${params.ENVIRONMENT}"
 
-                    sh """
-                        # Fetch secrets from GCP Secret Manager
-                        echo "Fetching DB credentials for environment: ${params.ENVIRONMENT}"
+                            DB_NAME=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-name" --project="${env.GCP_PROJECT}")
+                            DB_USER=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-username" --project="${env.GCP_PROJECT}")
+                            DB_PASSWORD=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-password" --project="${env.GCP_PROJECT}")
+                            DB_HOST=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-host" --project="${env.GCP_PROJECT}")
 
-                        DB_NAME=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-name" --project="${env.GCP_PROJECT}")
-                        DB_USER=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-username" --project="${env.GCP_PROJECT}")
-                        DB_PASSWORD=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-password" --project="${env.GCP_PROJECT}")
-                        DB_HOST=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-host" --project="${env.GCP_PROJECT}")
+                            # Build PostgreSQL connection URL
+                            # Format: postgresql://username:password@host:5432/database
+                            echo "postgresql://\${DB_USER}:\${DB_PASSWORD}@\${DB_HOST}:5432/\${DB_NAME}" > ${WORKSPACE}/db_url.txt
 
-                        # Build PostgreSQL connection URL
-                        # Format: postgresql://username:password@host:5432/database
-                        echo "postgresql://\${DB_USER}:\${DB_PASSWORD}@\${DB_HOST}:5432/\${DB_NAME}" > ${WORKSPACE}/db_url.txt
+                            if [ -s ${WORKSPACE}/db_url.txt ]; then
+                                echo "✓ Database URL constructed successfully"
 
-                        if [ -s ${WORKSPACE}/db_url.txt ]; then
-                            echo "✓ Database URL constructed successfully"
-
-                        else
-                            echo "✗ Failed to construct database URL"
-                            exit 1
-                        fi
-                    """
+                            else
+                                echo "✗ Failed to construct database URL"
+                                exit 1
+                            fi
+                        """
+                    }
                 }
             }
         }
