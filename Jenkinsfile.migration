@@ -1,8 +1,8 @@
 import groovy.transform.Field
 
-@Field final String DEV_ENV = 'dev'
+@Field final String TEST_ENV = 'test'
 @Field final String PROD_ENV = 'prod'
-@Field final String GCP_PROJECT_DEV = 'vhealth-dev'
+@Field final String GCP_PROJECT_DEV = 'vhealth-test'
 @Field final String GCP_PROJECT_PROD = 'vhealth-prod'
 
 
@@ -10,7 +10,7 @@ String getGCPProject(String env_name) {
   switch (env_name) {
     case PROD_ENV:
       return GCP_PROJECT_PROD
-    case DEV_ENV:
+    case TEST_ENV:
       return GCP_PROJECT_DEV
     default:
       return null
@@ -28,7 +28,7 @@ pipeline {
         )
         choice(
             name: 'ENVIRONMENT',
-            choices: [DEV_ENV, PROD_ENV],
+            choices: [TEST_ENV, PROD_ENV],
             description: 'Target environment for migration',
         )
         string(
@@ -79,7 +79,7 @@ pipeline {
                     echo "========================================="
 
                     // Validate parameters
-                    if (params.ENVIRONMENT != DEV_ENV && params.ENVIRONMENT != PROD_ENV) {
+                    if (params.ENVIRONMENT != TEST_ENV && params.ENVIRONMENT != PROD_ENV) {
                         error("Invalid ENVIRONMENT: ${params.ENVIRONMENT}")
                     }
 
