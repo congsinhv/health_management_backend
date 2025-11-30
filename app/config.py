@@ -129,6 +129,12 @@ class Settings(BaseSettings):
         None, description="Chat AI Service URL for proxying Q&A requests"
     )
 
+    # Prediction Service settings (for Main API proxy)
+    # ========================================
+    prediction_service_url: Optional[str] = Field(
+        None, description="Prediction Service URL for proxying prediction requests"
+    )
+
     # Local paths (used as cache directory when downloading from GCS)
     qa_model_path: str = Field(
         default="./models/vietnamese-sbert",
