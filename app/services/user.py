@@ -8,6 +8,7 @@ import asyncpg
 from typing import Optional, List, Dict, Any
 from datetime import timedelta, datetime, timezone
 from app.constants import UserProviders
+from app.exceptions import ResourceNotFoundException
 from app.db.user import UserRepository
 from app.db.user_profile import UserProfileRepository
 from app.schemas.user import (
@@ -107,17 +108,25 @@ class UserService:
     ) -> UserResponse:
         """Create a new user."""
         # Check if user already exists
-        existing_user = await self.user_repo.get_user_by_email(user_data.email)
-        if existing_user:
-            raise ValueError("User with this email already exists")
+        try:
+            existing_user = await self.user_repo.get_user_by_email(user_data.email)
+            if existing_user:
+                raise ValueError("User with this email already exists")
+        except ResourceNotFoundException:
+            # User not found is expected when creating a new user
+            pass
 
         # For OAuth users, check if Google ID already exists
         if user_data.google_id:
-            existing_google_user = await self.user_repo.get_user_by_google_id(
-                user_data.google_id
-            )
-            if existing_google_user:
-                raise ValueError("User with this Google account already exists")
+            try:
+                existing_google_user = await self.user_repo.get_user_by_google_id(
+                    user_data.google_id
+                )
+                if existing_google_user:
+                    raise ValueError("User with this Google account already exists")
+            except ResourceNotFoundException:
+                # Google user not found is expected when creating a new user
+                pass
 
         # Hash password if provided (not required for OAuth users)
         password_hash = None
