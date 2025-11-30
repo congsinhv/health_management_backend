@@ -2,8 +2,8 @@
 Configuration settings for the Health Management application.
 """
 
-from typing import Optional, List
-from pydantic import Field, model_validator
+from typing import Optional, List, Any
+from pydantic import Field, model_validator, field_validator
 from pydantic_settings import BaseSettings
 import logging
 
@@ -75,6 +75,15 @@ class Settings(BaseSettings):
             "http://192.168.1.3:8080",
         ]
     )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Any) -> List[str]:
+        """Parse CORS origins from comma-separated string or list."""
+        if isinstance(v, str):
+            # Handle comma-separated string from environment variable
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
     @model_validator(mode="after")
     def add_custom_domain_to_cors(self):
