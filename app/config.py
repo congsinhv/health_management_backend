@@ -123,6 +123,12 @@ class Settings(BaseSettings):
     # ========================================
     qa_enabled: bool = Field(default=True, description="Enable/disable Q&A service")
 
+    # Chat AI Service settings (for Main API proxy)
+    # ========================================
+    chat_ai_service_url: Optional[str] = Field(
+        None, description="Chat AI Service URL for proxying Q&A requests"
+    )
+
     # Local paths (used as cache directory when downloading from GCS)
     qa_model_path: str = Field(
         default="./models/vietnamese-sbert",

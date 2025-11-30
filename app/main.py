@@ -37,9 +37,10 @@ from app.config import settings
 from app.db.database import database
 from app.middleware.rate_limit import init_rate_limiter
 from app.middleware.security import SecurityHeadersMiddleware
-from app.services.qa_service import QAService
 from app.services.cache import create_cache_service
 from app.services.cache_invalidation import get_cache_invalidator
+from app.clients.chat_ai_client import get_chat_ai_client, cleanup_chat_ai_client
+from app.core.shared.http_client import cleanup_service_clients
 from app.api import predict
 
 # Configure logging
@@ -107,57 +108,21 @@ async def lifespan(app: FastAPI):
             "Cache Service and Invalidator created in fallback mode (no Redis)"
         )
 
-    # Initialize Q&A Service if enabled
-    if settings.qa_enabled:
-        try:
-            logger.info("Initializing Q&A Service...")
-            # Get cache service from app state (initialized above)
-            cache_service = getattr(app.state, "cache_service", None)
+    # Initialize Chat AI Service client (proxy mode)
+    try:
+        logger.info("Initializing Chat AI Service client...")
+        chat_ai_client = await get_chat_ai_client()
 
-            # Initialize QA Service in background to avoid blocking startup
-            import asyncio
-            from concurrent.futures import ThreadPoolExecutor
+        if chat_ai_client:
+            app.state.chat_ai_client = chat_ai_client
+            logger.info("Chat AI Service client initialized successfully")
+        else:
+            logger.info("Chat AI Service client not configured - operating in proxy mode only")
 
-            def init_qa_service():
-                try:
-                    return QAService(settings, cache_service=cache_service)
-                except Exception as e:
-                    logger.error(f"Failed to initialize Q&A Service: {e}")
-                    return None
-
-            # Initialize QA Service with timeout to prevent Cloud Run startup timeout
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(init_qa_service)
-                try:
-                    # Wait up to 30 seconds for QA Service initialization
-                    qa_service = future.result(timeout=30)
-                    if qa_service:
-                        app.state.qa_service = qa_service
-                        cache_status = (
-                            "with caching"
-                            if cache_service and cache_service.enabled
-                            else "without caching"
-                        )
-                        logger.info(
-                            f"Q&A Service initialized successfully {cache_status}"
-                        )
-                    else:
-                        logger.warning("Q&A Service initialization returned None")
-                        app.state.qa_service = None
-                except Exception as e:
-                    logger.error(f"Q&A Service initialization timed out or failed: {e}")
-                    logger.warning(
-                        "Q&A Service will not be available - continuing startup"
-                    )
-                    app.state.qa_service = None
-
-        except Exception as e:
-            logger.error(f"Failed to start Q&A Service initialization: {e}")
-            logger.warning("Q&A Service will not be available")
-            app.state.qa_service = None
-    else:
-        logger.info("Q&A Service is disabled in settings")
-        app.state.qa_service = None
+    except Exception as e:
+        logger.error(f"Failed to initialize Chat AI Service client: {e}")
+        logger.warning("Chat AI Service will not be available")
+        app.state.chat_ai_client = None
 
     yield
 
@@ -171,6 +136,20 @@ async def lifespan(app: FastAPI):
             logger.info("Redis connection closed gracefully")
         except Exception as e:
             logger.warning(f"Error closing Redis connection: {e}")
+
+    # Cleanup Chat AI Service client
+    try:
+        await cleanup_chat_ai_client()
+        logger.info("Chat AI Service client closed gracefully")
+    except Exception as e:
+        logger.warning(f"Error closing Chat AI Service client: {e}")
+
+    # Cleanup all service clients
+    try:
+        await cleanup_service_clients()
+        logger.info("All service clients closed gracefully")
+    except Exception as e:
+        logger.warning(f"Error closing service clients: {e}")
 
     await database.disconnect()
 
@@ -505,11 +484,11 @@ async def health_check():
         async with pool.acquire() as connection:
             await connection.fetchval("SELECT 1")
 
-        # Check QA service status
-        qa_status = (
-            "initialized"
-            if app.state.qa_service is not None
-            else ("disabled" if not settings.qa_enabled else "not initialized")
+        # Check Chat AI service status (proxy mode)
+        chat_ai_status = (
+            "configured"
+            if hasattr(app.state, "chat_ai_client") and app.state.chat_ai_client is not None
+            else ("not_configured" if settings.chat_ai_service_url else "disabled")
         )
 
         # Check Cache Service status
@@ -527,7 +506,7 @@ async def health_check():
         return {
             "status": "healthy",
             "database": "connected",
-            "qa_service": qa_status,
+            "chat_ai_service": chat_ai_status,
             "cache": {
                 "status": cache_status,
                 "stats": cache_stats,

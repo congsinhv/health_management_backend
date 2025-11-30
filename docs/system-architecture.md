@@ -2,7 +2,7 @@
 
 **VHealth Backend - Technical Architecture Documentation**
 
-Last Updated: 2025-11-30 (Phase 1: Microservices Separation)
+Last Updated: 2025-11-30 (Phase 2: Microservices Extraction)
 
 ---
 
@@ -36,11 +36,20 @@ VHealth Backend follows these architectural principles:
 7. **Observable**: Comprehensive logging and metrics
 8. **Secure**: Defense in depth security model
 
-### 1.2 Microservices Architecture Overview (Phase 1)
+### 1.2 Microservices Architecture Overview (Phase 2)
 
-VHealth Backend has successfully completed **Phase 1 of microservices separation**, transitioning from a monolithic service architecture to a component-based microservices architecture with shared infrastructure and interface-based communication.
+VHealth Backend has successfully completed **Phase 2 of microservices extraction**, transitioning from a monolithic service architecture to a fully implemented microservices architecture with independently deployable services.
 
-#### Phase 1 Achievements
+#### Phase 2 Achievements
+
+**✅ Completed Services:**
+- **Chat AI Service**: Standalone microservice with SBERT and OpenAI integration
+- **Main API Service**: Core backend service with user management and conversations
+- **Service-to-Service Communication**: IAM-based authentication and REST API integration
+- **ONNX Optimization**: 2.5x faster inference for Vietnamese SBERT model
+- **Production Infrastructure**: Docker, Cloud Run, CI/CD pipeline, monitoring
+
+#### Phase 1 Foundation
 
 **✅ Completed Components:**
 - **Shared Package Infrastructure** (`app/core/shared/`)

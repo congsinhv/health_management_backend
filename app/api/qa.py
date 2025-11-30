@@ -1,5 +1,5 @@
 """
-Q&A API endpoints.
+Q&A API endpoints - Main API proxy to Chat AI service.
 """
 
 import asyncio
@@ -36,6 +36,8 @@ from app.utils.metrics import (
     record_sse_error,
     start_sse_connection,
 )
+from app.clients.chat_ai_client import get_chat_ai_client
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +51,7 @@ async def ask_question(
     current_user: Annotated[UserInDB, Depends(get_current_active_user)],
 ):
     """
-    Ask a health-related question and get answers.
+    Ask a health-related question and get answers (proxied to Chat AI service).
 
     Requires authentication. Users must be logged in to ask questions.
 
@@ -64,7 +66,7 @@ async def ask_question(
     ErrorContext.set_request_id()
     ErrorContext.set_user_id(current_user.id)
     ErrorContext.add_context("endpoint", "ask_question")
-    ErrorContext.add_context("operation", "qa_inference")
+    ErrorContext.add_context("operation", "qa_proxy")
     ErrorContext.add_context("question_length", len(question_data.question))
 
     with ErrorContext(
@@ -78,20 +80,33 @@ async def ask_question(
             else question_data.question,
         },
     ):
-        # Get QA service from app state
-        qa_service = request.app.state.qa_service
+        # Get Chat AI client
+        chat_ai_client = await get_chat_ai_client()
 
-        if qa_service is None:
-            raise ServiceUnavailableException("Q&A service is not available")
+        if chat_ai_client is None:
+            raise ServiceUnavailableException(
+                "Chat AI service is not configured or available",
+                details={"service": "chat_ai", "configured": bool(settings.chat_ai_service_url)}
+            )
 
-        # Process question
-        result = await qa_service.ask_question(
-            user_question=question_data.question,
-            threshold=question_data.threshold,
-            top_k=question_data.top_k,
-        )
+        # Proxy question to Chat AI service
+        try:
+            result = await chat_ai_client.ask_question(
+                question=question_data.question,
+                threshold=question_data.threshold,
+                top_k=question_data.top_k,
+            )
 
-        return QuestionResponse(**result)
+            ErrorContext.add_context("proxy_success", True)
+            return QuestionResponse(**result)
+
+        except Exception as e:
+            ErrorContext.add_context("proxy_error", str(e))
+            logger.error(f"Failed to proxy question to Chat AI service: {e}")
+            raise ServiceUnavailableException(
+                f"Chat AI service is temporarily unavailable: {str(e)}",
+                details={"service": "chat_ai", "error": str(e)}
+            )
 
 
 @router.post(
@@ -107,7 +122,7 @@ async def ask_question_stream(
     current_user: Annotated[UserInDB, Depends(get_current_active_user)],
 ):
     """
-    Stream Q&A response with progressive events:
+    Stream Q&A response with progressive events (proxied to Chat AI service):
     1. QUESTION_RECEIVED - Immediate acknowledgment
     2. ANSWERS_FOUND - Semantic search results
     3. SUMMARY_CHUNK - Token-by-token AI summary
@@ -117,7 +132,7 @@ async def ask_question_stream(
     ErrorContext.set_request_id()
     ErrorContext.set_user_id(current_user.id)
     ErrorContext.add_context("endpoint", "ask_question_stream")
-    ErrorContext.add_context("operation", "qa_streaming")
+    ErrorContext.add_context("operation", "qa_proxy_streaming")
     ErrorContext.add_context("question_length", len(question_data.question))
 
     # Rate limiting
@@ -134,9 +149,14 @@ async def ask_question_stream(
         await rate_limiter.register_connection(str(current_user.id))
         await rate_limiter.register_request(str(current_user.id))
 
-    qa_service = request.app.state.qa_service
-    if not qa_service:
-        raise ServiceUnavailableException("Q&A service is not available")
+    # Get Chat AI client
+    chat_ai_client = await get_chat_ai_client()
+
+    if chat_ai_client is None:
+        raise ServiceUnavailableException(
+            "Chat AI service is not configured or available",
+            details={"service": "chat_ai", "configured": bool(settings.chat_ai_service_url)}
+        )
 
     # Start monitoring
     start_time = time.time()
@@ -159,7 +179,7 @@ async def ask_question_stream(
             last_heartbeat = asyncio.get_event_loop().time()
             heartbeat_interval = 30  # seconds
 
-            async for sse_event in qa_service.stream_ask_question(
+            async for sse_event in chat_ai_client.stream_ask_question(
                 question=question_data.question,
                 threshold=question_data.threshold,
                 top_k=question_data.top_k,
@@ -172,7 +192,7 @@ async def ask_question_stream(
                     StructuredLogger.log_disconnect(str(current_user.id), duration)
                     break
 
-                # Yield event
+                # Yield event from Chat AI service
                 yield sse_event
                 event_count += 1
 
@@ -191,17 +211,20 @@ async def ask_question_stream(
                     yield ":\n\n"  # SSE comment (keep-alive)
                     last_heartbeat = current_time
 
+            ErrorContext.add_context("proxy_success", True)
+
         except Exception as e:
             duration = time.time() - start_time
             ErrorContext.add_context("stream_error", str(e))
             ErrorContext.add_context("stream_duration", duration)
+            ErrorContext.add_context("proxy_error", str(e))
             StructuredLogger.log_error(str(current_user.id), str(e), "streaming_error")
             record_sse_error("streaming_error", str(current_user.id))
 
             error_event = {
                 "event": "error",
                 "data": json.dumps(
-                    {"error": "Internal streaming error", "code": "internal_error"}
+                    {"error": "Chat AI service streaming error", "code": "service_unavailable"}
                 ),
             }
             yield f"event: {error_event['event']}\ndata: {error_event['data']}\n\n"
@@ -234,7 +257,7 @@ async def ask_question_stream(
 @router.get("/health", response_model=QAHealthResponse, status_code=status.HTTP_200_OK)
 async def qa_health_check(request: Request):
     """
-    Check Q&A service health status.
+    Check Q&A service health status (proxied to Chat AI service).
 
     Public endpoint - no authentication required.
 
@@ -244,27 +267,44 @@ async def qa_health_check(request: Request):
     # Set error context for request correlation
     ErrorContext.set_request_id()
     ErrorContext.add_context("endpoint", "qa_health_check")
-    ErrorContext.add_context("operation", "health_check")
+    ErrorContext.add_context("operation", "health_check_proxy")
 
     with ErrorContext("qa_health_check"):
-        qa_service = request.app.state.qa_service
+        # Get Chat AI client
+        chat_ai_client = await get_chat_ai_client()
 
-        if qa_service is None:
+        if chat_ai_client is None:
             return QAHealthResponse(
                 status="unavailable",
                 model_loaded=False,
                 embeddings_loaded=False,
                 streaming_enabled=False,
                 openai_configured=False,
-                message="Q&A service is not initialized",
+                message="Chat AI service is not configured",
             )
 
-        return QAHealthResponse(
-            status="healthy",
-            model_loaded=qa_service.model is not None,
-            embeddings_loaded=qa_service.question_embeddings is not None,
-            streaming_enabled=hasattr(qa_service, "stream_ask_question"),
-            openai_configured=hasattr(qa_service, "openai_client")
-            and qa_service.openai_client is not None,
-            message="Q&A service is operational",
-        )
+        # Proxy health check to Chat AI service
+        try:
+            health_response = await chat_ai_client.health_check()
+
+            # Map health check response to QAHealthResponse
+            return QAHealthResponse(
+                status=health_response.get("status", "unknown"),
+                model_loaded=health_response.get("model_loaded", False),
+                embeddings_loaded=health_response.get("embeddings_loaded", False),
+                streaming_enabled=health_response.get("streaming_enabled", False),
+                openai_configured=health_response.get("openai_configured", False),
+                message=health_response.get("message", "Health check completed"),
+            )
+
+        except Exception as e:
+            ErrorContext.add_context("health_check_error", str(e))
+            logger.error(f"Failed to proxy health check to Chat AI service: {e}")
+            return QAHealthResponse(
+                status="unhealthy",
+                model_loaded=False,
+                embeddings_loaded=False,
+                streaming_enabled=False,
+                openai_configured=False,
+                message=f"Chat AI service health check failed: {str(e)}",
+            )
