@@ -22,7 +22,7 @@ pipeline {
     environment {
         GCP_REGION = 'asia-southeast1'
         ENV = "${params.ENVIRONMENT}"
-        DOMAIN_PREFIX = "${params.ENVIRONMENT == 'prod' ? '' : params.ENVIRONMENT}"
+        DOMAIN_PREFIX = "${params.ENVIRONMENT == 'prod' ? '' : params.ENVIRONMENT + '.'}"
         GCP_PROJECT_ID = "vhealth-${params.ENVIRONMENT}"
         TF_BACKEND_BUCKET = "${GCP_PROJECT_ID}-backend-tfstate"
 
@@ -427,8 +427,8 @@ AI summarization will not be available without this secret.
                                 --set-env-vars "MODEL_AUTO_DOWNLOAD=true" \
                                 --set-env-vars "GCP_MODEL_BLOB_PATH=models/vietnamese-sbert/" \
                                 --set-env-vars "GCP_DATA_BLOB_PATH=data/" \
-                                --set-env-vars "CUSTOM_DOMAIN=${DOMAIN_PREFIX}.vhealth.io.vn" \
-                                --set-env-vars "CORS_ORIGINS=https://${DOMAIN_PREFIX}vhealth.io.vn,https://api.${DOMAIN_PREFIX}vhealth.io.vn" \
+                                --set-env-vars "CUSTOM_DOMAIN=${DOMAIN_PREFIX}vhealth.io.vn" \
+                                --set-env-vars "CORS_ORIGINS=https://${DOMAIN_PREFIX}vhealth.io.vn\\,https://api.${DOMAIN_PREFIX}vhealth.io.vn" \
                                 --set-secrets "DATABASE_URL=vhealth-${params.ENVIRONMENT}-database-url:latest" \
                                 --set-secrets "SECRET_KEY=vhealth-${params.ENVIRONMENT}-secret-key:latest" \
                                 --set-secrets "GOOGLE_CLIENT_ID=vhealth-${params.ENVIRONMENT}-google-client-id:latest" \
