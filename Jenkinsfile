@@ -22,6 +22,7 @@ pipeline {
     environment {
         GCP_REGION = 'asia-southeast1'
         ENV = "${params.ENVIRONMENT}"
+        DOMAIN_PREFIX = "${params.ENVIRONMENT == 'prod' ? '' : params.ENVIRONMENT}"
         GCP_PROJECT_ID = "vhealth-${params.ENVIRONMENT}"
         TF_BACKEND_BUCKET = "${GCP_PROJECT_ID}-backend-tfstate"
 
@@ -426,7 +427,8 @@ AI summarization will not be available without this secret.
                                 --set-env-vars "MODEL_AUTO_DOWNLOAD=true" \
                                 --set-env-vars "GCP_MODEL_BLOB_PATH=models/vietnamese-sbert/" \
                                 --set-env-vars "GCP_DATA_BLOB_PATH=data/" \
-                                --set-env-vars "CUSTOM_DOMAIN=${params.ENVIRONMENT == 'prod' ? '' : params.ENVIRONMENT}.vhealth.io.vn" \
+                                --set-env-vars "CUSTOM_DOMAIN=${DOMAIN_PREFIX}.vhealth.io.vn" \
+                                --set-env-vars "CORS_ORIGINS=https://${DOMAIN_PREFIX}vhealth.io.vn,https://api.${DOMAIN_PREFIX}vhealth.io.vn" \
                                 --set-secrets "DATABASE_URL=vhealth-${params.ENVIRONMENT}-database-url:latest" \
                                 --set-secrets "SECRET_KEY=vhealth-${params.ENVIRONMENT}-secret-key:latest" \
                                 --set-secrets "GOOGLE_CLIENT_ID=vhealth-${params.ENVIRONMENT}-google-client-id:latest" \
@@ -436,7 +438,7 @@ AI summarization will not be available without this secret.
                                 --set-secrets "MAIL_FROM=vhealth-${params.ENVIRONMENT}-mail-from:latest" \
                                 --set-secrets "MAIL_SERVER=vhealth-${params.ENVIRONMENT}-mail-server:latest" \
                                 --set-secrets "OPENAI_API_KEY=vhealth-${params.ENVIRONMENT}-openai-api-key:latest" \
-                                --set-env-vars "WEBUI_URL=${params.ENVIRONMENT == 'prod' ? 'https://vhealth.io.vn' : 'https://dev.vhealth.io.vn'}" \
+                                --set-env-vars "WEBUI_URL=https://${DOMAIN_PREFIX}vhealth.io.vn" \
                                 --cpu 2 \
                                 --memory 2Gi \
                                 --min-instances 0 \
