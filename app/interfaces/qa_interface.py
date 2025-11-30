@@ -16,11 +16,19 @@ from app.core.shared.schemas import BaseResponse, ServiceRequest
 class QARequest(ServiceRequest):
     """Q&A request model."""
 
-    question: str = Field(..., min_length=1, max_length=1000, description="Health question in Vietnamese")
+    question: str = Field(
+        ..., min_length=1, max_length=1000, description="Health question in Vietnamese"
+    )
     user_id: Optional[int] = Field(None, description="User ID for personalization")
-    conversation_id: Optional[int] = Field(None, description="Conversation ID for context")
-    context: Optional[str] = Field(None, description="Additional context for the question")
-    threshold: Optional[float] = Field(0.55, ge=0.0, le=1.0, description="Similarity threshold for answers")
+    conversation_id: Optional[int] = Field(
+        None, description="Conversation ID for context"
+    )
+    context: Optional[str] = Field(
+        None, description="Additional context for the question"
+    )
+    threshold: Optional[float] = Field(
+        0.55, ge=0.0, le=1.0, description="Similarity threshold for answers"
+    )
 
 
 class QAAnswer(BaseModel):
@@ -29,7 +37,9 @@ class QAAnswer(BaseModel):
     answer: str = Field(..., description="Answer text in Vietnamese")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score")
     source: str = Field(..., description="Source of the answer")
-    similarity: float = Field(..., ge=0.0, le=1.0, description="Similarity score with question")
+    similarity: float = Field(
+        ..., ge=0.0, le=1.0, description="Similarity score with question"
+    )
 
 
 class QAResponse(BaseResponse):
@@ -38,7 +48,9 @@ class QAResponse(BaseResponse):
     question: str = Field(..., description="Original question")
     answers: list[QAAnswer] = Field(..., description="List of matching answers")
     summary: Optional[str] = Field(None, description="AI-generated summary")
-    processing_time_ms: Optional[int] = Field(None, description="Processing time in milliseconds")
+    processing_time_ms: Optional[int] = Field(
+        None, description="Processing time in milliseconds"
+    )
     cache_hit: bool = Field(False, description="Whether response came from cache")
 
 
@@ -48,7 +60,9 @@ class QAStreamChunk(BaseModel):
     chunk: str = Field(..., description="Text chunk for streaming")
     type: str = Field(..., description="Chunk type: 'summary' or 'partial'")
     finished: bool = Field(False, description="Whether streaming is complete")
-    final_response: Optional[QAResponse] = Field(None, description="Final complete response")
+    final_response: Optional[QAResponse] = Field(
+        None, description="Final complete response"
+    )
 
 
 class QAHealthCheck(BaseResponse):
@@ -56,10 +70,14 @@ class QAHealthCheck(BaseResponse):
 
     service: str = Field("qa", description="Service name")
     model_loaded: bool = Field(..., description="Whether SBERT model is loaded")
-    database_connected: bool = Field(..., description="Whether QA database is connected")
+    database_connected: bool = Field(
+        ..., description="Whether QA database is connected"
+    )
     openai_available: bool = Field(..., description="Whether OpenAI API is available")
     cache_status: str = Field(..., description="Cache service status")
-    total_questions: Optional[int] = Field(None, description="Total questions in dataset")
+    total_questions: Optional[int] = Field(
+        None, description="Total questions in dataset"
+    )
 
 
 class IQAService(ABC):
@@ -128,11 +146,7 @@ class IQAService(ABC):
 
     @abstractmethod
     async def add_answer(
-        self,
-        question: str,
-        answer: str,
-        source: str,
-        category: Optional[str] = None
+        self, question: str, answer: str, source: str, category: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Add a new Q&A pair to the dataset.
@@ -170,10 +184,7 @@ class IQAService(ABC):
 
     @abstractmethod
     async def search_answers(
-        self,
-        query: str,
-        limit: int = 10,
-        threshold: float = 0.55
+        self, query: str, limit: int = 10, threshold: float = 0.55
     ) -> list[Dict[str, Any]]:
         """
         Search for answers matching a query.
@@ -194,9 +205,7 @@ class IQAService(ABC):
 
     @abstractmethod
     async def get_conversation_context(
-        self,
-        conversation_id: int,
-        user_id: int
+        self, conversation_id: int, user_id: int
     ) -> list[Dict[str, Any]]:
         """
         Get conversation context for better answers.

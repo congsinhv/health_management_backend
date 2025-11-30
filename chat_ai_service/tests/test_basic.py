@@ -7,9 +7,9 @@ import os
 from unittest.mock import MagicMock
 
 # Set environment variables for testing
-os.environ['SECRET_KEY'] = 'test-secret-key'
-os.environ['DEBUG'] = 'true'
-os.environ['OPENAI_API_KEY'] = 'test-openai-key'
+os.environ["SECRET_KEY"] = "test-secret-key"
+os.environ["DEBUG"] = "true"
+os.environ["OPENAI_API_KEY"] = "test-openai-key"
 
 
 class TestBasicImports:
@@ -18,10 +18,8 @@ class TestBasicImports:
     def test_config_import(self):
         """Test config imports work."""
         from app.config import Settings
-        settings = Settings(
-            SECRET_KEY="test-key",
-            OPENAI_API_KEY="test-openai-key"
-        )
+
+        settings = Settings(SECRET_KEY="test-key", OPENAI_API_KEY="test-openai-key")
         assert settings.SECRET_KEY == "test-key"
         assert settings.OPENAI_API_KEY == "test-openai-key"
 
@@ -30,8 +28,9 @@ class TestBasicImports:
         from app.core.qa_constants import (
             DEFAULT_MODEL_NAME,
             DEFAULT_SIMILARITY_THRESHOLD,
-            DEFAULT_TOP_K
+            DEFAULT_TOP_K,
         )
+
         assert DEFAULT_MODEL_NAME is not None
         assert isinstance(DEFAULT_SIMILARITY_THRESHOLD, float)
         assert isinstance(DEFAULT_TOP_K, int)
@@ -41,11 +40,7 @@ class TestBasicImports:
         from app.schemas.qa import QuestionRequest, QuestionResponse
 
         # Test QuestionRequest
-        request = QuestionRequest(
-            question="What is diabetes?",
-            threshold=0.55,
-            top_k=5
-        )
+        request = QuestionRequest(question="What is diabetes?", threshold=0.55, top_k=5)
         assert request.question == "What is diabetes?"
         assert request.threshold == 0.55
         assert request.top_k == 5
@@ -56,14 +51,12 @@ class TestBasicImports:
             QAServiceException,
             QAModelNotLoadedException,
             ValidationException,
-            ServiceUnavailableException
+            ServiceUnavailableException,
         )
 
         # Test exception creation
         exc = QAServiceException(
-            message="Test error",
-            details={"test": "data"},
-            error_code="TestError"
+            message="Test error", details={"test": "data"}, error_code="TestError"
         )
         assert exc.message == "Test error"
         assert exc.error_code == "TestError"

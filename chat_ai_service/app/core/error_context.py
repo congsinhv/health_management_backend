@@ -64,29 +64,29 @@ class ErrorContext:
     def add_context(cls, key: str, value: Any) -> None:
         """Add arbitrary context information."""
         cls._ensure_context()
-        if not hasattr(cls._context, 'custom'):
+        if not hasattr(cls._context, "custom"):
             cls._context.custom = {}
         cls._context.custom[key] = value
 
     @classmethod
     def get_request_id(cls) -> Optional[str]:
         """Get current request ID."""
-        return getattr(cls._context, 'request_id', None)
+        return getattr(cls._context, "request_id", None)
 
     @classmethod
     def get_user_id(cls) -> Optional[str]:
         """Get current user ID."""
-        return getattr(cls._context, 'user_id', None)
+        return getattr(cls._context, "user_id", None)
 
     @classmethod
     def get_correlation_id(cls) -> Optional[str]:
         """Get current correlation ID."""
-        return getattr(cls._context, 'correlation_id', None)
+        return getattr(cls._context, "correlation_id", None)
 
     @classmethod
     def get_custom_context(cls) -> Dict[str, Any]:
         """Get custom context dictionary."""
-        return getattr(cls._context, 'custom', {})
+        return getattr(cls._context, "custom", {})
 
     @classmethod
     def get_all(cls) -> Dict[str, Any]:
@@ -107,7 +107,7 @@ class ErrorContext:
     @classmethod
     def _ensure_context(cls) -> None:
         """Ensure context dictionary exists."""
-        if not hasattr(cls._context, 'initialized'):
+        if not hasattr(cls._context, "initialized"):
             cls._context.initialized = True
             cls._context.request_id = None
             cls._context.user_id = None

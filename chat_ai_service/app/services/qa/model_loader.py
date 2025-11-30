@@ -31,12 +31,14 @@ except ImportError:
 try:
     import torch
     import numpy as np
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
 
 try:
     import onnxruntime as ort
+
     ONNX_AVAILABLE = True
 except ImportError:
     ONNX_AVAILABLE = False
@@ -140,15 +142,16 @@ class ModelLoader:
         """Load ONNX model for inference."""
         try:
             # Configure ONNX Runtime session
-            providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
             if TORCH_AVAILABLE and torch.cuda.is_available():
                 logger.info("ONNX Runtime: Using CUDA")
-                providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
             else:
                 logger.info("ONNX Runtime: Using CPU")
 
             try:
                 import onnxruntime as ort
+
                 session = ort.InferenceSession(str(onnx_path), providers=providers)
             except ImportError:
                 logger.error("onnxruntime not available")
@@ -156,8 +159,10 @@ class ModelLoader:
 
             # Test the model with dummy input
             input_name = session.get_inputs()[0].name
-            dummy_input = {"input_ids": [[1, 2, 3, 4, 5]],
-                          "attention_mask": [[1, 1, 1, 1, 1]]}
+            dummy_input = {
+                "input_ids": [[1, 2, 3, 4, 5]],
+                "attention_mask": [[1, 1, 1, 1, 1]],
+            }
             _ = session.run(None, dummy_input)
 
             logger.info(f"ONNX model loaded successfully from: {onnx_path}")
@@ -166,7 +171,9 @@ class ModelLoader:
             logger.error(f"Failed to load ONNX model: {e}")
             return None
 
-    def _try_optimize_to_onnx(self, model: SentenceTransformer, model_path: Path) -> bool:
+    def _try_optimize_to_onnx(
+        self, model: SentenceTransformer, model_path: Path
+    ) -> bool:
         """Try to convert PyTorch model to ONNX format."""
         if not ONNX_AVAILABLE:
             logger.warning("ONNX Runtime not available, skipping optimization")
@@ -183,8 +190,13 @@ class ModelLoader:
             # Prepare dummy input for export
             tokenizer = model.tokenizer
             dummy_text = "This is a dummy sentence for ONNX export."
-            inputs = tokenizer(dummy_text, return_tensors="pt",
-                              padding=True, truncation=True, max_length=128)
+            inputs = tokenizer(
+                dummy_text,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=128,
+            )
 
             # Export to ONNX
             torch.onnx.export(
@@ -196,9 +208,9 @@ class ModelLoader:
                 dynamic_axes={
                     "input_ids": {0: "batch_size", 1: "sequence"},
                     "attention_mask": {0: "batch_size", 1: "sequence"},
-                    "last_hidden_state": {0: "batch_size", 1: "sequence"}
+                    "last_hidden_state": {0: "batch_size", 1: "sequence"},
                 },
-                opset_version=14
+                opset_version=14,
             )
 
             logger.info(f"ONNX model saved to: {onnx_path}")
@@ -342,7 +354,7 @@ class ModelLoader:
                 return_tensors="np",
                 padding=True,
                 truncation=True,
-                max_length=128
+                max_length=128,
             )
 
             # Run inference with ONNX
@@ -350,8 +362,8 @@ class ModelLoader:
                 None,
                 {
                     "input_ids": inputs["input_ids"],
-                    "attention_mask": inputs["attention_mask"]
-                }
+                    "attention_mask": inputs["attention_mask"],
+                },
             )
 
             # Apply mean pooling (same as SentenceTransformer)

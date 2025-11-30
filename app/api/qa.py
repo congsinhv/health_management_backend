@@ -86,7 +86,10 @@ async def ask_question(
         if chat_ai_client is None:
             raise ServiceUnavailableException(
                 "Chat AI service is not configured or available",
-                details={"service": "chat_ai", "configured": bool(settings.chat_ai_service_url)}
+                details={
+                    "service": "chat_ai",
+                    "configured": bool(settings.chat_ai_service_url),
+                },
             )
 
         # Proxy question to Chat AI service
@@ -105,7 +108,7 @@ async def ask_question(
             logger.error(f"Failed to proxy question to Chat AI service: {e}")
             raise ServiceUnavailableException(
                 f"Chat AI service is temporarily unavailable: {str(e)}",
-                details={"service": "chat_ai", "error": str(e)}
+                details={"service": "chat_ai", "error": str(e)},
             )
 
 
@@ -155,7 +158,10 @@ async def ask_question_stream(
     if chat_ai_client is None:
         raise ServiceUnavailableException(
             "Chat AI service is not configured or available",
-            details={"service": "chat_ai", "configured": bool(settings.chat_ai_service_url)}
+            details={
+                "service": "chat_ai",
+                "configured": bool(settings.chat_ai_service_url),
+            },
         )
 
     # Start monitoring
@@ -224,7 +230,10 @@ async def ask_question_stream(
             error_event = {
                 "event": "error",
                 "data": json.dumps(
-                    {"error": "Chat AI service streaming error", "code": "service_unavailable"}
+                    {
+                        "error": "Chat AI service streaming error",
+                        "code": "service_unavailable",
+                    }
                 ),
             }
             yield f"event: {error_event['event']}\ndata: {error_event['data']}\n\n"

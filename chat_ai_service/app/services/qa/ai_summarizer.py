@@ -32,10 +32,12 @@ logger = logging.getLogger(__name__)
 class AISummarizer:
     """AI-powered answer summarization using service client for OpenAI API."""
 
-    def __init__(self,
-                 api_key: Optional[str] = None,
-                 model: str = "gpt-4o-mini",
-                 service_url: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "gpt-4o-mini",
+        service_url: Optional[str] = None,
+    ):
         """
         Initialize AI summarizer.
 
@@ -48,7 +50,7 @@ class AISummarizer:
         self.model = model
         self.temperature = OPENAI_TEMPERATURE
         self.max_tokens = 150  # Concise summaries
-        self.service_url = service_url or getattr(settings, 'openai_service_url', None)
+        self.service_url = service_url or getattr(settings, "openai_service_url", None)
         self.service_client = None
         self.direct_client = None
 
@@ -63,6 +65,7 @@ class AISummarizer:
         """Initialize direct OpenAI client."""
         try:
             from openai import OpenAI, AsyncOpenAI
+
             self.direct_client = OpenAI(api_key=self.api_key)
             self.async_client = AsyncOpenAI(api_key=self.api_key)
             logger.info("Direct OpenAI clients initialized successfully")
@@ -102,11 +105,15 @@ class AISummarizer:
 
             if self.service_client:
                 # Use service client for OpenAI communication
-                async for chunk in self._stream_with_service_client(question, answers_text):
+                async for chunk in self._stream_with_service_client(
+                    question, answers_text
+                ):
                     yield chunk
             else:
                 # Use direct OpenAI client
-                async for chunk in self._stream_with_direct_client(question, answers_text):
+                async for chunk in self._stream_with_direct_client(
+                    question, answers_text
+                ):
                     yield chunk
 
         except Exception as e:
@@ -152,7 +159,9 @@ class AISummarizer:
                 # Set up headers
                 headers = {
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self.api_key}" if self.api_key else "no-auth"
+                    "Authorization": f"Bearer {self.api_key}"
+                    if self.api_key
+                    else "no-auth",
                 }
 
                 async with session.post(url, json=payload, headers=headers) as response:
@@ -160,13 +169,14 @@ class AISummarizer:
 
                     # Process streaming response
                     async for line in response.content:
-                        line = line.decode('utf-8').strip()
-                        if line.startswith('data: '):
+                        line = line.decode("utf-8").strip()
+                        if line.startswith("data: "):
                             data = line[6:]  # Remove 'data: ' prefix
-                            if data == '[DONE]':
+                            if data == "[DONE]":
                                 break
                             try:
                                 import json
+
                                 chunk = json.loads(data)
                                 if chunk.get("choices"):
                                     delta = chunk["choices"][0].get("delta", {})
@@ -322,9 +332,19 @@ class AISummarizer:
                     "max_tokens": 200,
                 }
 
-                response = await self.service_client.post("/chat/completions", json=payload)
-                evaluation = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-                return {"available": True, "evaluation": evaluation, "feedback": evaluation}
+                response = await self.service_client.post(
+                    "/chat/completions", json=payload
+                )
+                evaluation = (
+                    response.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
+                return {
+                    "available": True,
+                    "evaluation": evaluation,
+                    "feedback": evaluation,
+                }
             else:
                 # Use direct client for validation
                 messages = [
@@ -354,7 +374,11 @@ class AISummarizer:
                 )
 
                 evaluation = response.choices[0].message.content
-                return {"available": True, "evaluation": evaluation, "feedback": evaluation}
+                return {
+                    "available": True,
+                    "evaluation": evaluation,
+                    "feedback": evaluation,
+                }
 
         except Exception as e:
             logger.error(f"Error validating answer quality: {e}")

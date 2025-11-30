@@ -26,12 +26,15 @@ router = APIRouter(prefix="/api/v1/predict", tags=["Predictions"])
 @router.post("/", response_model=PredictionResponse)
 async def predict(
     user_input: UserInput,
-    current_user = Depends(get_current_user),
-    pool = Depends(get_database_pool)
+    current_user=Depends(get_current_user),
+    pool=Depends(get_database_pool),
 ):
     """Generate health prediction (proxied + persisted)."""
     try:
-        with ErrorContext("predict_obesity", {"user_id": current_user.id, "operation": "prediction_request"}):
+        with ErrorContext(
+            "predict_obesity",
+            {"user_id": current_user.id, "operation": "prediction_request"},
+        ):
             # 1. Call Prediction service
             prediction_data = await prediction_client.predict(user_input.dict())
 
@@ -43,7 +46,7 @@ async def predict(
                 prediction_id=prediction_id,
                 user_id=current_user.id,
                 user_input=user_input.dict(),
-                prediction_data=prediction_data
+                prediction_data=prediction_data,
             )
 
             # 3. Return with ID
@@ -56,34 +59,27 @@ async def predict(
                 healthAnalysis=prediction_data.get("healthAnalysis", {}),
                 dietPlan=prediction_data.get("dietPlan", {}),
                 workoutPlan=prediction_data.get("workoutPlan", {}),
-                raw_prediction=prediction_data.get("raw_prediction", [])
+                raw_prediction=prediction_data.get("raw_prediction", []),
             )
 
     except ValidationException as e:
         logger.error(f"Prediction validation failed: {e}")
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid input: {str(e)}"
-        )
+        raise HTTPException(status_code=422, detail=f"Invalid input: {str(e)}")
     except ServiceUnavailableException as e:
         logger.error(f"Prediction service unavailable: {e}")
         raise HTTPException(
-            status_code=503,
-            detail=f"Prediction service unavailable: {str(e)}"
+            status_code=503, detail=f"Prediction service unavailable: {str(e)}"
         )
     except Exception as e:
         logger.error(f"Prediction failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
 
 @router.post("/{prediction_id}/pdf")
 async def generate_pdf(
     prediction_id: str,
-    current_user = Depends(get_current_user),
-    pool = Depends(get_database_pool)
+    current_user=Depends(get_current_user),
+    pool=Depends(get_database_pool),
 ):
     """Generate PDF report for prediction."""
     try:
@@ -97,29 +93,17 @@ async def generate_pdf(
         prediction = await prediction_repo.get_prediction(prediction_id)
 
         if not prediction:
-            raise HTTPException(
-                status_code=404,
-                detail="Prediction not found"
-            )
+            raise HTTPException(status_code=404, detail="Prediction not found")
 
         # Check if prediction belongs to current user
         if prediction.get("user_id") != current_user.id:
-            raise HTTPException(
-                status_code=403,
-                detail="Access denied"
-            )
+            raise HTTPException(status_code=403, detail="Access denied")
 
         # Generate and upload PDF
         pdf_url = await pdf_service.generate_and_upload_pdf(prediction)
 
-        return {
-            "pdf_url": pdf_url,
-            "prediction_id": prediction_id
-        }
+        return {"pdf_url": pdf_url, "prediction_id": prediction_id}
 
     except Exception as e:
         logger.error(f"PDF generation failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"PDF generation error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")

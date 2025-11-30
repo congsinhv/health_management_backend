@@ -23,25 +23,52 @@ class PredictionRequest(ServiceRequest):
     weight: float = Field(..., ge=10.0, le=500.0, description="Weight in kg")
 
     # Lifestyle factors
-    activity_level: str = Field(..., pattern="^(sedentary|light|moderate|active|very_active)$", description="Physical activity level")
-    smoking_status: str = Field(..., pattern="^(never|former|current)$", description="Smoking status")
-    alcohol_consumption: str = Field(..., pattern="^(none|moderate|heavy)$", description="Alcohol consumption")
+    activity_level: str = Field(
+        ...,
+        pattern="^(sedentary|light|moderate|active|very_active)$",
+        description="Physical activity level",
+    )
+    smoking_status: str = Field(
+        ..., pattern="^(never|former|current)$", description="Smoking status"
+    )
+    alcohol_consumption: str = Field(
+        ..., pattern="^(none|moderate|heavy)$", description="Alcohol consumption"
+    )
 
     # Health indicators
-    systolic_bp: Optional[float] = Field(None, ge=70.0, le=250.0, description="Systolic blood pressure")
-    diastolic_bp: Optional[float] = Field(None, ge=40.0, le=150.0, description="Diastolic blood pressure")
-    fasting_glucose: Optional[float] = Field(None, ge=50.0, le=500.0, description="Fasting blood glucose (mg/dL)")
-    cholesterol: Optional[float] = Field(None, ge=100.0, le=400.0, description="Total cholesterol (mg/dL)")
+    systolic_bp: Optional[float] = Field(
+        None, ge=70.0, le=250.0, description="Systolic blood pressure"
+    )
+    diastolic_bp: Optional[float] = Field(
+        None, ge=40.0, le=150.0, description="Diastolic blood pressure"
+    )
+    fasting_glucose: Optional[float] = Field(
+        None, ge=50.0, le=500.0, description="Fasting blood glucose (mg/dL)"
+    )
+    cholesterol: Optional[float] = Field(
+        None, ge=100.0, le=400.0, description="Total cholesterol (mg/dL)"
+    )
 
     # Medical history
-    family_history_diabetes: bool = Field(False, description="Family history of diabetes")
-    family_history_heart_disease: bool = Field(False, description="Family history of heart disease")
-    personal_history_diabetes: bool = Field(False, description="Personal history of diabetes")
-    personal_history_heart_disease: bool = Field(False, description="Personal history of heart disease")
+    family_history_diabetes: bool = Field(
+        False, description="Family history of diabetes"
+    )
+    family_history_heart_disease: bool = Field(
+        False, description="Family history of heart disease"
+    )
+    personal_history_diabetes: bool = Field(
+        False, description="Personal history of diabetes"
+    )
+    personal_history_heart_disease: bool = Field(
+        False, description="Personal history of heart disease"
+    )
 
     # User context
     user_id: Optional[int] = Field(None, description="User ID for tracking")
-    prediction_type: str = Field("general", description="Type of prediction: general, obesity, diabetes, heart_disease")
+    prediction_type: str = Field(
+        "general",
+        description="Type of prediction: general, obesity, diabetes, heart_disease",
+    )
 
 
 class RiskScore(BaseModel):
@@ -49,8 +76,12 @@ class RiskScore(BaseModel):
 
     factor: str = Field(..., description="Risk factor name")
     score: float = Field(..., ge=0.0, le=1.0, description="Risk score (0-1)")
-    level: str = Field(..., pattern="^(low|moderate|high|very_high)$", description="Risk level")
-    contributing_factors: List[str] = Field(default_factory=list, description="Factors contributing to this risk")
+    level: str = Field(
+        ..., pattern="^(low|moderate|high|very_high)$", description="Risk level"
+    )
+    contributing_factors: List[str] = Field(
+        default_factory=list, description="Factors contributing to this risk"
+    )
 
 
 class Recommendation(BaseModel):
@@ -59,8 +90,14 @@ class Recommendation(BaseModel):
     category: str = Field(..., description="Recommendation category")
     title: str = Field(..., description="Recommendation title")
     description: str = Field(..., description="Detailed recommendation")
-    priority: str = Field(..., pattern="^(low|medium|high|critical)$", description="Recommendation priority")
-    action_items: List[str] = Field(default_factory=list, description="Specific action items")
+    priority: str = Field(
+        ...,
+        pattern="^(low|medium|high|critical)$",
+        description="Recommendation priority",
+    )
+    action_items: List[str] = Field(
+        default_factory=list, description="Specific action items"
+    )
 
 
 class PredictionResponse(BaseResponse):
@@ -68,14 +105,26 @@ class PredictionResponse(BaseResponse):
 
     user_id: Optional[int] = Field(None, description="User ID from request")
     bmi: float = Field(..., ge=10.0, le=60.0, description="Calculated BMI")
-    obesity_level: str = Field(..., pattern="^(underweight|normal|overweight|obese|severely_obese)$", description="Obesity classification")
+    obesity_level: str = Field(
+        ...,
+        pattern="^(underweight|normal|overweight|obese|severely_obese)$",
+        description="Obesity classification",
+    )
     obesity_risk: RiskScore = Field(..., description="Obesity risk assessment")
     diabetes_risk: RiskScore = Field(..., description="Diabetes risk assessment")
-    heart_disease_risk: RiskScore = Field(..., description="Heart disease risk assessment")
-    recommendations: List[Recommendation] = Field(default_factory=list, description="Personalized recommendations")
+    heart_disease_risk: RiskScore = Field(
+        ..., description="Heart disease risk assessment"
+    )
+    recommendations: List[Recommendation] = Field(
+        default_factory=list, description="Personalized recommendations"
+    )
     model_version: str = Field(..., description="ML model version used")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Overall prediction confidence")
-    processing_time_ms: Optional[int] = Field(None, description="Processing time in milliseconds")
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Overall prediction confidence"
+    )
+    processing_time_ms: Optional[int] = Field(
+        None, description="Processing time in milliseconds"
+    )
 
 
 class PredictionHistory(BaseModel):
@@ -123,10 +172,7 @@ class IPredictionService(ABC):
 
     @abstractmethod
     async def get_user_predictions(
-        self,
-        user_id: int,
-        limit: int = 10,
-        offset: int = 0
+        self, user_id: int, limit: int = 10, offset: int = 0
     ) -> List[PredictionHistory]:
         """
         Get prediction history for a user.
@@ -150,7 +196,7 @@ class IPredictionService(ABC):
         user_id: int,
         request: PredictionRequest,
         response: PredictionResponse,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
     ) -> PredictionHistory:
         """
         Save a prediction to user history.
@@ -171,9 +217,7 @@ class IPredictionService(ABC):
 
     @abstractmethod
     async def get_prediction_by_id(
-        self,
-        prediction_id: int,
-        user_id: int
+        self, prediction_id: int, user_id: int
     ) -> Optional[PredictionHistory]:
         """
         Get a specific prediction by ID.
@@ -192,11 +236,7 @@ class IPredictionService(ABC):
         pass
 
     @abstractmethod
-    async def delete_prediction(
-        self,
-        prediction_id: int,
-        user_id: int
-    ) -> bool:
+    async def delete_prediction(self, prediction_id: int, user_id: int) -> bool:
         """
         Delete a prediction from user history.
 
@@ -225,9 +265,7 @@ class IPredictionService(ABC):
 
     @abstractmethod
     async def get_prediction_statistics(
-        self,
-        user_id: Optional[int] = None,
-        days: int = 30
+        self, user_id: Optional[int] = None, days: int = 30
     ) -> Dict[str, Any]:
         """
         Get prediction statistics.
@@ -245,11 +283,7 @@ class IPredictionService(ABC):
         pass
 
     @abstractmethod
-    async def generate_pdf_report(
-        self,
-        prediction_id: int,
-        user_id: int
-    ) -> str:
+    async def generate_pdf_report(self, prediction_id: int, user_id: int) -> str:
         """
         Generate PDF report for a prediction.
 

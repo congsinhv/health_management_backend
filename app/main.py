@@ -117,7 +117,9 @@ async def lifespan(app: FastAPI):
             app.state.chat_ai_client = chat_ai_client
             logger.info("Chat AI Service client initialized successfully")
         else:
-            logger.info("Chat AI Service client not configured - operating in proxy mode only")
+            logger.info(
+                "Chat AI Service client not configured - operating in proxy mode only"
+            )
 
     except Exception as e:
         logger.error(f"Failed to initialize Chat AI Service client: {e}")
@@ -487,7 +489,8 @@ async def health_check():
         # Check Chat AI service status (proxy mode)
         chat_ai_status = (
             "configured"
-            if hasattr(app.state, "chat_ai_client") and app.state.chat_ai_client is not None
+            if hasattr(app.state, "chat_ai_client")
+            and app.state.chat_ai_client is not None
             else ("not_configured" if settings.chat_ai_service_url else "disabled")
         )
 

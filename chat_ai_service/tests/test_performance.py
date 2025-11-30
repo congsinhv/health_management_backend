@@ -14,7 +14,8 @@ import numpy as np
 # Import from parent directory
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.qa.model_loader import ModelLoader
 from app.services.qa import QAService
@@ -34,7 +35,7 @@ class TestONNXOptimization:
         model.tokenizer = MagicMock()
         model.tokenizer.return_value = {
             "input_ids": [[1, 2, 3, 4, 5]],
-            "attention_mask": [[1, 1, 1, 1, 1]]
+            "attention_mask": [[1, 1, 1, 1, 1]],
         }
         return model
 
@@ -48,14 +49,14 @@ class TestONNXOptimization:
         ]
         session.get_inputs.return_value = [
             MagicMock(name="input_ids"),
-            MagicMock(name="attention_mask")
+            MagicMock(name="attention_mask"),
         ]
         return session
 
     @pytest.fixture
     def pytorch_loader(self, mock_pytorch_model):
         """Create ModelLoader configured for PyTorch."""
-        with patch('app.services.qa.model_loader.SentenceTransformer') as mock_st:
+        with patch("app.services.qa.model_loader.SentenceTransformer") as mock_st:
             mock_st.return_value = mock_pytorch_model
             loader = ModelLoader(use_onnx=False)
             loader.model = mock_pytorch_model
@@ -65,7 +66,7 @@ class TestONNXOptimization:
     @pytest.fixture
     def onnx_loader(self, mock_pytorch_model, mock_onnx_session):
         """Create ModelLoader configured for ONNX."""
-        with patch('app.services.qa.model_loader.SentenceTransformer') as mock_st:
+        with patch("app.services.qa.model_loader.SentenceTransformer") as mock_st:
             mock_st.return_value = mock_pytorch_model
             loader = ModelLoader(use_onnx=True)
             loader.model = mock_pytorch_model
@@ -127,11 +128,11 @@ class TestONNXOptimization:
     def test_onnx_model_conversion(self, mock_pytorch_model, tmp_path):
         """Test ONNX model conversion process."""
         # Mock torch.onnx.export
-        with patch('app.services.qa.model_loader.torch') as mock_torch:
+        with patch("app.services.qa.model_loader.torch") as mock_torch:
             mock_torch.cuda.is_available.return_value = False
             mock_torch.onnx.export = MagicMock()
 
-            with patch('app.services.qa.model_loader.ort') as mock_ort:
+            with patch("app.services.qa.model_loader.ort") as mock_ort:
                 # Mock successful ONNX session creation
                 mock_session = MagicMock()
                 mock_ort.InferenceSession.return_value = mock_session
@@ -156,9 +157,9 @@ class TestONNXOptimization:
                     dynamic_axes={
                         "input_ids": {0: "batch_size", 1: "sequence"},
                         "attention_mask": {0: "batch_size", 1: "sequence"},
-                        "last_hidden_state": {0: "batch_size", 1: "sequence"}
+                        "last_hidden_state": {0: "batch_size", 1: "sequence"},
                     },
-                    opset_version=14
+                    opset_version=14,
                 )
 
     def test_onnx_fallback_to_pytorch(self, pytorch_loader, mock_onnx_session):
@@ -220,13 +221,12 @@ class TestQAPServicePerformance:
             DEBUG=True,
             qa_model_path="/tmp/test_model",
             model_auto_download=False,
-            OPENAI_API_KEY="test-key"
+            OPENAI_API_KEY="test-key",
         )
 
-        with patch('app.services.qa.ModelLoader'), \
-             patch('app.services.qa.DatasetLoader'), \
-             patch('app.services.qa.AISummarizer'):
-
+        with patch("app.services.qa.ModelLoader"), patch(
+            "app.services.qa.DatasetLoader"
+        ), patch("app.services.qa.AISummarizer"):
             service = QAService(settings)
 
             # Add performance metrics tracking
@@ -236,7 +236,7 @@ class TestQAPServicePerformance:
                 "avg_response_time": 0,
                 "cache_hits": 0,
                 "cache_misses": 0,
-                "error_count": 0
+                "error_count": 0,
             }
 
             # Wrap methods to track performance
@@ -257,7 +257,8 @@ class TestQAPServicePerformance:
                     response_time = end_time - start_time
                     service.metrics["total_response_time"] += response_time
                     service.metrics["avg_response_time"] = (
-                        service.metrics["total_response_time"] / service.metrics["total_requests"]
+                        service.metrics["total_response_time"]
+                        / service.metrics["total_requests"]
                     )
 
             service.ask_question_stream = tracked_ask_stream
@@ -266,6 +267,7 @@ class TestQAPServicePerformance:
     @pytest.mark.asyncio
     async def test_concurrent_request_performance(self, performance_qa_service):
         """Test performance under concurrent requests."""
+
         # Mock fast streaming response
         async def mock_stream():
             await asyncio.sleep(0.05)  # 50ms processing time
@@ -303,12 +305,14 @@ class TestQAPServicePerformance:
                 "total_time": total_time,
                 "avg_request_time": avg_time_per_request,
                 "total_events": total_events,
-                "requests_per_second": concurrency / total_time
+                "requests_per_second": concurrency / total_time,
             }
 
-            print(f"Concurrency {concurrency}: {total_time:.3f}s total, "
-                  f"{avg_time_per_request:.3f}s avg, "
-                  f"{concurrency/total_time:.1f} req/s")
+            print(
+                f"Concurrency {concurrency}: {total_time:.3f}s total, "
+                f"{avg_time_per_request:.3f}s avg, "
+                f"{concurrency/total_time:.1f} req/s"
+            )
 
             # Verify all requests completed successfully
             assert total_events == concurrency
@@ -324,7 +328,9 @@ class TestQAPServicePerformance:
         response_times = [0.05, 0.08, 0.12, 0.06, 0.09]  # Various response times
 
         async def variable_stream():
-            delay = response_times[len(performance_qa_service.metrics) % len(response_times)]
+            delay = response_times[
+                len(performance_qa_service.metrics) % len(response_times)
+            ]
             await asyncio.sleep(delay)
             yield "Response"
 
@@ -334,7 +340,7 @@ class TestQAPServicePerformance:
         sla_targets = {
             "p50": 0.1,  # 50th percentile < 100ms
             "p95": 0.2,  # 95th percentile < 200ms
-            "p99": 0.3   # 99th percentile < 300ms
+            "p99": 0.3,  # 99th percentile < 300ms
         }
 
         request_times = []
@@ -351,7 +357,9 @@ class TestQAPServicePerformance:
         p95 = request_times[int(len(request_times) * 0.95)]
         p99 = request_times[int(len(request_times) * 0.99)]
 
-        print(f"Response time percentiles: P50={p50:.3f}s, P95={p95:.3f}s, P99={p99:.3f}s")
+        print(
+            f"Response time percentiles: P50={p50:.3f}s, P95={p95:.3f}s, P99={p99:.3f}s"
+        )
 
         # Verify SLA targets are met
         assert p50 <= sla_targets["p50"], f"P50 {p50}s > {sla_targets['p50']}s"
@@ -370,7 +378,9 @@ class TestQAPServicePerformance:
             yield "Memory intensive response"
             # Data should be garbage collected after function
 
-        performance_qa_service.ask_question_stream.return_value = memory_intensive_stream()
+        performance_qa_service.ask_question_stream.return_value = (
+            memory_intensive_stream()
+        )
 
         # Measure memory over sustained load
         initial_memory = process.memory_info().rss
@@ -378,7 +388,9 @@ class TestQAPServicePerformance:
 
         for batch in range(10):  # 10 batches of requests
             for request in range(10):  # 10 requests per batch
-                async for _ in performance_qa_service.ask_question_stream("Test", 0.7, 3):
+                async for _ in performance_qa_service.ask_question_stream(
+                    "Test", 0.7, 3
+                ):
                     pass
 
             # Sample memory after each batch
@@ -388,6 +400,7 @@ class TestQAPServicePerformance:
 
             # Force garbage collection
             import gc
+
             gc.collect()
 
         # Analyze memory usage
@@ -399,11 +412,14 @@ class TestQAPServicePerformance:
 
         # Memory growth should be bounded
         assert max_memory_growth < 100 * 1024 * 1024  # Less than 100MB growth
-        assert final_memory_growth < max_memory_growth * 0.5  # Should recover some memory
+        assert (
+            final_memory_growth < max_memory_growth * 0.5
+        )  # Should recover some memory
 
     @pytest.mark.asyncio
     async def test_throughput_scaling(self, performance_qa_service):
         """Test throughput scaling with different loads."""
+
         # Mock response with predictable processing time
         async def predictable_stream():
             await asyncio.sleep(0.01)  # 10ms processing time
@@ -419,6 +435,7 @@ class TestQAPServicePerformance:
             # Create batch of requests
             tasks = []
             for i in range(batch_size):
+
                 async def make_request(i=i):
                     events = []
                     async for chunk in performance_qa_service.ask_question_stream(
@@ -442,17 +459,21 @@ class TestQAPServicePerformance:
                 "duration": duration,
                 "total_events": total_events,
                 "throughput": throughput,
-                "requests_per_second": batch_size / duration
+                "requests_per_second": batch_size / duration,
             }
 
-            print(f"Batch size {batch_size}: {throughput:.1f} events/s, "
-                  f"{batch_size/duration:.1f} req/s")
+            print(
+                f"Batch size {batch_size}: {throughput:.1f} events/s, "
+                f"{batch_size/duration:.1f} req/s"
+            )
 
             # Verify all requests processed
             assert total_events == batch_size
 
         # Throughput should scale but may have diminishing returns
-        assert throughput_results[50]["throughput"] > throughput_results[1]["throughput"]
+        assert (
+            throughput_results[50]["throughput"] > throughput_results[1]["throughput"]
+        )
 
 
 class TestPerformanceRegression:
@@ -462,14 +483,16 @@ class TestPerformanceRegression:
     async def test_embedding_generation_regression(self):
         """Test embedding generation doesn't regress in performance."""
         # Mock model loader
-        with patch('app.services.qa.ModelLoader') as mock_loader_class:
+        with patch("app.services.qa.ModelLoader") as mock_loader_class:
             mock_loader = MagicMock()
             mock_loader_class.return_value = mock_loader
 
             # Mock realistic embedding generation time
             async def realistic_embeddings(sentences):
                 # Simulate processing time based on batch size
-                processing_time = 0.001 + len(sentences) * 0.0001  # 1ms base + 0.1ms per sentence
+                processing_time = (
+                    0.001 + len(sentences) * 0.0001
+                )  # 1ms base + 0.1ms per sentence
                 await asyncio.sleep(processing_time)
                 return [[0.1, 0.2, 0.3] for _ in sentences]
 
@@ -479,10 +502,10 @@ class TestPerformanceRegression:
             # Test with different batch sizes
             batch_sizes = [1, 10, 50, 100]
             max_times = {
-                1: 0.01,   # 10ms max for single sentence
+                1: 0.01,  # 10ms max for single sentence
                 10: 0.05,  # 50ms max for 10 sentences
-                50: 0.2,   # 200ms max for 50 sentences
-                100: 0.4    # 400ms max for 100 sentences
+                50: 0.2,  # 200ms max for 50 sentences
+                100: 0.4,  # 400ms max for 100 sentences
             }
 
             for batch_size in batch_sizes:
@@ -494,36 +517,44 @@ class TestPerformanceRegression:
 
                 processing_time = end_time - start_time
 
-                print(f"Batch size {batch_size}: {processing_time:.3f}s (max: {max_times[batch_size]:.3f}s)")
+                print(
+                    f"Batch size {batch_size}: {processing_time:.3f}s (max: {max_times[batch_size]:.3f}s)"
+                )
 
                 assert len(embeddings) == batch_size
-                assert processing_time < max_times[batch_size], \
-                    f"Batch {batch_size} took {processing_time:.3f}s, max allowed {max_times[batch_size]:.3f}s"
+                assert (
+                    processing_time < max_times[batch_size]
+                ), f"Batch {batch_size} took {processing_time:.3f}s, max allowed {max_times[batch_size]:.3f}s"
 
     @pytest.mark.asyncio
     async def test_search_performance_regression(self):
         """Test similarity search performance doesn't regress."""
         # Create large dataset for search testing
         import pandas as pd
+
         num_questions = 10000
 
-        df = pd.DataFrame({
-            'Question': [f'Health question {i}' for i in range(num_questions)],
-            'Answer': [f'Health answer {i}' for i in range(num_questions)],
-            'Field': ['health'] * num_questions
-        })
+        df = pd.DataFrame(
+            {
+                "Question": [f"Health question {i}" for i in range(num_questions)],
+                "Answer": [f"Health answer {i}" for i in range(num_questions)],
+                "Field": ["health"] * num_questions,
+            }
+        )
 
         # Generate pre-computed embeddings
-        embeddings = [[i/1000, (i+1)/1000, (i+2)/1000] for i in range(num_questions)]
+        embeddings = [
+            [i / 1000, (i + 1) / 1000, (i + 2) / 1000] for i in range(num_questions)
+        ]
 
         # Mock QA service with large dataset
-        with patch('app.services.qa.ModelLoader'), \
-             patch('app.services.qa.DatasetLoader') as mock_dataset_loader, \
-             patch('app.services.qa.AISummarizer'):
-
+        with patch("app.services.qa.ModelLoader"), patch(
+            "app.services.qa.DatasetLoader"
+        ) as mock_dataset_loader, patch("app.services.qa.AISummarizer"):
             mock_dataset_loader.return_value.load_dataset.return_value = df
 
             from app.services.qa import QAService
+
             settings = Settings(qa_model_path="/tmp/test")
             service = QAService(settings)
             service.df = df
@@ -534,10 +565,13 @@ class TestPerformanceRegression:
             def mock_cosine_similarity(query_emb, dataset_emb, threshold=0.5, top_k=10):
                 # Simulate realistic search time
                 import time
-                time.sleep(0.01 + len(dataset_emb) * 0.000001)  # 10ms + 1µs per item
-                return [[0.9, 0.8, 0.7][:min(top_k, 3)]]
 
-            with patch('app.services.qa.util.cosine_similarity', mock_cosine_similarity):
+                time.sleep(0.01 + len(dataset_emb) * 0.000001)  # 10ms + 1µs per item
+                return [[0.9, 0.8, 0.7][: min(top_k, 3)]]
+
+            with patch(
+                "app.services.qa.util.cosine_similarity", mock_cosine_similarity
+            ):
                 # Test search performance
                 max_search_time = 0.1  # 100ms max for search
 
@@ -551,18 +585,18 @@ class TestPerformanceRegression:
 
                 print(f"Search time for {num_questions} items: {search_time:.3f}s")
 
-                assert search_time < max_search_time, \
-                    f"Search took {search_time:.3f}s, max allowed {max_search_time:.3f}s"
+                assert (
+                    search_time < max_search_time
+                ), f"Search took {search_time:.3f}s, max allowed {max_search_time:.3f}s"
 
     def test_startup_time_regression(self):
         """Test service startup time doesn't regress."""
         max_startup_time = 5.0  # 5 seconds max startup time
 
         # Mock service components
-        with patch('app.services.qa.ModelLoader') as mock_loader, \
-             patch('app.services.qa.DatasetLoader') as mock_dataset, \
-             patch('app.services.qa.AISummarizer') as mock_summarizer:
-
+        with patch("app.services.qa.ModelLoader") as mock_loader, patch(
+            "app.services.qa.DatasetLoader"
+        ) as mock_dataset, patch("app.services.qa.AISummarizer") as mock_summarizer:
             # Mock initialization delays
             async def delayed_init():
                 await asyncio.sleep(0.5)  # 500ms delay
@@ -573,6 +607,7 @@ class TestPerformanceRegression:
             mock_summarizer.return_value.is_available.return_value = True
 
             from app.services.qa import QAService
+
             settings = Settings(qa_model_path="/tmp/test")
             service = QAService(settings)
 
@@ -585,39 +620,42 @@ class TestPerformanceRegression:
 
             print(f"Service startup time: {startup_time:.3f}s")
 
-            assert startup_time < max_startup_time, \
-                f"Startup took {startup_time:.3f}s, max allowed {max_startup_time:.3f}s"
+            assert (
+                startup_time < max_startup_time
+            ), f"Startup took {startup_time:.3f}s, max allowed {max_startup_time:.3f}s"
 
     @pytest.mark.asyncio
     async def test_streaming_latency_regression(self):
         """Test streaming response latency doesn't regress."""
         # Mock AI summarizer with controlled response timing
-        with patch('app.services.qa.ModelLoader'), \
-             patch('app.services.qa.DatasetLoader'), \
-             patch('app.services.qa.AISummarizer') as mock_summarizer:
-
+        with patch("app.services.qa.ModelLoader"), patch(
+            "app.services.qa.DatasetLoader"
+        ), patch("app.services.qa.AISummarizer") as mock_summarizer:
             # Create streaming response with controlled chunk delays
             async def controlled_stream():
                 chunks = [
                     "This is the first chunk",
                     " of the response",
                     " with some delays",
-                    " between chunks."
+                    " between chunks.",
                 ]
                 for chunk in chunks:
                     await asyncio.sleep(0.02)  # 20ms per chunk
                     yield chunk
 
-            mock_summarizer.return_value.summarize_with_streaming.return_value = controlled_stream()
+            mock_summarizer.return_value.summarize_with_streaming.return_value = (
+                controlled_stream()
+            )
 
             from app.services.qa import QAService
+
             settings = Settings(qa_model_path="/tmp/test")
             service = QAService(settings)
             service.is_initialized = True
 
             # Test streaming latency
             max_first_chunk_time = 0.1  # 100ms max for first chunk
-            max_chunk_interval = 0.05   # 50ms max between chunks
+            max_chunk_interval = 0.05  # 50ms max between chunks
 
             start_time = time.time()
             chunk_times = []
@@ -629,12 +667,14 @@ class TestPerformanceRegression:
                 # First chunk should arrive quickly
                 if len(chunk_times) == 1:
                     first_chunk_latency = chunk_time - start_time
-                    assert first_chunk_latency < max_first_chunk_time, \
-                        f"First chunk latency {first_chunk_latency:.3f}s > {max_first_chunk_time:.3f}s"
+                    assert (
+                        first_chunk_latency < max_first_chunk_time
+                    ), f"First chunk latency {first_chunk_latency:.3f}s > {max_first_chunk_time:.3f}s"
                 elif len(chunk_times) > 1:
                     chunk_interval = chunk_time - chunk_times[-2]
-                    assert chunk_interval < max_chunk_interval, \
-                        f"Chunk interval {chunk_interval:.3f}s > {max_chunk_interval:.3f}s"
+                    assert (
+                        chunk_interval < max_chunk_interval
+                    ), f"Chunk interval {chunk_interval:.3f}s > {max_chunk_interval:.3f}s"
 
                 # Stop after a few chunks for testing
                 if len(chunk_times) >= 3:

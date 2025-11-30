@@ -8,6 +8,7 @@ import time
 # Base URL for prediction service
 BASE_URL = "http://localhost:8001"
 
+
 def test_prediction_endpoint():
     """Test the prediction endpoint with sample data."""
 
@@ -26,7 +27,7 @@ def test_prediction_endpoint():
         "FAF": 1.0,
         "TUE": 3.0,
         "CALC": "Sometimes",
-        "MTRANS": "Automobile"
+        "MTRANS": "Automobile",
     }
 
     print("Testing prediction endpoint...")
@@ -38,7 +39,7 @@ def test_prediction_endpoint():
             f"{BASE_URL}/api/v1/predict/",
             json=user_data,
             headers={"Content-Type": "application/json"},
-            timeout=30
+            timeout=30,
         )
 
         print(f"Status Code: {response.status_code}")
@@ -55,6 +56,7 @@ def test_prediction_endpoint():
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {e}")
         return False
+
 
 def test_multiple_predictions():
     """Test multiple predictions for consistency."""
@@ -76,8 +78,8 @@ def test_multiple_predictions():
                 "FAF": 3.0,
                 "TUE": 2.0,
                 "CALC": "Sometimes",
-                "MTRANS": "Walking"
-            }
+                "MTRANS": "Walking",
+            },
         },
         {
             "name": "Overweight female",
@@ -95,9 +97,9 @@ def test_multiple_predictions():
                 "FAF": 0.5,
                 "TUE": 4.0,
                 "CALC": "Frequently",
-                "MTRANS": "Automobile"
-            }
-        }
+                "MTRANS": "Automobile",
+            },
+        },
     ]
 
     results = []
@@ -108,9 +110,9 @@ def test_multiple_predictions():
         start_time = time.time()
         response = requests.post(
             f"{BASE_URL}/api/v1/predict/",
-            json=test_case['data'],
+            json=test_case["data"],
             headers={"Content-Type": "application/json"},
-            timeout=30
+            timeout=30,
         )
         end_time = time.time()
 
@@ -120,25 +122,30 @@ def test_multiple_predictions():
 
         if response.status_code == 200:
             result = response.json()
-            results.append({
-                "test_name": test_case['name'],
-                "obesity_level": result.get('obesity_level'),
-                "bmi": result.get('bmi'),
-                "response_time": response_time,
-                "success": True
-            })
+            results.append(
+                {
+                    "test_name": test_case["name"],
+                    "obesity_level": result.get("obesity_level"),
+                    "bmi": result.get("bmi"),
+                    "response_time": response_time,
+                    "success": True,
+                }
+            )
             print(f"Obesity Level: {result.get('obesity_level')}")
             print(f"BMI: {result.get('bmi')}")
         else:
             print(f"Error: {response.text}")
-            results.append({
-                "test_name": test_case['name'],
-                "response_time": response_time,
-                "success": False,
-                "error": response.text
-            })
+            results.append(
+                {
+                    "test_name": test_case["name"],
+                    "response_time": response_time,
+                    "success": False,
+                    "error": response.text,
+                }
+            )
 
     return results
+
 
 if __name__ == "__main__":
     print("=== Prediction Service Testing ===\n")
@@ -151,15 +158,19 @@ if __name__ == "__main__":
         results = test_multiple_predictions()
 
         print(f"\n=== Summary ===")
-        successful_tests = [r for r in results if r['success']]
+        successful_tests = [r for r in results if r["success"]]
         print(f"Successful predictions: {len(successful_tests)}/{len(results)}")
 
         if successful_tests:
-            avg_response_time = sum(r['response_time'] for r in successful_tests) / len(successful_tests)
+            avg_response_time = sum(r["response_time"] for r in successful_tests) / len(
+                successful_tests
+            )
             print(f"Average response time: {avg_response_time:.3f}s")
 
             print("Obesity levels predicted:")
             for result in successful_tests:
-                print(f"  {result['test_name']}: {result['obesity_level']} (BMI: {result.get('bmi', 'N/A')})")
+                print(
+                    f"  {result['test_name']}: {result['obesity_level']} (BMI: {result.get('bmi', 'N/A')})"
+                )
     else:
         print("Basic prediction test failed. Skipping consistency tests.")

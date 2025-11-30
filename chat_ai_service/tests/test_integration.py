@@ -13,7 +13,8 @@ import json
 # Import from parent directory
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.main import create_qa_app
 from app.api.qa import create_qa_app as create_qa_router
@@ -21,7 +22,7 @@ from app.core.shared.http_client import ServiceClient
 from app.core.shared.exceptions import (
     ServiceUnavailableException,
     AIServiceException,
-    OpenAIException
+    OpenAIException,
 )
 
 
@@ -48,9 +49,9 @@ class TestEndToEndWorkflows:
     async def async_client(self, full_app_with_services):
         """Create async client for streaming tests."""
         from httpx import AsyncClient, ASGITransport
+
         client = AsyncClient(
-            transport=ASGITransport(app=full_app_with_services),
-            base_url="http://test"
+            transport=ASGITransport(app=full_app_with_services), base_url="http://test"
         )
         yield client
 
@@ -59,24 +60,24 @@ class TestEndToEndWorkflows:
         # Setup realistic mock responses
         mock_qa_service.find_similar_questions.return_value = [
             {
-                'question': 'What is diabetes?',
-                'answer': 'Diabetes is a metabolic disease that affects blood sugar levels.',
-                'similarity': 0.92,
-                'field': 'health'
+                "question": "What is diabetes?",
+                "answer": "Diabetes is a metabolic disease that affects blood sugar levels.",
+                "similarity": 0.92,
+                "field": "health",
             },
             {
-                'question': 'What are diabetes symptoms?',
-                'answer': 'Common symptoms include increased thirst, frequent urination.',
-                'similarity': 0.87,
-                'field': 'health'
-            }
+                "question": "What are diabetes symptoms?",
+                "answer": "Common symptoms include increased thirst, frequent urination.",
+                "similarity": 0.87,
+                "field": "health",
+            },
         ]
 
         # Make request
         request_data = {
             "question": "Tell me about diabetes",
             "threshold": 0.7,
-            "top_k": 3
+            "top_k": 3,
         }
 
         response = client.post("/api/v1/qa/ask", json=request_data)
@@ -93,14 +94,24 @@ class TestEndToEndWorkflows:
     @pytest.mark.asyncio
     async def test_complete_streaming_workflow(self, async_client, mock_qa_service):
         """Test complete streaming Q&A workflow."""
+
         # Setup realistic streaming response
         async def mock_stream():
-            yield {"event": "question_received", "data": {"question": "Tell me about diabetes"}}
-            yield {"event": "answers_found", "data": {"count": 2, "similarity_threshold": 0.7}}
+            yield {
+                "event": "question_received",
+                "data": {"question": "Tell me about diabetes"},
+            }
+            yield {
+                "event": "answers_found",
+                "data": {"count": 2, "similarity_threshold": 0.7},
+            }
             yield "Diabetes is a metabolic disease"
             yield " that affects blood sugar levels."
             yield "It requires proper management through diet, exercise, and medication."
-            yield {"event": "stream_complete", "data": {"total_tokens": 25, "duration": 1.2}}
+            yield {
+                "event": "stream_complete",
+                "data": {"total_tokens": 25, "duration": 1.2},
+            }
 
         mock_qa_service.ask_question_stream.return_value = mock_stream()
 
@@ -108,7 +119,7 @@ class TestEndToEndWorkflows:
         request_data = {
             "question": "Tell me about diabetes",
             "threshold": 0.7,
-            "top_k": 3
+            "top_k": 3,
         }
 
         response = await async_client.post("/api/v1/qa/ask-stream", json=request_data)
@@ -131,13 +142,13 @@ class TestEndToEndWorkflows:
                 "model_loaded": True,
                 "embeddings_ready": True,
                 "dataset_loaded": True,
-                "ai_available": True
+                "ai_available": True,
             },
             "metrics": {
                 "total_questions": 1000,
                 "avg_response_time": 0.8,
-                "cache_hit_rate": 0.85
-            }
+                "cache_hit_rate": 0.85,
+            },
         }
 
         # Test health endpoint
@@ -161,12 +172,14 @@ class TestEndToEndWorkflows:
     def test_error_recovery_workflow(self, client, mock_qa_service):
         """Test error recovery workflow."""
         # Simulate service error
-        mock_qa_service.ask_question_stream.side_effect = AIServiceException("AI service temporarily unavailable")
+        mock_qa_service.ask_question_stream.side_effect = AIServiceException(
+            "AI service temporarily unavailable"
+        )
 
         request_data = {
             "question": "Tell me about diabetes",
             "threshold": 0.7,
-            "top_k": 3
+            "top_k": 3,
         }
 
         response = client.post("/api/v1/qa/ask", json=request_data)
@@ -184,14 +197,16 @@ class TestServiceToServiceCommunication:
     def mock_service_client(self):
         """Mock service client for inter-service communication."""
         client = AsyncMock()
-        client.post = AsyncMock(return_value=MagicMock(
-            status_code=200,
-            json=lambda: {
-                "question": "What is diabetes?",
-                "answers": {"health": ["Diabetes is a metabolic disease..."]},
-                "summary": "Diabetes is a metabolic disease affecting blood sugar levels."
-            }
-        ))
+        client.post = AsyncMock(
+            return_value=MagicMock(
+                status_code=200,
+                json=lambda: {
+                    "question": "What is diabetes?",
+                    "answers": {"health": ["Diabetes is a metabolic disease..."]},
+                    "summary": "Diabetes is a metabolic disease affecting blood sugar levels.",
+                },
+            )
+        )
         return client
 
     @pytest.fixture
@@ -218,7 +233,7 @@ class TestServiceToServiceCommunication:
     async def test_main_api_proxy_flow(self, mock_service_client):
         """Test main API proxying requests to Chat AI service."""
         # Mock ServiceClient
-        with patch('app.core.shared.http_client.ServiceClient') as mock_client_class:
+        with patch("app.core.shared.http_client.ServiceClient") as mock_client_class:
             mock_client_class.return_value = mock_service_client
 
             # Simulate main API calling Chat AI service
@@ -226,13 +241,13 @@ class TestServiceToServiceCommunication:
             request_data = {
                 "question": "What is diabetes?",
                 "threshold": 0.7,
-                "top_k": 3
+                "top_k": 3,
             }
 
             response = await client.post(
                 "/api/v1/qa/ask",
                 json=request_data,
-                headers={"Authorization": "Bearer service-token"}
+                headers={"Authorization": "Bearer service-token"},
             )
 
             assert response.status_code == 200
@@ -247,16 +262,17 @@ class TestServiceToServiceCommunication:
     async def test_iam_authentication_flow(self):
         """Test IAM authentication between services."""
         # Mock IAM token generation
-        with patch('app.core.shared.http_client.generate_iam_token') as mock_iam:
+        with patch("app.core.shared.http_client.generate_iam_token") as mock_iam:
             mock_iam.return_value = "iam-token-123"
 
-            with patch('app.core.shared.http_client.ServiceClient') as mock_client:
+            with patch("app.core.shared.http_client.ServiceClient") as mock_client:
                 mock_client_instance = AsyncMock()
                 mock_client_instance.post.return_value = MagicMock(status_code=200)
                 mock_client.return_value = mock_client_instance
 
                 # Create service client with IAM
                 from app.core.shared.http_client import ServiceClient
+
                 client = ServiceClient("https://chat-ai-service.com", use_iam=True)
 
                 # Make request
@@ -272,20 +288,24 @@ class TestServiceToServiceCommunication:
         mock_services = [
             "https://chat-ai-1.example.com",
             "https://chat-ai-2.example.com",
-            "https://chat-ai-3.example.com"
+            "https://chat-ai-3.example.com",
         ]
 
-        with patch('app.core.shared.http_client.discover_chat_ai_services') as mock_discover:
+        with patch(
+            "app.core.shared.http_client.discover_chat_ai_services"
+        ) as mock_discover:
             mock_discover.return_value = mock_services
 
             # Mock client selection and request
-            with patch('app.core.shared.http_client.ServiceClient') as mock_client:
+            with patch("app.core.shared.http_client.ServiceClient") as mock_client:
                 mock_client_instance = AsyncMock()
                 mock_client_instance.post.return_value = MagicMock(status_code=200)
                 mock_client.return_value = mock_client_instance
 
                 # Simulate load-balanced request
-                client = ServiceClient(mock_services[0])  # Round-robin would select first
+                client = ServiceClient(
+                    mock_services[0]
+                )  # Round-robin would select first
 
                 await client.post("/api/v1/qa/ask", json={"question": "Test"})
 
@@ -296,14 +316,16 @@ class TestServiceToServiceCommunication:
     async def test_circuit_breaker_pattern(self):
         """Test circuit breaker pattern for service resilience."""
         # Mock circuit breaker state
-        with patch('app.core.shared.http_client.CircuitBreaker') as mock_breaker:
+        with patch("app.core.shared.http_client.CircuitBreaker") as mock_breaker:
             mock_breaker_instance = MagicMock()
             mock_breaker_instance.is_open.return_value = False
-            mock_breaker_instance.call = AsyncMock(return_value=MagicMock(status_code=200))
+            mock_breaker_instance.call = AsyncMock(
+                return_value=MagicMock(status_code=200)
+            )
             mock_breaker.return_value = mock_breaker_instance
 
             # Mock service client with circuit breaker
-            with patch('app.core.shared.http_client.ServiceClient') as mock_client:
+            with patch("app.core.shared.http_client.ServiceClient") as mock_client:
                 mock_client_instance = AsyncMock()
                 mock_client.return_value = mock_client_instance
 
@@ -325,7 +347,7 @@ class TestPerformanceAndScalability:
             "total_requests": 0,
             "total_response_time": 0,
             "cache_hits": 0,
-            "cache_misses": 0
+            "cache_misses": 0,
         }
 
         # Wrap methods to track performance
@@ -339,7 +361,7 @@ class TestPerformanceAndScalability:
                 yield result
 
             end_time = time.time()
-            mock_qa_service.metrics["total_response_time"] += (end_time - start_time)
+            mock_qa_service.metrics["total_response_time"] += end_time - start_time
 
         mock_qa_service.ask_question_stream = tracked_ask_stream
 
@@ -348,6 +370,7 @@ class TestPerformanceAndScalability:
     @pytest.mark.asyncio
     async def test_concurrent_request_handling(self, performance_qa_service):
         """Test handling multiple concurrent requests."""
+
         # Mock streaming response
         async def mock_response():
             await asyncio.sleep(0.1)  # Simulate processing time
@@ -378,6 +401,7 @@ class TestPerformanceAndScalability:
     @pytest.mark.asyncio
     async def test_response_time_sla(self, performance_qa_service):
         """Test response time meets SLA requirements."""
+
         # Mock fast streaming response
         async def mock_response():
             yield "Quick response"
@@ -434,6 +458,7 @@ class TestPerformanceAndScalability:
     @pytest.mark.asyncio
     async def test_graceful_degradation_under_load(self, performance_qa_service):
         """Test graceful degradation when system is under load."""
+
         # Simulate degraded performance
         async def slow_response():
             await asyncio.sleep(0.5)  # Slow response
@@ -464,6 +489,7 @@ class TestResilienceAndErrorHandling:
     @pytest.mark.asyncio
     async def test_service_timeout_handling(self):
         """Test timeout handling when Chat AI service is slow."""
+
         # Mock slow service
         async def slow_service():
             await asyncio.sleep(5.0)  # Very slow
@@ -476,7 +502,7 @@ class TestResilienceAndErrorHandling:
         try:
             async for chunk in asyncio.wait_for(
                 mock_qa_service.ask_question_stream("Test", 0.7, 3),
-                timeout=1.0  # 1 second timeout
+                timeout=1.0,  # 1 second timeout
             ):
                 pass
             assert False, "Should have timed out"
@@ -487,7 +513,7 @@ class TestResilienceAndErrorHandling:
     async def test_service_unavailable_fallback(self):
         """Test fallback behavior when Chat AI service is unavailable."""
         # Mock unavailable service
-        with patch('app.core.shared.http_client.ServiceClient') as mock_client:
+        with patch("app.core.shared.http_client.ServiceClient") as mock_client:
             mock_client_instance = AsyncMock()
             mock_client_instance.post.side_effect = Exception("Service unavailable")
             mock_client.return_value = mock_client_instance
@@ -517,8 +543,8 @@ class TestResilienceAndErrorHandling:
             "components": {
                 "model_loaded": True,
                 "embeddings_ready": True,
-                "ai_available": False
-            }
+                "ai_available": False,
+            },
         }
 
         # Service should still provide basic functionality

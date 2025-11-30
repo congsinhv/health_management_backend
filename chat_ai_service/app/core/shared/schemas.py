@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List, Generic, TypeVar
 from pydantic import BaseModel, ConfigDict, Field
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class BaseResponse(BaseModel):

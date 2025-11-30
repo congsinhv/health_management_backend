@@ -10,29 +10,36 @@ import os
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 def load_sklearn_models():
     """Load sklearn models."""
     print("Loading sklearn models...")
-    sklearn_model = joblib.load('obesity_classifier_final.pkl')
-    label_encoder = joblib.load('label_encoder.pkl')
+    sklearn_model = joblib.load("obesity_classifier_final.pkl")
+    label_encoder = joblib.load("label_encoder.pkl")
 
     print(f"Sklearn model type: {type(sklearn_model)}")
     print(f"Number of features: {len(sklearn_model.feature_names_in_)}")
 
     return sklearn_model, label_encoder
 
+
 def load_onnx_models():
     """Load ONNX models."""
     print("Loading ONNX models...")
-    onnx_session = ort.InferenceSession('models/obesity_classifier.onnx', providers=['CPUExecutionProvider'])
+    onnx_session = ort.InferenceSession(
+        "models/obesity_classifier.onnx", providers=["CPUExecutionProvider"]
+    )
 
-    with open('models/label_encoder.json', 'r') as f:
+    with open("models/label_encoder.json", "r") as f:
         label_encoder = json.load(f)
 
     print(f"ONNX model inputs: {[input.name for input in onnx_session.get_inputs()]}")
-    print(f"ONNX model outputs: {[output.name for output in onnx_session.get_outputs()]}")
+    print(
+        f"ONNX model outputs: {[output.name for output in onnx_session.get_outputs()]}"
+    )
 
     return onnx_session, label_encoder
+
 
 def generate_test_data(n_samples=1000):
     """Generate test data for benchmarking."""
@@ -42,34 +49,35 @@ def generate_test_data(n_samples=1000):
     test_data = []
     for i in range(n_samples):
         sample = {
-            'Gender': np.random.randint(0, 2),
-            'Age': np.random.randint(18, 65),
-            'Height': np.random.uniform(1.4, 2.0),
-            'Weight': np.random.uniform(40, 120),
-            'BMI': 0,  # Will be calculated
-            'BMI_Category_Detailed': np.random.randint(0, 7),
-            'family_history_with_overweight': np.random.randint(0, 2),
-            'FAVC': np.random.randint(0, 2),
-            'FCVC': np.random.uniform(1, 3),
-            'NCP': np.random.randint(1, 4),
-            'CAEC': np.random.randint(0, 4),
-            'CH2O': np.random.uniform(1, 3),
-            'FAF': np.random.uniform(0, 3),
-            'TUE': np.random.uniform(0, 3),
-            'CALC': np.random.randint(0, 4),
-            'MTRANS_Calorie': np.random.uniform(0.5, 2.5),
-            'Metabolic_Age': np.random.uniform(10, 50),
-            'Family_Risk_Score': np.random.uniform(0, 10),
-            'Lifestyle_Score': np.random.uniform(1, 12),
-            'Diet_Quality': np.random.uniform(0, 5),
+            "Gender": np.random.randint(0, 2),
+            "Age": np.random.randint(18, 65),
+            "Height": np.random.uniform(1.4, 2.0),
+            "Weight": np.random.uniform(40, 120),
+            "BMI": 0,  # Will be calculated
+            "BMI_Category_Detailed": np.random.randint(0, 7),
+            "family_history_with_overweight": np.random.randint(0, 2),
+            "FAVC": np.random.randint(0, 2),
+            "FCVC": np.random.uniform(1, 3),
+            "NCP": np.random.randint(1, 4),
+            "CAEC": np.random.randint(0, 4),
+            "CH2O": np.random.uniform(1, 3),
+            "FAF": np.random.uniform(0, 3),
+            "TUE": np.random.uniform(0, 3),
+            "CALC": np.random.randint(0, 4),
+            "MTRANS_Calorie": np.random.uniform(0.5, 2.5),
+            "Metabolic_Age": np.random.uniform(10, 50),
+            "Family_Risk_Score": np.random.uniform(0, 10),
+            "Lifestyle_Score": np.random.uniform(1, 12),
+            "Diet_Quality": np.random.uniform(0, 5),
         }
 
         # Calculate BMI
-        sample['BMI'] = sample['Weight'] / (sample['Height'] ** 2)
+        sample["BMI"] = sample["Weight"] / (sample["Height"] ** 2)
 
         test_data.append(sample)
 
     return test_data
+
 
 def prepare_sklearn_features(test_data, sklearn_model):
     """Prepare features for sklearn model."""
@@ -82,14 +90,31 @@ def prepare_sklearn_features(test_data, sklearn_model):
 
     return np.array(features_list, dtype=np.float32)
 
+
 def prepare_onnx_features(test_data):
     """Prepare features for ONNX model."""
     # Same feature order as sklearn
     feature_names = [
-        'Gender', 'Age', 'Height', 'Weight', 'BMI', 'BMI_Category_Detailed',
-        'family_history_with_overweight', 'FAVC', 'FCVC', 'NCP', 'CAEC', 'CH2O', 'FAF',
-        'TUE', 'CALC', 'MTRANS_Calorie', 'Metabolic_Age', 'Family_Risk_Score',
-        'Lifestyle_Score', 'Diet_Quality'
+        "Gender",
+        "Age",
+        "Height",
+        "Weight",
+        "BMI",
+        "BMI_Category_Detailed",
+        "family_history_with_overweight",
+        "FAVC",
+        "FCVC",
+        "NCP",
+        "CAEC",
+        "CH2O",
+        "FAF",
+        "TUE",
+        "CALC",
+        "MTRANS_Calorie",
+        "Metabolic_Age",
+        "Family_Risk_Score",
+        "Lifestyle_Score",
+        "Diet_Quality",
     ]
 
     features_list = []
@@ -98,6 +123,7 @@ def prepare_onnx_features(test_data):
         features_list.append(features)
 
     return np.array(features_list, dtype=np.float32)
+
 
 def benchmark_sklearn(sklearn_model, label_encoder, test_features, n_runs=100):
     """Benchmark sklearn prediction performance."""
@@ -117,10 +143,11 @@ def benchmark_sklearn(sklearn_model, label_encoder, test_features, n_runs=100):
     predictions_per_second = len(test_features) / avg_time
 
     return {
-        'total_time': total_time,
-        'avg_time': avg_time,
-        'predictions_per_second': predictions_per_second
+        "total_time": total_time,
+        "avg_time": avg_time,
+        "predictions_per_second": predictions_per_second,
     }
+
 
 def benchmark_onnx(onnx_session, label_encoder, test_features, n_runs=100):
     """Benchmark ONNX prediction performance."""
@@ -144,10 +171,11 @@ def benchmark_onnx(onnx_session, label_encoder, test_features, n_runs=100):
     predictions_per_second = len(test_features) / avg_time
 
     return {
-        'total_time': total_time,
-        'avg_time': avg_time,
-        'predictions_per_second': predictions_per_second
+        "total_time": total_time,
+        "avg_time": avg_time,
+        "predictions_per_second": predictions_per_second,
     }
+
 
 def verify_predictions(sklearn_model, label_encoder, onnx_session, test_features):
     """Verify that sklearn and ONNX predictions match."""
@@ -167,7 +195,9 @@ def verify_predictions(sklearn_model, label_encoder, onnx_session, test_features
     matches = sum(1 for sk, on in zip(sklearn_labels, onnx_labels) if sk == on)
     consistency = matches / len(sklearn_preds) * 100
 
-    print(f"Prediction consistency: {consistency:.1f}% ({matches}/{len(sklearn_preds)})")
+    print(
+        f"Prediction consistency: {consistency:.1f}% ({matches}/{len(sklearn_preds)})"
+    )
 
     if consistency < 95:
         print("⚠️  Warning: Low prediction consistency between sklearn and ONNX")
@@ -176,6 +206,7 @@ def verify_predictions(sklearn_model, label_encoder, onnx_session, test_features
                 print(f"  Sample {i}: sklearn={sk}, onnx={on}")
 
     return consistency
+
 
 def main():
     """Run benchmark comparison."""
@@ -196,11 +227,15 @@ def main():
     print(f"Feature names: {list(sklearn_model.feature_names_in_)}\n")
 
     # Verify prediction consistency
-    consistency = verify_predictions(sklearn_model, sklearn_label_encoder, onnx_session, sklearn_features)
+    consistency = verify_predictions(
+        sklearn_model, sklearn_label_encoder, onnx_session, sklearn_features
+    )
     print()
 
     # Benchmark sklearn
-    sklearn_results = benchmark_sklearn(sklearn_model, sklearn_label_encoder, sklearn_features)
+    sklearn_results = benchmark_sklearn(
+        sklearn_model, sklearn_label_encoder, sklearn_features
+    )
 
     # Benchmark ONNX
     onnx_results = benchmark_onnx(onnx_session, onnx_label_encoder, onnx_features)
@@ -220,10 +255,15 @@ def main():
     print()
 
     # Calculate speedup
-    speedup = sklearn_results['predictions_per_second'] / onnx_results['predictions_per_second']
+    speedup = (
+        sklearn_results["predictions_per_second"]
+        / onnx_results["predictions_per_second"]
+    )
     print(f"Performance Comparison:")
     print(f"  Speedup: {speedup:.2f}x faster")
-    print(f"  Time reduction: {(1 - onnx_results['avg_time']/sklearn_results['avg_time'])*100:.1f}%")
+    print(
+        f"  Time reduction: {(1 - onnx_results['avg_time']/sklearn_results['avg_time'])*100:.1f}%"
+    )
     print(f"  Prediction consistency: {consistency:.1f}%")
 
     # Evaluate success criteria
@@ -244,6 +284,7 @@ def main():
     else:
         print("\n⚠️  Benchmark FAILED: Criteria not met")
         return False
+
 
 if __name__ == "__main__":
     success = main()

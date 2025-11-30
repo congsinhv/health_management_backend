@@ -25,7 +25,7 @@ class PredictService:
         """Create and initialize service."""
         model_loader = ONNXModelLoader(
             model_path=settings.model_path,
-            label_encoder_path=settings.label_encoder_path
+            label_encoder_path=settings.label_encoder_path,
         )
         await model_loader.initialize()
         return cls(model_loader)
@@ -40,10 +40,10 @@ class PredictService:
             obesity_level, raw_prediction = self.model_loader.predict(features)
 
             # 3. Calculate health metrics
-            height = user_input.get('height', 1.7)
-            weight = user_input.get('weight', 70)
-            age = user_input.get('age', 25)
-            bmi = weight / (height ** 2)
+            height = user_input.get("height", 1.7)
+            weight = user_input.get("weight", 70)
+            age = user_input.get("age", 25)
+            bmi = weight / (height**2)
             metabolic_age = self._calculate_metabolic_age(age, bmi, user_input)
 
             # 4. Generate AI recommendations (OpenAI)
@@ -57,8 +57,10 @@ class PredictService:
                 "metabolic_age": int(round(metabolic_age)),
                 "diet_plan": diet_plan,
                 "workout_plan": workout_plan,
-                "raw_prediction": raw_prediction.tolist() if hasattr(raw_prediction, 'tolist') else raw_prediction,
-                "input_data": user_input
+                "raw_prediction": raw_prediction.tolist()
+                if hasattr(raw_prediction, "tolist")
+                else raw_prediction,
+                "input_data": user_input,
             }
 
         except Exception as e:
@@ -69,18 +71,25 @@ class PredictService:
         """Check if model is loaded."""
         return self.model_loader.is_model_loaded()
 
-    def _calculate_metabolic_age(self, age: float, bmi: float, user_input: Dict[str, Any]) -> float:
+    def _calculate_metabolic_age(
+        self, age: float, bmi: float, user_input: Dict[str, Any]
+    ) -> float:
         """Calculate metabolic age based on various factors."""
         try:
             # Base metabolic age from BMI
             base_metabolic_age = age * bmi / 10
 
             # Adjustments based on lifestyle
-            family_history_penalty = 5 if user_input.get('family_history', False) else 0
+            family_history_penalty = 5 if user_input.get("family_history", False) else 0
             physical_activity_bonus = self._calculate_activity_bonus(user_input)
             diet_penalty = self._calculate_diet_penalty(user_input)
 
-            metabolic_age = base_metabolic_age + family_history_penalty - physical_activity_bonus + diet_penalty
+            metabolic_age = (
+                base_metabolic_age
+                + family_history_penalty
+                - physical_activity_bonus
+                + diet_penalty
+            )
 
             return max(10, min(80, metabolic_age))  # Reasonable bounds
 
@@ -91,8 +100,8 @@ class PredictService:
     def _calculate_activity_bonus(self, user_input: Dict[str, Any]) -> float:
         """Calculate activity bonus for metabolic age."""
         try:
-            faf = user_input.get('FAF', 1)  # Physical activity frequency
-            tue = user_input.get('TUE', 2)  # Screen time
+            faf = user_input.get("FAF", 1)  # Physical activity frequency
+            tue = user_input.get("TUE", 2)  # Screen time
 
             # More activity and less screen time = better metabolic age
             if faf >= 3 and tue <= 2:
@@ -109,16 +118,16 @@ class PredictService:
     def _calculate_diet_penalty(self, user_input: Dict[str, Any]) -> float:
         """Calculate diet penalty for metabolic age."""
         try:
-            fcvc = user_input.get('FCVC', 2)  # Vegetable consumption
-            favc = user_input.get('FAVC', 'no')  # High calorie food
-            ch2o = user_input.get('CH2O', 2)  # Water consumption
+            fcvc = user_input.get("FCVC", 2)  # Vegetable consumption
+            favc = user_input.get("FAVC", "no")  # High calorie food
+            ch2o = user_input.get("CH2O", 2)  # Water consumption
 
             penalty = 0
 
             # Poor diet penalties
             if fcvc < 2:
                 penalty += 3  # Low vegetable consumption
-            if favc.lower() in ['yes', '1']:
+            if favc.lower() in ["yes", "1"]:
                 penalty += 5  # High calorie food consumption
             if ch2o < 2:
                 penalty += 2  # Low water consumption
@@ -127,9 +136,13 @@ class PredictService:
         except:
             return 0.0
 
-    async def _generate_diet_plan(self, obesity_level: str, bmi: float) -> Dict[str, Any]:
+    async def _generate_diet_plan(
+        self, obesity_level: str, bmi: float
+    ) -> Dict[str, Any]:
         """Generate diet plan using OpenAI."""
-        weight_category = 'overweight' if bmi >= 25 else 'normal' if bmi >= 18.5 else 'underweight'
+        weight_category = (
+            "overweight" if bmi >= 25 else "normal" if bmi >= 18.5 else "underweight"
+        )
 
         prompt = f"""
         You are a nutrition expert. Create a 7-day diet plan for a person with:
@@ -165,7 +178,7 @@ class PredictService:
             response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content
             return json.loads(content)
@@ -173,12 +186,16 @@ class PredictService:
             logger.error(f"Diet plan generation failed: {e}")
             return {
                 "healthAnalysis": ["Unable to generate diet plan at this time."],
-                "weeklyPlans": []
+                "weeklyPlans": [],
             }
 
-    async def _generate_workout_plan(self, obesity_level: str, bmi: float) -> Dict[str, Any]:
+    async def _generate_workout_plan(
+        self, obesity_level: str, bmi: float
+    ) -> Dict[str, Any]:
         """Generate workout plan using OpenAI."""
-        fitness_level = 'beginner' if bmi >= 30 else 'intermediate' if bmi >= 25 else 'advanced'
+        fitness_level = (
+            "beginner" if bmi >= 30 else "intermediate" if bmi >= 25 else "advanced"
+        )
 
         prompt = f"""
         You are a fitness expert. Create a 7-day workout plan for a person with:
@@ -222,12 +239,10 @@ class PredictService:
             response = await self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
             )
             content = response.choices[0].message.content
             return json.loads(content)
         except Exception as e:
             logger.error(f"Workout plan generation failed: {e}")
-            return {
-                "weeklyPlans": []
-            }
+            return {"weeklyPlans": []}

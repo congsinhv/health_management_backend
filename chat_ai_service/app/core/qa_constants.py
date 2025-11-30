@@ -46,6 +46,7 @@ RATE_LIMIT_REQUESTS_PER_MINUTE = 30
 RATE_LIMIT_CONCURRENT_REQUESTS = 10
 RATE_LIMIT_WINDOW_SECONDS = 60
 
+
 # Response messages
 class QAMessages:
     """Standard Q&A service response messages."""
@@ -65,6 +66,7 @@ class QAMessages:
     AI_SUMMARIZING = "Đang tổng hợp câu trả lời..."
     AI_SUMMARY_READY = "Đã tổng hợp xong câu trả lời"
 
+
 # Column names for Q&A dataset (supports Vietnamese Excel files)
 class QAColumns:
     """Column names for Q&A dataset."""
@@ -74,6 +76,7 @@ class QAColumns:
     KEYWORDS = "Từ khóa"
     FIELD = "Lĩnh vực"
     QUESTION_CLEAN = "Câu hỏi_clean"
+
 
 # HTTP status codes for Q&A responses
 class QAStatusCodes:
@@ -88,6 +91,7 @@ class QAStatusCodes:
     INTERNAL_SERVER_ERROR = 500
     SERVICE_UNAVAILABLE = 503
 
+
 # Event types for Server-Sent Events
 class QAEventTypes:
     """Event types for Q&A streaming responses."""
@@ -99,6 +103,7 @@ class QAEventTypes:
     ERROR = "error"
     HEALTH_CHECK = "health_check"
 
+
 # Cache key prefixes
 class QACacheKeys:
     """Cache key prefixes for Q&A service."""
@@ -108,6 +113,7 @@ class QACacheKeys:
     SUMMARY_PREFIX = "qa:summary"
     MODEL_INFO_PREFIX = "qa:model_info"
     DATASET_INFO_PREFIX = "qa:dataset_info"
+
 
 # Service health status
 class QAHealthStatus:

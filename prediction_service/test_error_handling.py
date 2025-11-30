@@ -9,6 +9,7 @@ from typing import Dict, Any, List
 # Base URL for prediction service
 BASE_URL = "http://localhost:8001"
 
+
 def test_invalid_data_scenarios():
     """Test various invalid data scenarios."""
     print("=== Testing Invalid Data Scenarios ===")
@@ -30,9 +31,9 @@ def test_invalid_data_scenarios():
                 "FAF": 1.0,
                 "TUE": 2.0,
                 "CALC": "Sometimes",
-                "MTRANS": "Walking"
+                "MTRANS": "Walking",
             },
-            "expected_status": 422
+            "expected_status": 422,
         },
         {
             "name": "Zero Height",
@@ -50,9 +51,9 @@ def test_invalid_data_scenarios():
                 "FAF": 1.0,
                 "TUE": 2.0,
                 "CALC": "Sometimes",
-                "MTRANS": "Walking"
+                "MTRANS": "Walking",
             },
-            "expected_status": 422
+            "expected_status": 422,
         },
         {
             "name": "Invalid Gender",
@@ -70,9 +71,9 @@ def test_invalid_data_scenarios():
                 "FAF": 1.0,
                 "TUE": 2.0,
                 "CALC": "Sometimes",
-                "MTRANS": "Walking"
+                "MTRANS": "Walking",
             },
-            "expected_status": 500  # This might pass validation but fail in processing
+            "expected_status": 500,  # This might pass validation but fail in processing
         },
         {
             "name": "Missing Required Fields",
@@ -81,13 +82,9 @@ def test_invalid_data_scenarios():
                 "gender": "male"
                 # Missing height, weight, etc.
             },
-            "expected_status": 422
+            "expected_status": 422,
         },
-        {
-            "name": "Empty Data",
-            "data": {},
-            "expected_status": 422
-        },
+        {"name": "Empty Data", "data": {}, "expected_status": 422},
         {
             "name": "Null Values",
             "data": {
@@ -104,9 +101,9 @@ def test_invalid_data_scenarios():
                 "FAF": 1.0,
                 "TUE": 2.0,
                 "CALC": "Sometimes",
-                "MTRANS": "Walking"
+                "MTRANS": "Walking",
             },
-            "expected_status": 422
+            "expected_status": 422,
         },
         {
             "name": "Extreme Values",
@@ -124,10 +121,10 @@ def test_invalid_data_scenarios():
                 "FAF": 10.0,
                 "TUE": 20.0,
                 "CALC": "Always",
-                "MTRANS": "Automobile"
+                "MTRANS": "Automobile",
             },
-            "expected_status": 200  # Should handle extreme values gracefully
-        }
+            "expected_status": 200,  # Should handle extreme values gracefully
+        },
     ]
 
     results = []
@@ -138,17 +135,17 @@ def test_invalid_data_scenarios():
         try:
             start_time = time.time()
             response = requests.post(
-                f"{BASE_URL}/api/v1/predict/",
-                json=test_case['data'],
-                timeout=30
+                f"{BASE_URL}/api/v1/predict/", json=test_case["data"], timeout=30
             )
             end_time = time.time()
             response_time = end_time - start_time
 
-            print(f"Status Code: {response.status_code} (Expected: {test_case['expected_status']})")
+            print(
+                f"Status Code: {response.status_code} (Expected: {test_case['expected_status']})"
+            )
             print(f"Response Time: {response_time:.3f}s")
 
-            if response.status_code == test_case['expected_status']:
+            if response.status_code == test_case["expected_status"]:
                 print("✅ Status code matches expectation")
                 results.append(True)
             else:
@@ -158,8 +155,10 @@ def test_invalid_data_scenarios():
             if response.status_code == 422:
                 # Validation error - should have proper error message
                 error_data = response.json()
-                print(f"Validation Error: {error_data.get('detail', 'No error details')}")
-                if 'detail' in error_data:
+                print(
+                    f"Validation Error: {error_data.get('detail', 'No error details')}"
+                )
+                if "detail" in error_data:
                     print("✅ Proper error response format")
                 else:
                     print("❌ Missing error details")
@@ -167,7 +166,7 @@ def test_invalid_data_scenarios():
             elif response.status_code == 500:
                 # Internal server error - should have error message
                 print(f"Server Error: {response.text}")
-                if 'detail' in response.text:
+                if "detail" in response.text:
                     print("✅ Error response contains details")
                 else:
                     print("❌ Error response lacks details")
@@ -175,8 +174,16 @@ def test_invalid_data_scenarios():
             elif response.status_code == 200:
                 # Success - check if response is reasonable
                 result = response.json()
-                required_fields = ['obesity_level', 'bmi', 'metabolic_age', 'diet_plan', 'workout_plan']
-                missing_fields = [field for field in required_fields if field not in result]
+                required_fields = [
+                    "obesity_level",
+                    "bmi",
+                    "metabolic_age",
+                    "diet_plan",
+                    "workout_plan",
+                ]
+                missing_fields = [
+                    field for field in required_fields if field not in result
+                ]
 
                 if missing_fields:
                     print(f"❌ Missing fields: {missing_fields}")
@@ -185,8 +192,8 @@ def test_invalid_data_scenarios():
                     print("✅ Response contains all required fields")
 
                 # Check if values are reasonable
-                bmi = result.get('bmi', 0)
-                metabolic_age = result.get('metabolic_age', 0)
+                bmi = result.get("bmi", 0)
+                metabolic_age = result.get("metabolic_age", 0)
 
                 if not (10 <= bmi <= 100):
                     print(f"❌ Unreasonable BMI: {bmi}")
@@ -203,6 +210,7 @@ def test_invalid_data_scenarios():
 
     return results
 
+
 def test_service_availability():
     """Test service availability and health checks."""
     print("\n=== Testing Service Availability ===")
@@ -211,7 +219,7 @@ def test_service_availability():
         ("/", "Root"),
         ("/health", "Health Check"),
         ("/api/v1/predict/health", "Prediction Service Health"),
-        ("/api/v1/predict/info", "Service Info")
+        ("/api/v1/predict/info", "Service Info"),
     ]
 
     availability_results = []
@@ -233,11 +241,11 @@ def test_service_availability():
 
                 if endpoint == "/health" or endpoint == "/api/v1/predict/health":
                     health_data = response.json()
-                    if 'status' in health_data:
+                    if "status" in health_data:
                         print(f"  Status: {health_data['status']}")
-                    if 'model_loaded' in health_data:
+                    if "model_loaded" in health_data:
                         print(f"  Model Loaded: {health_data['model_loaded']}")
-                    if health_data.get('model_loaded', False):
+                    if health_data.get("model_loaded", False):
                         print("✅ Model is loaded and ready")
                     else:
                         print("❌ Model is not loaded")
@@ -252,6 +260,7 @@ def test_service_availability():
             availability_results.append(False)
 
     return availability_results
+
 
 def test_concurrent_requests():
     """Test service behavior under concurrent load."""
@@ -271,7 +280,7 @@ def test_concurrent_requests():
         "FAF": 1.0,
         "TUE": 2.0,
         "CALC": "Sometimes",
-        "MTRANS": "Walking"
+        "MTRANS": "Walking",
     }
 
     import threading
@@ -284,26 +293,28 @@ def test_concurrent_requests():
         try:
             start_time = time.time()
             response = requests.post(
-                f"{BASE_URL}/api/v1/predict/",
-                json=user_data,
-                timeout=30
+                f"{BASE_URL}/api/v1/predict/", json=user_data, timeout=30
             )
             end_time = time.time()
 
-            results.put({
-                'id': request_id,
-                'status_code': response.status_code,
-                'response_time': end_time - start_time,
-                'success': response.status_code == 200
-            })
+            results.put(
+                {
+                    "id": request_id,
+                    "status_code": response.status_code,
+                    "response_time": end_time - start_time,
+                    "success": response.status_code == 200,
+                }
+            )
         except Exception as e:
-            results.put({
-                'id': request_id,
-                'status_code': 0,
-                'response_time': 0,
-                'success': False,
-                'error': str(e)
-            })
+            results.put(
+                {
+                    "id": request_id,
+                    "status_code": 0,
+                    "response_time": 0,
+                    "success": False,
+                    "error": str(e),
+                }
+            )
 
     # Start concurrent requests
     threads = []
@@ -327,8 +338,8 @@ def test_concurrent_requests():
         request_results.append(results.get())
 
     # Analyze results
-    successful_requests = [r for r in request_results if r['success']]
-    failed_requests = [r for r in request_results if not r['success']]
+    successful_requests = [r for r in request_results if r["success"]]
+    failed_requests = [r for r in request_results if not r["success"]]
 
     print(f"Total requests: {num_requests}")
     print(f"Successful requests: {len(successful_requests)}")
@@ -337,7 +348,7 @@ def test_concurrent_requests():
     print(f"Total time: {total_time:.3f}s")
 
     if successful_requests:
-        response_times = [r['response_time'] for r in successful_requests]
+        response_times = [r["response_time"] for r in successful_requests]
         avg_response_time = sum(response_times) / len(response_times)
         min_response_time = min(response_times)
         max_response_time = max(response_times)
@@ -350,20 +361,30 @@ def test_concurrent_requests():
     if failed_requests:
         print("\nFailed requests:")
         for failed in failed_requests:
-            if 'error' in failed:
+            if "error" in failed:
                 print(f"  Request {failed['id']}: {failed['error']}")
             else:
                 print(f"  Request {failed['id']}: Status {failed['status_code']}")
 
     # Success criteria
-    success_rate_acceptable = len(successful_requests) / num_requests >= 0.9  # 90% success rate
-    avg_time_acceptable = successful_requests and (sum(r['response_time'] for r in successful_requests) / len(successful_requests)) < 5.0
+    success_rate_acceptable = (
+        len(successful_requests) / num_requests >= 0.9
+    )  # 90% success rate
+    avg_time_acceptable = (
+        successful_requests
+        and (
+            sum(r["response_time"] for r in successful_requests)
+            / len(successful_requests)
+        )
+        < 5.0
+    )
 
     print(f"\nConcurrent Load Criteria:")
     print(f"  Success Rate >= 90%: {'PASS' if success_rate_acceptable else 'FAIL'}")
     print(f"  Average Response Time < 5s: {'PASS' if avg_time_acceptable else 'FAIL'}")
 
     return success_rate_acceptable and avg_time_acceptable
+
 
 def test_model_edge_cases():
     """Test edge cases that might affect model performance."""
@@ -386,8 +407,8 @@ def test_model_edge_cases():
                 "FAF": 5.0,
                 "TUE": 1.0,
                 "CALC": "no",
-                "MTRANS": "Walking"
-            }
+                "MTRANS": "Walking",
+            },
         },
         {
             "name": "Very High BMI",
@@ -405,8 +426,8 @@ def test_model_edge_cases():
                 "FAF": 0.0,
                 "TUE": 8.0,
                 "CALC": "Always",
-                "MTRANS": "Automobile"
-            }
+                "MTRANS": "Automobile",
+            },
         },
         {
             "name": "Extreme Age - Young",
@@ -424,8 +445,8 @@ def test_model_edge_cases():
                 "FAF": 3.0,
                 "TUE": 2.0,
                 "CALC": "no",
-                "MTRANS": "Bike"
-            }
+                "MTRANS": "Bike",
+            },
         },
         {
             "name": "Extreme Age - Old",
@@ -443,9 +464,9 @@ def test_model_edge_cases():
                 "FAF": 1.0,
                 "TUE": 3.0,
                 "CALC": "Sometimes",
-                "MTRANS": "Public_Transportation"
-            }
-        }
+                "MTRANS": "Public_Transportation",
+            },
+        },
     ]
 
     edge_case_results = []
@@ -455,16 +476,14 @@ def test_model_edge_cases():
 
         try:
             response = requests.post(
-                f"{BASE_URL}/api/v1/predict/",
-                json=edge_case['data'],
-                timeout=30
+                f"{BASE_URL}/api/v1/predict/", json=edge_case["data"], timeout=30
             )
 
             if response.status_code == 200:
                 result = response.json()
-                obesity_level = result.get('obesity_level')
-                bmi = result.get('bmi')
-                metabolic_age = result.get('metabolic_age')
+                obesity_level = result.get("obesity_level")
+                bmi = result.get("bmi")
+                metabolic_age = result.get("metabolic_age")
 
                 print(f"Obesity Level: {obesity_level}")
                 print(f"BMI: {bmi}")
@@ -473,13 +492,13 @@ def test_model_edge_cases():
 
                 # Check if obesity level makes sense for BMI
                 if bmi and obesity_level:
-                    if bmi < 18.5 and 'Insufficient' in obesity_level:
+                    if bmi < 18.5 and "Insufficient" in obesity_level:
                         print("✅ Consistent underweight prediction")
-                    elif bmi >= 30 and 'Obesity' in obesity_level:
+                    elif bmi >= 30 and "Obesity" in obesity_level:
                         print("✅ Consistent obesity prediction")
-                    elif 18.5 <= bmi < 25 and 'Normal' in obesity_level:
+                    elif 18.5 <= bmi < 25 and "Normal" in obesity_level:
                         print("✅ Consistent normal weight prediction")
-                    elif 25 <= bmi < 30 and 'Overweight' in obesity_level:
+                    elif 25 <= bmi < 30 and "Overweight" in obesity_level:
                         print("✅ Consistent overweight prediction")
                     else:
                         print("⚠️  BMI and obesity level may not align")
@@ -496,24 +515,35 @@ def test_model_edge_cases():
 
     return edge_case_results
 
+
 def main():
     """Run all error handling and degradation tests."""
     print("=== Prediction Service Error Handling & Graceful Degradation Testing ===")
 
     # Test 1: Invalid data scenarios
     invalid_data_results = test_invalid_data_scenarios()
-    invalid_data_pass_rate = sum(invalid_data_results) / len(invalid_data_results) if invalid_data_results else 0
+    invalid_data_pass_rate = (
+        sum(invalid_data_results) / len(invalid_data_results)
+        if invalid_data_results
+        else 0
+    )
 
     # Test 2: Service availability
     availability_results = test_service_availability()
-    availability_pass_rate = sum(availability_results) / len(availability_results) if availability_results else 0
+    availability_pass_rate = (
+        sum(availability_results) / len(availability_results)
+        if availability_results
+        else 0
+    )
 
     # Test 3: Concurrent requests
     concurrent_pass = test_concurrent_requests()
 
     # Test 4: Model edge cases
     edge_case_results = test_model_edge_cases()
-    edge_case_pass_rate = sum(edge_case_results) / len(edge_case_results) if edge_case_results else 0
+    edge_case_pass_rate = (
+        sum(edge_case_results) / len(edge_case_results) if edge_case_results else 0
+    )
 
     # Summary
     print(f"\n=== Error Handling & Degradation Summary ===")
@@ -523,18 +553,31 @@ def main():
     print(f"Edge Case Handling: {edge_case_pass_rate*100:.1f}% pass rate")
 
     # Overall success criteria
-    invalid_data_acceptable = invalid_data_pass_rate >= 0.8  # 80% of invalid cases handled properly
-    availability_acceptable = availability_pass_rate >= 0.9  # 90% of endpoints available
+    invalid_data_acceptable = (
+        invalid_data_pass_rate >= 0.8
+    )  # 80% of invalid cases handled properly
+    availability_acceptable = (
+        availability_pass_rate >= 0.9
+    )  # 90% of endpoints available
     concurrent_acceptable = concurrent_pass  # Concurrent load test passes
     edge_case_acceptable = edge_case_pass_rate >= 0.75  # 75% of edge cases handled
 
     print(f"\nSuccess Criteria:")
     print(f"  Invalid Data >= 80%: {'PASS' if invalid_data_acceptable else 'FAIL'}")
-    print(f"  Service Availability >= 90%: {'PASS' if availability_acceptable else 'FAIL'}")
+    print(
+        f"  Service Availability >= 90%: {'PASS' if availability_acceptable else 'FAIL'}"
+    )
     print(f"  Concurrent Load: {'PASS' if concurrent_acceptable else 'FAIL'}")
     print(f"  Edge Cases >= 75%: {'PASS' if edge_case_acceptable else 'FAIL'}")
 
-    overall_success = all([invalid_data_acceptable, availability_acceptable, concurrent_acceptable, edge_case_acceptable])
+    overall_success = all(
+        [
+            invalid_data_acceptable,
+            availability_acceptable,
+            concurrent_acceptable,
+            edge_case_acceptable,
+        ]
+    )
     print(f"\nOVERALL ERROR HANDLING: {'PASS' if overall_success else 'FAIL'}")
 
     # Recommendations
@@ -550,6 +593,7 @@ def main():
             print("- Test and improve handling of edge cases")
 
     return overall_success
+
 
 if __name__ == "__main__":
     main()

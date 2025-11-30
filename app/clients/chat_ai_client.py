@@ -28,7 +28,7 @@ class ChatAIClient:
             base_url: Base URL of the Chat AI service
             timeout: Request timeout in seconds (longer for streaming)
         """
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._client = None
 
@@ -39,11 +39,13 @@ class ChatAIClient:
                 base_url=self.base_url,
                 timeout=self.timeout,
                 max_retries=3,
-                retry_delay=0.5
+                retry_delay=0.5,
             )
         return self._client
 
-    async def ask_question(self, question: str, threshold: float = 0.55, top_k: int = 7) -> Dict[str, Any]:
+    async def ask_question(
+        self, question: str, threshold: float = 0.55, top_k: int = 7
+    ) -> Dict[str, Any]:
         """
         Ask a question via Chat AI service.
 
@@ -59,11 +61,7 @@ class ChatAIClient:
             client = await self._get_client()
 
             # Prepare request payload
-            payload = {
-                "question": question,
-                "threshold": threshold,
-                "top_k": top_k
-            }
+            payload = {"question": question, "threshold": threshold, "top_k": top_k}
 
             logger.info(f"Proxying question to Chat AI service: {question[:100]}...")
             response = await client.post("/api/v1/qa/ask", json=payload)
@@ -75,14 +73,11 @@ class ChatAIClient:
             logger.error(f"Failed to proxy question to Chat AI service: {e}")
             raise ServiceUnavailableException(
                 f"Chat AI service is temporarily unavailable: {str(e)}",
-                details={"service": "chat_ai", "error": str(e)}
+                details={"service": "chat_ai", "error": str(e)},
             )
 
     async def stream_ask_question(
-        self,
-        question: str,
-        threshold: float = 0.55,
-        top_k: int = 7
+        self, question: str, threshold: float = 0.55, top_k: int = 7
     ) -> AsyncGenerator[str, None]:
         """
         Stream question response via Chat AI service.
@@ -99,13 +94,11 @@ class ChatAIClient:
             client = await self._get_client()
 
             # Prepare request payload
-            payload = {
-                "question": question,
-                "threshold": threshold,
-                "top_k": top_k
-            }
+            payload = {"question": question, "threshold": threshold, "top_k": top_k}
 
-            logger.info(f"Proxying streaming question to Chat AI service: {question[:100]}...")
+            logger.info(
+                f"Proxying streaming question to Chat AI service: {question[:100]}..."
+            )
 
             # Get the underlying session for streaming
             session = await client._get_session()
@@ -127,7 +120,7 @@ class ChatAIClient:
                 # Stream response chunks line by line for SSE
                 async for line in response.content:
                     if line:
-                        yield line.decode('utf-8')
+                        yield line.decode("utf-8")
 
             logger.info("Completed streaming response from Chat AI service")
 
@@ -136,10 +129,12 @@ class ChatAIClient:
             # Yield error event for streaming clients
             error_event = {
                 "event": "error",
-                "data": json.dumps({
-                    "error": "Chat AI service is temporarily unavailable",
-                    "code": "service_unavailable"
-                })
+                "data": json.dumps(
+                    {
+                        "error": "Chat AI service is temporarily unavailable",
+                        "code": "service_unavailable",
+                    }
+                ),
             }
             yield f"event: {error_event['event']}\ndata: {error_event['data']}\n\n"
 
@@ -161,7 +156,7 @@ class ChatAIClient:
                 "status": "unhealthy",
                 "service": "chat_ai",
                 "error": str(e),
-                "message": "Chat AI service is not responding"
+                "message": "Chat AI service is not responding",
             }
 
     async def close(self):
@@ -193,7 +188,9 @@ async def get_chat_ai_client() -> Optional[ChatAIClient]:
     global _chat_ai_client
 
     if not settings.chat_ai_service_url:
-        logger.warning("CHAT_AI_SERVICE_URL not configured, Chat AI client not available")
+        logger.warning(
+            "CHAT_AI_SERVICE_URL not configured, Chat AI client not available"
+        )
         return None
 
     if _chat_ai_client is None:

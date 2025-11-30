@@ -39,7 +39,7 @@ def create_access_token(
     data: Dict[str, Any],
     secret_key: str,
     algorithm: str = "HS256",
-    expires_delta: Optional[timedelta] = None
+    expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
@@ -54,9 +54,7 @@ def create_access_token(
 
 
 def verify_access_token(
-    token: str,
-    secret_key: str,
-    algorithm: str = "HS256"
+    token: str, secret_key: str, algorithm: str = "HS256"
 ) -> Optional[Dict[str, Any]]:
     """Verify and decode a JWT access token."""
     try:
@@ -70,7 +68,7 @@ def create_refresh_token(
     data: Dict[str, Any],
     secret_key: str,
     algorithm: str = "HS256",
-    expires_delta: Optional[timedelta] = None
+    expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Create a JWT refresh token."""
     to_encode = data.copy()
@@ -85,9 +83,7 @@ def create_refresh_token(
 
 
 def verify_refresh_token(
-    token: str,
-    secret_key: str,
-    algorithm: str = "HS256"
+    token: str, secret_key: str, algorithm: str = "HS256"
 ) -> Optional[Dict[str, Any]]:
     """Verify and decode a JWT refresh token."""
     try:
@@ -116,7 +112,7 @@ def create_verification_token(
     secret_key: str,
     algorithm: str = "HS256",
     token_type: str = "email_verification",
-    expire_minutes: Optional[int] = None
+    expire_minutes: Optional[int] = None,
 ) -> str:
     """Create a token for email verification or password reset."""
     if expire_minutes is None:
@@ -137,7 +133,7 @@ def verify_verification_token(
     token: str,
     secret_key: str,
     algorithm: str = "HS256",
-    expected_type: str = "email_verification"
+    expected_type: str = "email_verification",
 ) -> Optional[str]:
     """Verify email verification or password reset token."""
     try:

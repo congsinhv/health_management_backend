@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional
 PREDICTION_SERVICE_URL = "http://localhost:8001"
 MAIN_API_URL = "http://localhost:8080"
 
+
 def test_prediction_service_direct():
     """Test prediction service directly."""
     print("=== Testing Prediction Service Direct ===")
@@ -29,7 +30,7 @@ def test_prediction_service_direct():
         "FAF": 1.0,
         "TUE": 3.0,
         "CALC": "Sometimes",
-        "MTRANS": "Automobile"
+        "MTRANS": "Automobile",
     }
 
     try:
@@ -44,9 +45,7 @@ def test_prediction_service_direct():
 
         # Test prediction
         predict_response = requests.post(
-            f"{PREDICTION_SERVICE_URL}/api/v1/predict/",
-            json=user_data,
-            timeout=30
+            f"{PREDICTION_SERVICE_URL}/api/v1/predict/", json=user_data, timeout=30
         )
         print(f"Prediction Service Prediction: {predict_response.status_code}")
         if predict_response.status_code == 200:
@@ -62,6 +61,7 @@ def test_prediction_service_direct():
     except requests.exceptions.RequestException as e:
         print(f"Prediction Service Error: {e}")
         return False
+
 
 def test_main_api_proxy():
     """Test Main API proxy to prediction service."""
@@ -81,15 +81,13 @@ def test_main_api_proxy():
         "FAF": 1.0,
         "TUE": 3.0,
         "CALC": "Sometimes",
-        "MTRANS": "Automobile"
+        "MTRANS": "Automobile",
     }
 
     # Try without authentication first to see the proxy structure
     try:
         predict_response = requests.post(
-            f"{MAIN_API_URL}/api/v1/predict/",
-            json=user_data,
-            timeout=30
+            f"{MAIN_API_URL}/api/v1/predict/", json=user_data, timeout=30
         )
         print(f"Main API Prediction (no auth): {predict_response.status_code}")
         if predict_response.status_code == 401:
@@ -123,6 +121,7 @@ def test_main_api_proxy():
 
     return True
 
+
 def test_service_equivalence():
     """Test that prediction service and main API produce equivalent results."""
     print("\n=== Testing Service Equivalence ===")
@@ -145,15 +144,13 @@ def test_service_equivalence():
         "FAF": 2.0,
         "TUE": 2.0,
         "CALC": "Sometimes",
-        "MTRANS": "Walking"
+        "MTRANS": "Walking",
     }
 
     try:
         # Test prediction service
         predict_response = requests.post(
-            f"{PREDICTION_SERVICE_URL}/api/v1/predict/",
-            json=user_data,
-            timeout=30
+            f"{PREDICTION_SERVICE_URL}/api/v1/predict/", json=user_data, timeout=30
         )
 
         if predict_response.status_code == 200:
@@ -162,13 +159,27 @@ def test_service_equivalence():
             print(f"  obesity_level: {result.get('obesity_level')}")
             print(f"  bmi: {result.get('bmi')}")
             print(f"  metabolic_age: {result.get('metabolic_age')}")
-            print(f"  diet_plan present: {'healthAnalysis' in result.get('diet_plan', {})}")
-            print(f"  workout_plan present: {'weeklyPlans' in result.get('workout_plan', {})}")
-            print(f"  raw_prediction present: {len(result.get('raw_prediction', [])) > 0}")
+            print(
+                f"  diet_plan present: {'healthAnalysis' in result.get('diet_plan', {})}"
+            )
+            print(
+                f"  workout_plan present: {'weeklyPlans' in result.get('workout_plan', {})}"
+            )
+            print(
+                f"  raw_prediction present: {len(result.get('raw_prediction', [])) > 0}"
+            )
             print(f"  input_data preserved: {len(result.get('input_data', {})) > 0}")
 
             # Validate expected fields
-            required_fields = ['obesity_level', 'bmi', 'metabolic_age', 'diet_plan', 'workout_plan', 'raw_prediction', 'input_data']
+            required_fields = [
+                "obesity_level",
+                "bmi",
+                "metabolic_age",
+                "diet_plan",
+                "workout_plan",
+                "raw_prediction",
+                "input_data",
+            ]
             missing_fields = [field for field in required_fields if field not in result]
 
             if missing_fields:
@@ -185,6 +196,7 @@ def test_service_equivalence():
         print(f"Error testing prediction service: {e}")
         return False
 
+
 def test_error_handling():
     """Test error handling in prediction service."""
     print("\n=== Testing Error Handling ===")
@@ -194,14 +206,12 @@ def test_error_handling():
         "age": -5,  # Invalid age
         "gender": "invalid",
         "height": 0,
-        "weight": 0
+        "weight": 0,
     }
 
     try:
         response = requests.post(
-            f"{PREDICTION_SERVICE_URL}/api/v1/predict/",
-            json=invalid_data,
-            timeout=30
+            f"{PREDICTION_SERVICE_URL}/api/v1/predict/", json=invalid_data, timeout=30
         )
         print(f"Invalid Data Response: {response.status_code}")
 
@@ -220,7 +230,7 @@ def test_error_handling():
         response = requests.post(
             f"{PREDICTION_SERVICE_URL}/api/v1/predict/",
             json={},  # Empty data
-            timeout=30
+            timeout=30,
         )
         print(f"Missing Fields Response: {response.status_code}")
 
@@ -231,6 +241,7 @@ def test_error_handling():
 
     except Exception as e:
         print(f"Error testing missing fields: {e}")
+
 
 def test_performance_degradation():
     """Test how the service performs under load."""
@@ -250,7 +261,7 @@ def test_performance_degradation():
         "FAF": 2.0,
         "TUE": 2.0,
         "CALC": "Sometimes",
-        "MTRANS": "Walking"
+        "MTRANS": "Walking",
     }
 
     # Test sequential requests
@@ -263,9 +274,7 @@ def test_performance_degradation():
         start_time = time.time()
         try:
             response = requests.post(
-                f"{PREDICTION_SERVICE_URL}/api/v1/predict/",
-                json=user_data,
-                timeout=30
+                f"{PREDICTION_SERVICE_URL}/api/v1/predict/", json=user_data, timeout=30
             )
             end_time = time.time()
             response_time = end_time - start_time
@@ -286,7 +295,9 @@ def test_performance_degradation():
         max_time = max(response_times)
 
         print(f"\nPerformance Summary:")
-        print(f"  Success Rate: {success_count}/{num_requests} ({success_count/num_requests*100:.1f}%)")
+        print(
+            f"  Success Rate: {success_count}/{num_requests} ({success_count/num_requests*100:.1f}%)"
+        )
         print(f"  Average Response Time: {avg_time:.3f}s")
         print(f"  Min Response Time: {min_time:.3f}s")
         print(f"  Max Response Time: {max_time:.3f}s")
@@ -299,13 +310,16 @@ def test_performance_degradation():
 
         print(f"\nPerformance Criteria:")
         print(f"  Average < 2s: {'PASS' if avg_acceptable else 'FAIL'}")
-        print(f"  Consistency < 1s range: {'PASS' if consistency_acceptable else 'FAIL'}")
+        print(
+            f"  Consistency < 1s range: {'PASS' if consistency_acceptable else 'FAIL'}"
+        )
         print(f"  Success Rate >= 95%: {'PASS' if success_acceptable else 'FAIL'}")
 
         return avg_acceptable and consistency_acceptable and success_acceptable
     else:
         print("  No successful requests")
         return False
+
 
 def main():
     """Run all integration tests."""
@@ -335,12 +349,14 @@ def main():
     print(f"Response Format Validation: {'PASS' if format_result else 'FAIL'}")
     print(f"Performance Requirements: {'PASS' if performance_result else 'FAIL'}")
 
-    overall_success = all([
-        direct_result is not False,  # False means critical failure
-        proxy_result,
-        format_result,
-        performance_result
-    ])
+    overall_success = all(
+        [
+            direct_result is not False,  # False means critical failure
+            proxy_result,
+            format_result,
+            performance_result,
+        ]
+    )
 
     print(f"\nOVERALL INTEGRATION: {'PASS' if overall_success else 'FAIL'}")
 
@@ -349,13 +365,16 @@ def main():
         if not direct_result:
             print("- Prediction service may need configuration fixes")
         if not proxy_result:
-            print("- Main API may need to be running with prediction_service_url configured")
+            print(
+                "- Main API may need to be running with prediction_service_url configured"
+            )
         if not format_result:
             print("- Response format may not match Main API expectations")
         if not performance_result:
             print("- Performance may not meet requirements (<2s avg, 95% success)")
 
     return overall_success
+
 
 if __name__ == "__main__":
     main()

@@ -66,6 +66,7 @@ def create_qa_app() -> FastAPI:
         """Initialize QA service on startup."""
         try:
             from app.services.qa import create_qa_service
+
             app.state.qa_service = create_qa_service(settings)
 
             # Initialize the service
@@ -78,9 +79,9 @@ def create_qa_app() -> FastAPI:
     @app.on_event("shutdown")
     async def shutdown_event():
         """Cleanup on shutdown."""
-        if hasattr(app.state, 'qa_service') and app.state.qa_service:
+        if hasattr(app.state, "qa_service") and app.state.qa_service:
             try:
-                if hasattr(app.state.qa_service, 'ai_summarizer'):
+                if hasattr(app.state.qa_service, "ai_summarizer"):
                     await app.state.qa_service.ai_summarizer.close()
                 logger.info("QA service cleanup completed")
             except Exception as e:
@@ -138,7 +139,7 @@ async def ask_question(
             qa_service,
             question_data.question,
             question_data.threshold,
-            question_data.top_k
+            question_data.top_k,
         )
 
         return QuestionResponse(**result)
@@ -209,7 +210,7 @@ async def ask_question_stream(
                 # Format as proper SSE event
                 if isinstance(sse_event, str):
                     # Simple text chunk
-                    yield f"event: summary_chunk\ndata: {{\"chunk\": {json.dumps(sse_event)}, \"token_count\": 1}}\n\n"
+                    yield f'event: summary_chunk\ndata: {{"chunk": {json.dumps(sse_event)}, "token_count": 1}}\n\n'
                     event_count += 1
                 else:
                     # Event object
@@ -246,11 +247,13 @@ async def ask_question_stream(
             # Send final event
             complete_event = {
                 "event": "stream_complete",
-                "data": json.dumps({
-                    "total_tokens": event_count,
-                    "duration": duration,
-                    "question": question_data.question
-                })
+                "data": json.dumps(
+                    {
+                        "total_tokens": event_count,
+                        "duration": duration,
+                        "question": question_data.question,
+                    }
+                ),
             }
             yield f"event: {complete_event['event']}\ndata: {complete_event['data']}\n\n"
 
@@ -298,10 +301,16 @@ async def qa_health_check(request: Request):
         return QAHealthResponse(
             status=health_info.get("status", "unknown"),
             model_loaded=health_info.get("components", {}).get("model_loaded", False),
-            embeddings_loaded=health_info.get("components", {}).get("embeddings_ready", False),
+            embeddings_loaded=health_info.get("components", {}).get(
+                "embeddings_ready", False
+            ),
             streaming_enabled=True,  # Always true in this service
-            openai_configured=health_info.get("components", {}).get("ai_available", False),
-            message="Q&A service is operational" if health_info.get("status") == "healthy" else "Q&A service issues detected",
+            openai_configured=health_info.get("components", {}).get(
+                "ai_available", False
+            ),
+            message="Q&A service is operational"
+            if health_info.get("status") == "healthy"
+            else "Q&A service issues detected",
         )
 
 
@@ -333,10 +342,7 @@ async def qa_service_status(request: Request):
 
 
 async def _process_question_non_streaming(
-    qa_service: QAService,
-    question: str,
-    threshold: float,
-    top_k: int
+    qa_service: QAService, question: str, threshold: float, top_k: int
 ) -> Dict[str, any]:
     """Process question using streaming API and collect results."""
     try:

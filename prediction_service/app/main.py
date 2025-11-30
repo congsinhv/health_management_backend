@@ -30,11 +30,7 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI application
-app = FastAPI(
-    title="VHealth Prediction Service",
-    version="1.0.0",
-    lifespan=lifespan
-)
+app = FastAPI(title="VHealth Prediction Service", version="1.0.0", lifespan=lifespan)
 
 # Add CORS middleware
 app.add_middleware(
@@ -48,6 +44,7 @@ app.add_middleware(
 # Include API routes
 app.include_router(predict.router, prefix="/api/v1")
 
+
 # Root endpoint
 @app.get("/")
 async def root():
@@ -60,21 +57,26 @@ async def root():
             "health": "/health",
             "predict": "/api/v1/predict/",
             "docs": "/docs",
-            "redoc": "/redoc"
-        }
+            "redoc": "/redoc",
+        },
     }
+
 
 # Health check endpoint
 @app.get("/health")
 async def health():
     """Health check endpoint."""
     try:
-        model_loaded = app.state.predict_service.is_model_loaded() if hasattr(app.state, 'predict_service') else False
+        model_loaded = (
+            app.state.predict_service.is_model_loaded()
+            if hasattr(app.state, "predict_service")
+            else False
+        )
         return {
             "status": "healthy",
             "service": "prediction",
             "model_loaded": model_loaded,
-            "version": "1.0.0"
+            "version": "1.0.0",
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -82,5 +84,5 @@ async def health():
             "status": "unhealthy",
             "service": "prediction",
             "error": str(e),
-            "version": "1.0.0"
+            "version": "1.0.0",
         }

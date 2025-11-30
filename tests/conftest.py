@@ -195,7 +195,7 @@ def mock_vhealth_exception():
     return VHealthException(
         message="Test exception",
         details={"test_field": "test_value"},
-        error_code="TestException"
+        error_code="TestException",
     )
 
 
@@ -203,12 +203,13 @@ def mock_vhealth_exception():
 def sample_qa_request():
     """Sample QA request for testing."""
     from app.interfaces.qa_interface import QARequest
+
     return QARequest(
         question="What is diabetes?",
         user_id=1,
         conversation_id=None,
         context=None,
-        threshold=0.55
+        threshold=0.55,
     )
 
 
@@ -216,6 +217,7 @@ def sample_qa_request():
 def sample_prediction_request():
     """Sample prediction request for testing."""
     from app.interfaces.predict_interface import PredictionRequest
+
     return PredictionRequest(
         age=30,
         gender="male",
@@ -229,7 +231,7 @@ def sample_prediction_request():
         family_history_diabetes=False,
         family_history_heart_disease=False,
         user_id=1,
-        prediction_type="general"
+        prediction_type="general",
     )
 
 

@@ -5,19 +5,22 @@ import numpy as np
 import onnxruntime as ort
 import json
 
+
 def main():
     print("=== ONNX vs Sklearn Benchmark ===")
 
     # Load sklearn models
     print("Loading sklearn models...")
-    sklearn_model = joblib.load('obesity_classifier_final.pkl')
-    label_encoder = joblib.load('label_encoder.pkl')
+    sklearn_model = joblib.load("obesity_classifier_final.pkl")
+    label_encoder = joblib.load("label_encoder.pkl")
 
     # Load ONNX models
     print("Loading ONNX models...")
-    onnx_session = ort.InferenceSession('models/obesity_classifier.onnx', providers=['CPUExecutionProvider'])
+    onnx_session = ort.InferenceSession(
+        "models/obesity_classifier.onnx", providers=["CPUExecutionProvider"]
+    )
 
-    with open('models/label_encoder.json', 'r') as f:
+    with open("models/label_encoder.json", "r") as f:
         onnx_label_encoder = json.load(f)
 
     # Generate test data
@@ -65,6 +68,7 @@ def main():
     else:
         print(f"❌ Benchmark FAILED: ONNX is only {speedup:.2f}x faster (need ≥2x)")
         return False
+
 
 if __name__ == "__main__":
     success = main()

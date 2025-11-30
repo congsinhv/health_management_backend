@@ -8,7 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.qa import create_qa_app
 from app.config import settings
-from app.core.shared.exceptions import VHealthException, get_http_status_code, sanitize_error_details
+from app.core.shared.exceptions import (
+    VHealthException,
+    get_http_status_code,
+    sanitize_error_details,
+)
 from app.core.error_context import ErrorContext
 
 # Configure logging
@@ -33,20 +37,20 @@ async def vhealth_exception_handler(request, exc: VHealthException):
     error_response = {
         "error": exc.error_code,
         "message": exc.message,
-        "details": sanitize_error_details(exc.details, user_context=True)
+        "details": sanitize_error_details(exc.details, user_context=True),
     }
 
     # Log the error
-    exc.log("warning", {
-        "path": request.url.path,
-        "method": request.method,
-        "status_code": status_code
-    })
-
-    return JSONResponse(
-        status_code=status_code,
-        content=error_response
+    exc.log(
+        "warning",
+        {
+            "path": request.url.path,
+            "method": request.method,
+            "status_code": status_code,
+        },
     )
+
+    return JSONResponse(status_code=status_code, content=error_response)
 
 
 @app.exception_handler(Exception)
@@ -65,13 +69,10 @@ async def general_exception_handler(request, exc: Exception):
     error_response = {
         "error": "InternalServerError",
         "message": "An unexpected error occurred",
-        "details": {}
+        "details": {},
     }
 
-    return JSONResponse(
-        status_code=500,
-        content=error_response
-    )
+    return JSONResponse(status_code=500, content=error_response)
 
 
 # Root endpoint
@@ -83,7 +84,7 @@ async def root():
         "description": "Microservice for health-related Q&A with AI summarization",
         "version": "1.0.0",
         "docs_url": "/docs",
-        "health_check": "/api/v1/qa/health"
+        "health_check": "/api/v1/qa/health",
     }
 
 

@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 # Base URL for prediction service
 BASE_URL = "http://localhost:8001"
 
+
 def test_prediction_consistency():
     """Test prediction consistency with same input multiple times."""
 
@@ -28,7 +29,7 @@ def test_prediction_consistency():
         "FAF": 2.0,
         "TUE": 2.0,
         "CALC": "Sometimes",
-        "MTRANS": "Walking"
+        "MTRANS": "Walking",
     }
 
     num_tests = 10
@@ -46,7 +47,7 @@ def test_prediction_consistency():
                 f"{BASE_URL}/api/v1/predict/",
                 json=user_data,
                 headers={"Content-Type": "application/json"},
-                timeout=30
+                timeout=30,
             )
 
             end_time = time.time()
@@ -56,7 +57,9 @@ def test_prediction_consistency():
             if response.status_code == 200:
                 result = response.json()
                 results.append(result)
-                print(f"Test {i+1}: {result['obesity_level']} (BMI: {result['bmi']}, Response: {response_time:.3f}s)")
+                print(
+                    f"Test {i+1}: {result['obesity_level']} (BMI: {result['bmi']}, Response: {response_time:.3f}s)"
+                )
             else:
                 print(f"Test {i+1}: FAILED with status {response.status_code}")
                 print(f"Error: {response.text}")
@@ -66,9 +69,9 @@ def test_prediction_consistency():
 
     # Analyze consistency
     if results:
-        obesity_levels = [r['obesity_level'] for r in results]
-        bmi_values = [r['bmi'] for r in results]
-        metabolic_ages = [r['metabolic_age'] for r in results]
+        obesity_levels = [r["obesity_level"] for r in results]
+        bmi_values = [r["bmi"] for r in results]
+        metabolic_ages = [r["metabolic_age"] for r in results]
 
         # Check consistency
         unique_obesity_levels = set(obesity_levels)
@@ -96,34 +99,48 @@ def test_prediction_consistency():
 
         # Consistency criteria
         is_consistent = (
-            len(unique_obesity_levels) == 1 and
-            bmi_variance < 0.001 and  # BMI should be exactly the same
-            max_response_time - min_response_time < 2.0  # Response times reasonably consistent
+            len(unique_obesity_levels) == 1
+            and bmi_variance < 0.001
+            and max_response_time - min_response_time  # BMI should be exactly the same
+            < 2.0  # Response times reasonably consistent
         )
 
         print(f"\n=== Consistency Result ===")
         print(f"Overall consistency: {'PASS' if is_consistent else 'FAIL'}")
 
         return {
-            'success_rate': len(results) / num_tests,
-            'obesity_consistency': len(unique_obesity_levels) == 1,
-            'bmi_variance': bmi_variance,
-            'avg_response_time': avg_response_time,
-            'overall_consistent': is_consistent
+            "success_rate": len(results) / num_tests,
+            "obesity_consistency": len(unique_obesity_levels) == 1,
+            "bmi_variance": bmi_variance,
+            "avg_response_time": avg_response_time,
+            "overall_consistent": is_consistent,
         }
     else:
         print("ERROR: No successful predictions!")
-        return {'success_rate': 0, 'overall_consistent': False}
+        return {"success_rate": 0, "overall_consistent": False}
+
 
 def test_onnx_performance():
     """Test ONNX model performance specifically."""
 
     # Test with varied inputs to see model performance
     test_cases = [
-        {"name": "Underweight", "age": 22, "gender": "female", "height": 1.65, "weight": 45},
+        {
+            "name": "Underweight",
+            "age": 22,
+            "gender": "female",
+            "height": 1.65,
+            "weight": 45,
+        },
         {"name": "Normal", "age": 30, "gender": "male", "height": 1.75, "weight": 70},
-        {"name": "Overweight", "age": 35, "gender": "female", "height": 1.60, "weight": 75},
-        {"name": "Obese", "age": 45, "gender": "male", "height": 1.70, "weight": 95}
+        {
+            "name": "Overweight",
+            "age": 35,
+            "gender": "female",
+            "height": 1.60,
+            "weight": 75,
+        },
+        {"name": "Obese", "age": 45, "gender": "male", "height": 1.70, "weight": 95},
     ]
 
     # Base template
@@ -137,7 +154,7 @@ def test_onnx_performance():
         "FAF": 1.5,
         "TUE": 2.5,
         "CALC": "Sometimes",
-        "MTRANS": "Walking"
+        "MTRANS": "Walking",
     }
 
     print(f"\n=== ONNX Model Performance Test ===")
@@ -157,7 +174,7 @@ def test_onnx_performance():
                     f"{BASE_URL}/api/v1/predict/",
                     json=user_data,
                     headers={"Content-Type": "application/json"},
-                    timeout=30
+                    timeout=30,
                 )
 
                 end_time = time.time()
@@ -180,6 +197,7 @@ def test_onnx_performance():
         else:
             print(f"  {test_name}: FAILED (no successful predictions)")
 
+
 if __name__ == "__main__":
     print("=== Prediction Service Consistency & Performance Testing ===")
 
@@ -199,11 +217,11 @@ if __name__ == "__main__":
 
     # Success criteria based on requirements
     success_criteria = {
-        'success_rate': consistency_results['success_rate'] >= 0.95,
-        'obesity_consistency': consistency_results['obesity_consistency'],
-        'bmi_variance_acceptable': consistency_results['bmi_variance'] < 0.001,
-        'response_time_acceptable': consistency_results['avg_response_time'] < 2.0,
-        'overall_pass': consistency_results['overall_consistent']
+        "success_rate": consistency_results["success_rate"] >= 0.95,
+        "obesity_consistency": consistency_results["obesity_consistency"],
+        "bmi_variance_acceptable": consistency_results["bmi_variance"] < 0.001,
+        "response_time_acceptable": consistency_results["avg_response_time"] < 2.0,
+        "overall_pass": consistency_results["overall_consistent"],
     }
 
     print(f"\n=== Success Criteria ===")

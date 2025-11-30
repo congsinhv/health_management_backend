@@ -26,6 +26,7 @@ try:
     from google.auth.transport.requests import Request
     from google.oauth2 import id_token
     from google.auth.exceptions import DefaultCredentialsError
+
     GOOGLE_AUTH_AVAILABLE = True
 except ImportError:
     GOOGLE_AUTH_AVAILABLE = False
@@ -41,7 +42,7 @@ class ServiceClient:
         base_url: str,
         timeout: int = 30,
         max_retries: int = 3,
-        retry_delay: float = 0.5
+        retry_delay: float = 0.5,
     ):
         """
         Initialize service client.
@@ -52,7 +53,7 @@ class ServiceClient:
             max_retries: Maximum number of retries for failed requests
             retry_delay: Delay between retries in seconds
         """
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self.max_retries = max_retries
         self.retry_delay = retry_delay
@@ -100,7 +101,7 @@ class ServiceClient:
             # Cache the token
             self._token_cache[cache_key] = {
                 "token": token,
-                "expires_at": now + self._token_cache_ttl
+                "expires_at": now + self._token_cache_ttl,
             }
 
             return token
@@ -119,7 +120,7 @@ class ServiceClient:
         json: Optional[Dict[str, Any]] = None,
         params: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        retry_count: int = 0
+        retry_count: int = 0,
     ) -> Dict[str, Any]:
         """
         Make HTTP request with retry logic and IAM authentication.
@@ -139,17 +140,13 @@ class ServiceClient:
 
         try:
             async with session.request(
-                method,
-                url,
-                json=json,
-                params=params,
-                headers=req_headers
+                method, url, json=json, params=params, headers=req_headers
             ) as response:
                 response.raise_for_status()
 
                 # Handle different content types
-                content_type = response.headers.get('content-type', '')
-                if 'application/json' in content_type:
+                content_type = response.headers.get("content-type", "")
+                if "application/json" in content_type:
                     return await response.json()
                 else:
                     # Return text response as dict
@@ -159,10 +156,12 @@ class ServiceClient:
             logger.warning(f"Request failed (attempt {retry_count + 1}): {e}")
 
             # Retry logic for transient errors
-            if (retry_count < self.max_retries and
-                isinstance(e, (aiohttp.ClientConnectionError,
-                              aiohttp.ClientPayloadError))):
-                await asyncio.sleep(self.retry_delay * (2 ** retry_count))  # Exponential backoff
+            if retry_count < self.max_retries and isinstance(
+                e, (aiohttp.ClientConnectionError, aiohttp.ClientPayloadError)
+            ):
+                await asyncio.sleep(
+                    self.retry_delay * (2**retry_count)
+                )  # Exponential backoff
                 return await self._make_request(
                     method, path, json, params, headers, retry_count + 1
                 )
@@ -174,7 +173,7 @@ class ServiceClient:
         self,
         path: str,
         json: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """POST request with IAM auth."""
         return await self._make_request("POST", path, json=json, headers=headers)
@@ -183,7 +182,7 @@ class ServiceClient:
         self,
         path: str,
         params: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """GET request with IAM auth."""
         return await self._make_request("GET", path, params=params, headers=headers)
@@ -192,15 +191,13 @@ class ServiceClient:
         self,
         path: str,
         json: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """PUT request with IAM auth."""
         return await self._make_request("PUT", path, json=json, headers=headers)
 
     async def delete(
-        self,
-        path: str,
-        headers: Optional[Dict[str, str]] = None
+        self, path: str, headers: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """DELETE request with IAM auth."""
         return await self._make_request("DELETE", path, headers=headers)
@@ -215,7 +212,7 @@ class ServiceClient:
                 "status": "unhealthy",
                 "service": self.base_url,
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
     async def close(self):
@@ -240,10 +237,7 @@ class ServiceClientPool:
         self._clients: Dict[str, ServiceClient] = {}
 
     async def get_client(
-        self,
-        service_name: str,
-        base_url: str,
-        **kwargs
+        self, service_name: str, base_url: str, **kwargs
     ) -> ServiceClient:
         """Get or create a service client for the given service."""
         if service_name not in self._clients:

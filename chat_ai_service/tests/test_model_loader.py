@@ -10,14 +10,15 @@ from pathlib import Path
 
 # Import from parent directory
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.qa.model_loader import ModelLoader
 from app.config import Settings
 from app.core.shared.exceptions import (
     QAModelException,
     QAModelNotLoadedException,
-    ServiceUnavailableException
+    ServiceUnavailableException,
 )
 
 
@@ -40,8 +41,8 @@ class TestModelLoader:
         assert loader.model_path == model_path
         assert loader.use_onnx is True
 
-    @patch('app.services.qa.model_loader.SentenceTransformer')
-    @patch('app.services.qa.model_loader.Path')
+    @patch("app.services.qa.model_loader.SentenceTransformer")
+    @patch("app.services.qa.model_loader.Path")
     def test_load_model_success(self, mock_path, mock_sentence_transformer):
         """Test successful model loading from local."""
         # Setup mocks
@@ -63,10 +64,12 @@ class TestModelLoader:
         assert loader.model_loaded is True
         assert loader.model == mock_model
 
-    @patch('app.services.qa.model_loader.SentenceTransformer')
+    @patch("app.services.qa.model_loader.SentenceTransformer")
     def test_load_model_no_library(self, mock_sentence_transformer):
         """Test model loading when sentence_transformers not available."""
-        mock_sentence_transformer.side_effect = ImportError("No module named 'sentence_transformers'")
+        mock_sentence_transformer.side_effect = ImportError(
+            "No module named 'sentence_transformers'"
+        )
 
         loader = ModelLoader()
 
@@ -83,8 +86,8 @@ class TestModelLoader:
         result = loader.load_model()
         assert result == mock_model
 
-    @patch('app.services.qa.model_loader.Path')
-    @patch('app.services.qa.model_loader.SentenceTransformer')
+    @patch("app.services.qa.model_loader.Path")
+    @patch("app.services.qa.model_loader.SentenceTransformer")
     def test_load_local_model_success(self, mock_sentence_transformer, mock_path):
         """Test loading model from local directory."""
         # Setup mocks
@@ -106,7 +109,7 @@ class TestModelLoader:
         assert loader.model_loaded is True
         assert loader.model == mock_model
 
-    @patch('app.services.qa.model_loader.Path')
+    @patch("app.services.qa.model_loader.Path")
     def test_load_local_model_not_found(self, mock_path):
         """Test loading model when local model not found."""
         mock_path_instance = MagicMock()
@@ -119,8 +122,8 @@ class TestModelLoader:
         assert result is False
         assert loader.model_loaded is False
 
-    @patch('app.services.qa.model_loader.Path')
-    @patch('app.services.qa.model_loader.SentenceTransformer')
+    @patch("app.services.qa.model_loader.Path")
+    @patch("app.services.qa.model_loader.SentenceTransformer")
     def test_load_local_model_incomplete(self, mock_sentence_transformer, mock_path):
         """Test loading model when local model is incomplete."""
         mock_path_instance = MagicMock()
@@ -141,7 +144,7 @@ class TestModelLoader:
         # Create temporary directory with required files
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create required files
-            required_files = ['config.json', 'pytorch_model.bin', 'tokenizer.json']
+            required_files = ["config.json", "pytorch_model.bin", "tokenizer.json"]
             for file in required_files:
                 Path(temp_dir).joinpath(file).touch()
 
@@ -154,7 +157,7 @@ class TestModelLoader:
         """Test complete model validation when files are missing."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create only some files
-            Path(temp_dir).joinpath('config.json').touch()
+            Path(temp_dir).joinpath("config.json").touch()
 
             loader = ModelLoader(model_path=temp_dir)
             result = loader._is_model_complete()
@@ -168,7 +171,7 @@ class TestModelLoader:
 
         assert result is False
 
-    @patch('app.services.qa.model_loader.SentenceTransformer')
+    @patch("app.services.qa.model_loader.SentenceTransformer")
     def test_download_from_huggingface_success(self, mock_sentence_transformer):
         """Test successful model download from Hugging Face."""
         mock_model = MagicMock()
@@ -184,7 +187,7 @@ class TestModelLoader:
         assert loader.model == mock_model
         mock_sentence_transformer.assert_called_once()
 
-    @patch('app.services.qa.model_loader.SentenceTransformer')
+    @patch("app.services.qa.model_loader.SentenceTransformer")
     def test_download_from_huggingface_failure(self, mock_sentence_transformer):
         """Test failed model download from Hugging Face."""
         mock_sentence_transformer.side_effect = Exception("Download failed")
@@ -316,9 +319,9 @@ class TestModelLoader:
         with pytest.raises(Exception, match="Embedding failed"):
             loader.get_embeddings(["Test sentence"])
 
-    @patch('app.services.qa.model_loader.ort')
-    @patch('app.services.qa.model_loader.np')
-    @patch('app.services.qa.model_loader.torch')
+    @patch("app.services.qa.model_loader.ort")
+    @patch("app.services.qa.model_loader.np")
+    @patch("app.services.qa.model_loader.torch")
     def test_load_onnx_model_success(self, mock_torch, mock_np, mock_ort):
         """Test successful ONNX model loading."""
         # Setup mocks
@@ -337,7 +340,7 @@ class TestModelLoader:
             assert result == mock_session
             mock_ort.InferenceSession.assert_called_once()
 
-    @patch('app.services.qa.model_loader.ort')
+    @patch("app.services.qa.model_loader.ort")
     def test_load_onnx_model_failure(self, mock_ort):
         """Test ONNX model loading failure."""
         mock_ort.InferenceSession.side_effect = Exception("ONNX loading failed")
@@ -351,8 +354,8 @@ class TestModelLoader:
 
             assert result is None
 
-    @patch('app.services.qa.model_loader.torch')
-    @patch('app.services.qa.model_loader.ort')
+    @patch("app.services.qa.model_loader.torch")
+    @patch("app.services.qa.model_loader.ort")
     def test_try_optimize_to_onnx_success(self, mock_ort, mock_torch):
         """Test successful model optimization to ONNX."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -360,7 +363,7 @@ class TestModelLoader:
             mock_tokenizer = MagicMock()
             mock_tokenizer.return_value = {
                 "input_ids": [[1, 2, 3, 4, 5]],
-                "attention_mask": [[1, 1, 1, 1, 1]]
+                "attention_mask": [[1, 1, 1, 1, 1]],
             }
             mock_model.tokenizer = mock_tokenizer
 
@@ -371,8 +374,8 @@ class TestModelLoader:
             onnx_path = Path(temp_dir) / "model.onnx"
             assert onnx_path.exists()
 
-    @patch('app.services.qa.model_loader.torch')
-    @patch('app.services.qa.model_loader.ort')
+    @patch("app.services.qa.model_loader.torch")
+    @patch("app.services.qa.model_loader.ort")
     def test_try_optimize_to_onnx_already_exists(self, mock_ort, mock_torch):
         """Test ONNX optimization when ONNX model already exists."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -387,11 +390,11 @@ class TestModelLoader:
 
             assert result is True
 
-    @patch('app.services.qa.model_loader.torch')
+    @patch("app.services.qa.model_loader.torch")
     def test_try_optimize_to_onnx_no_onnx(self, mock_torch):
         """Test ONNX optimization when ONNX is not available."""
         # Mock ONNX as not available
-        with patch('app.services.qa.model_loader.ONNX_AVAILABLE', False):
+        with patch("app.services.qa.model_loader.ONNX_AVAILABLE", False):
             mock_model = MagicMock()
 
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -400,9 +403,9 @@ class TestModelLoader:
 
                 assert result is False
 
-    @patch('app.services.qa.model_loader.np')
-    @patch('app.services.qa.model_loader.torch')
-    @patch('app.services.qa.model_loader.ort')
+    @patch("app.services.qa.model_loader.np")
+    @patch("app.services.qa.model_loader.torch")
+    @patch("app.services.qa.model_loader.ort")
     def test_get_embeddings_onnx_success(self, mock_ort, mock_torch, mock_np):
         """Test successful ONNX embedding generation."""
         # Setup mocks
@@ -418,7 +421,7 @@ class TestModelLoader:
         mock_tokenizer = MagicMock()
         mock_tokenizer.return_value = {
             "input_ids": [[1, 2, 3, 4, 5]],
-            "attention_mask": [[1, 1, 1, 1, 1]]
+            "attention_mask": [[1, 1, 1, 1, 1]],
         }
         mock_model.tokenizer = mock_tokenizer
 
@@ -434,7 +437,7 @@ class TestModelLoader:
 
         assert isinstance(result, list)
 
-    @patch('app.services.qa.model_loader.SentenceTransformer')
+    @patch("app.services.qa.model_loader.SentenceTransformer")
     def test_get_embeddings_onnx_fallback_to_pytorch(self, mock_sentence_transformer):
         """Test ONNX embedding generation falling back to PyTorch."""
         mock_model = MagicMock()
@@ -468,7 +471,7 @@ class TestModelLoaderEdgeCases:
         """Test multiple calls to load_model with caching."""
         mock_model = MagicMock()
 
-        with patch('app.services.qa.model_loader.SentenceTransformer') as mock_st:
+        with patch("app.services.qa.model_loader.SentenceTransformer") as mock_st:
             mock_st.return_value = mock_model
 
             loader = ModelLoader()

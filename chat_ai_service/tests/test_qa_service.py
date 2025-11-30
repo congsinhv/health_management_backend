@@ -11,7 +11,8 @@ from pathlib import Path
 # Import from parent directory
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.qa import QAService, create_qa_service
 from app.services.qa.dataset_loader import DatasetLoader
@@ -23,7 +24,7 @@ from app.core.shared.exceptions import (
     QAModelNotLoadedException,
     QADatasetException,
     AIServiceException,
-    OpenAIException
+    OpenAIException,
 )
 
 
@@ -40,7 +41,7 @@ class TestQAService:
             model_auto_download=False,
             OPENAI_API_KEY="test-key",
             qa_dataset_path="/tmp/test_dataset.csv",
-            ENABLE_REDIS_CACHE=False
+            ENABLE_REDIS_CACHE=False,
         )
 
     @pytest.fixture
@@ -52,7 +53,7 @@ class TestQAService:
         loader.get_model_info.return_value = {
             "loaded": True,
             "dimension": 768,
-            "model_name": "test-model"
+            "model_name": "test-model",
         }
         return loader
 
@@ -60,19 +61,21 @@ class TestQAService:
     def mock_dataset_loader(self):
         """Mock dataset loader."""
         loader = MagicMock()
-        df = pd.DataFrame({
-            'Question': [
-                'What is diabetes?',
-                'How to prevent diabetes?',
-                'What are diabetes symptoms?'
-            ],
-            'Answer': [
-                'Diabetes is a metabolic disease...',
-                'To prevent diabetes...',
-                'Common diabetes symptoms include...'
-            ],
-            'Field': ['health', 'health', 'health']
-        })
+        df = pd.DataFrame(
+            {
+                "Question": [
+                    "What is diabetes?",
+                    "How to prevent diabetes?",
+                    "What are diabetes symptoms?",
+                ],
+                "Answer": [
+                    "Diabetes is a metabolic disease...",
+                    "To prevent diabetes...",
+                    "Common diabetes symptoms include...",
+                ],
+                "Field": ["health", "health", "health"],
+            }
+        )
         loader.load_dataset.return_value = df
         loader.is_dataset_loaded.return_value = True
         return loader
@@ -85,17 +88,24 @@ class TestQAService:
         return summarizer
 
     @pytest.fixture
-    def qa_service(self, mock_settings, mock_model_loader, mock_dataset_loader, mock_ai_summarizer):
+    def qa_service(
+        self, mock_settings, mock_model_loader, mock_dataset_loader, mock_ai_summarizer
+    ):
         """Create QA service with mocked dependencies."""
-        with patch('app.services.qa.ModelLoader', return_value=mock_model_loader), \
-             patch('app.services.qa.DatasetLoader', return_value=mock_dataset_loader), \
-             patch('app.services.qa.AISummarizer', return_value=mock_ai_summarizer):
-
+        with patch(
+            "app.services.qa.ModelLoader", return_value=mock_model_loader
+        ), patch(
+            "app.services.qa.DatasetLoader", return_value=mock_dataset_loader
+        ), patch(
+            "app.services.qa.AISummarizer", return_value=mock_ai_summarizer
+        ):
             service = QAService(mock_settings)
             return service
 
     @pytest.mark.asyncio
-    async def test_initialize_success(self, qa_service, mock_model_loader, mock_dataset_loader):
+    async def test_initialize_success(
+        self, qa_service, mock_model_loader, mock_dataset_loader
+    ):
         """Test successful QA service initialization."""
         await qa_service.initialize()
 
@@ -104,32 +114,42 @@ class TestQAService:
         assert qa_service.is_initialized is True
 
     @pytest.mark.asyncio
-    async def test_initialize_model_failure(self, mock_settings, mock_dataset_loader, mock_ai_summarizer):
+    async def test_initialize_model_failure(
+        self, mock_settings, mock_dataset_loader, mock_ai_summarizer
+    ):
         """Test initialization when model loading fails."""
         mock_model_loader = MagicMock()
         mock_model_loader.load_model.return_value = None
         mock_model_loader.is_model_available.return_value = False
 
-        with patch('app.services.qa.ModelLoader', return_value=mock_model_loader), \
-             patch('app.services.qa.DatasetLoader', return_value=mock_dataset_loader), \
-             patch('app.services.qa.AISummarizer', return_value=mock_ai_summarizer):
-
+        with patch(
+            "app.services.qa.ModelLoader", return_value=mock_model_loader
+        ), patch(
+            "app.services.qa.DatasetLoader", return_value=mock_dataset_loader
+        ), patch(
+            "app.services.qa.AISummarizer", return_value=mock_ai_summarizer
+        ):
             service = QAService(mock_settings)
             await service.initialize()
 
             assert service.is_initialized is False
 
     @pytest.mark.asyncio
-    async def test_initialize_dataset_failure(self, mock_settings, mock_model_loader, mock_ai_summarizer):
+    async def test_initialize_dataset_failure(
+        self, mock_settings, mock_model_loader, mock_ai_summarizer
+    ):
         """Test initialization when dataset loading fails."""
         mock_dataset_loader = MagicMock()
         mock_dataset_loader.load_dataset.return_value = None
         mock_dataset_loader.is_dataset_loaded.return_value = False
 
-        with patch('app.services.qa.ModelLoader', return_value=mock_model_loader), \
-             patch('app.services.qa.DatasetLoader', return_value=mock_dataset_loader), \
-             patch('app.services.qa.AISummarizer', return_value=mock_ai_summarizer):
-
+        with patch(
+            "app.services.qa.ModelLoader", return_value=mock_model_loader
+        ), patch(
+            "app.services.qa.DatasetLoader", return_value=mock_dataset_loader
+        ), patch(
+            "app.services.qa.AISummarizer", return_value=mock_ai_summarizer
+        ):
             service = QAService(mock_settings)
             await service.initialize()
 
@@ -144,21 +164,33 @@ class TestQAService:
         test_top_k = 3
 
         # Mock search results
-        qa_service.find_similar_questions = MagicMock(return_value=[
-            {'question': 'What is diabetes?', 'answer': 'Diabetes is a metabolic disease...', 'similarity': 0.9},
-            {'question': 'What are diabetes symptoms?', 'answer': 'Common diabetes symptoms include...', 'similarity': 0.8}
-        ])
+        qa_service.find_similar_questions = MagicMock(
+            return_value=[
+                {
+                    "question": "What is diabetes?",
+                    "answer": "Diabetes is a metabolic disease...",
+                    "similarity": 0.9,
+                },
+                {
+                    "question": "What are diabetes symptoms?",
+                    "answer": "Common diabetes symptoms include...",
+                    "similarity": 0.8,
+                },
+            ]
+        )
 
         # Mock AI summarizer
         qa_service.ai_summarizer.summarize_with_streaming.return_value = [
             "Diabetes is a metabolic disease",
             " that affects blood sugar levels.",
-            " It requires proper management."
+            " It requires proper management.",
         ]
 
         # Execute test
         events = []
-        async for event in qa_service.ask_question_stream(test_question, test_threshold, test_top_k):
+        async for event in qa_service.ask_question_stream(
+            test_question, test_threshold, test_top_k
+        ):
             events.append(event)
 
         # Verify results
@@ -179,7 +211,9 @@ class TestQAService:
 
         # Execute test
         events = []
-        async for event in qa_service.ask_question_stream(test_question, test_threshold, test_top_k):
+        async for event in qa_service.ask_question_stream(
+            test_question, test_threshold, test_top_k
+        ):
             events.append(event)
 
         # Should return apology message
@@ -194,16 +228,26 @@ class TestQAService:
         test_top_k = 3
 
         # Mock search results
-        qa_service.find_similar_questions = MagicMock(return_value=[
-            {'question': 'What is diabetes?', 'answer': 'Diabetes is a metabolic disease...', 'similarity': 0.9}
-        ])
+        qa_service.find_similar_questions = MagicMock(
+            return_value=[
+                {
+                    "question": "What is diabetes?",
+                    "answer": "Diabetes is a metabolic disease...",
+                    "similarity": 0.9,
+                }
+            ]
+        )
 
         # Mock AI summarizer error
-        qa_service.ai_summarizer.summarize_with_streaming.side_effect = OpenAIException("AI service unavailable")
+        qa_service.ai_summarizer.summarize_with_streaming.side_effect = OpenAIException(
+            "AI service unavailable"
+        )
 
         # Execute test
         events = []
-        async for event in qa_service.ask_question_stream(test_question, test_threshold, test_top_k):
+        async for event in qa_service.ask_question_stream(
+            test_question, test_threshold, test_top_k
+        ):
             events.append(event)
 
         # Should return error message
@@ -216,7 +260,9 @@ class TestQAService:
         test_question = "What is diabetes?"
 
         # Mock service error
-        qa_service.find_similar_questions = MagicMock(side_effect=Exception("Service error"))
+        qa_service.find_similar_questions = MagicMock(
+            side_effect=Exception("Service error")
+        )
 
         # Execute test
         with pytest.raises(QAServiceException):
@@ -232,21 +278,25 @@ class TestQAService:
 
         # Mock dataset embeddings (pre-computed)
         qa_service.question_embeddings = [[0.1, 0.2, 0.4], [0.5, 0.6, 0.7]]
-        qa_service.df = pd.DataFrame({
-            'Question': ['What is diabetes?', 'How to prevent diabetes?'],
-            'Answer': ['Diabetes is...', 'Prevention includes...'],
-            'Field': ['health', 'health']
-        })
+        qa_service.df = pd.DataFrame(
+            {
+                "Question": ["What is diabetes?", "How to prevent diabetes?"],
+                "Answer": ["Diabetes is...", "Prevention includes..."],
+                "Field": ["health", "health"],
+            }
+        )
 
         # Mock cosine similarity calculation
-        with patch('app.services.qa.util.cosine_similarity') as mock_cosine:
+        with patch("app.services.qa.util.cosine_similarity") as mock_cosine:
             mock_cosine.return_value = [[0.9, 0.3]]  # Similarities for each question
 
-            results = qa_service.find_similar_questions(test_question, threshold=0.55, top_k=5)
+            results = qa_service.find_similar_questions(
+                test_question, threshold=0.55, top_k=5
+            )
 
             assert len(results) == 1  # Only one result above threshold
-            assert results[0]['similarity'] == 0.9
-            assert 'What is diabetes?' in results[0]['question']
+            assert results[0]["similarity"] == 0.9
+            assert "What is diabetes?" in results[0]["question"]
 
     def test_find_similar_questions_no_embeddings(self, qa_service):
         """Test finding similar questions with no embeddings available."""
@@ -257,7 +307,7 @@ class TestQAService:
 
     def test_find_similar_questions_empty_dataset(self, qa_service):
         """Test finding similar questions with empty dataset."""
-        qa_service.df = pd.DataFrame(columns=['Question', 'Answer', 'Field'])
+        qa_service.df = pd.DataFrame(columns=["Question", "Answer", "Field"])
         qa_service.question_embeddings = []
 
         results = qa_service.find_similar_questions("What is diabetes?")
@@ -265,13 +315,18 @@ class TestQAService:
 
     def test_compute_embeddings_lazy(self, qa_service):
         """Test lazy computation of question embeddings."""
-        qa_service.df = pd.DataFrame({
-            'Question': ['What is diabetes?', 'How to prevent diabetes?'],
-            'Answer': ['Diabetes is...', 'Prevention includes...'],
-            'Field': ['health', 'health']
-        })
+        qa_service.df = pd.DataFrame(
+            {
+                "Question": ["What is diabetes?", "How to prevent diabetes?"],
+                "Answer": ["Diabetes is...", "Prevention includes..."],
+                "Field": ["health", "health"],
+            }
+        )
         qa_service.question_embeddings = None  # Not computed yet
-        qa_service.model_loader.get_embeddings.return_value = [[[0.1, 0.2, 0.3]], [[0.4, 0.5, 0.6]]]
+        qa_service.model_loader.get_embeddings.return_value = [
+            [[0.1, 0.2, 0.3]],
+            [[0.4, 0.5, 0.6]],
+        ]
 
         # Should compute embeddings on first access
         embeddings = qa_service._get_question_embeddings()
@@ -333,12 +388,12 @@ class TestQAService:
             "loaded": True,
             "model_name": "test-model",
             "dimension": 768,
-            "onnx_enabled": False
+            "onnx_enabled": False,
         }
         qa_service.dataset_loader.get_dataset_info.return_value = {
             "loaded": True,
             "row_count": 100,
-            "columns": ["Question", "Answer", "Field"]
+            "columns": ["Question", "Answer", "Field"],
         }
 
         status = qa_service.get_service_status()
@@ -365,10 +420,9 @@ class TestQAServiceFactory:
     @pytest.mark.asyncio
     async def test_create_qa_service_success(self, mock_settings):
         """Test successful QA service creation."""
-        with patch('app.services.qa.ModelLoader'), \
-             patch('app.services.qa.DatasetLoader'), \
-             patch('app.services.qa.AISummarizer'):
-
+        with patch("app.services.qa.ModelLoader"), patch(
+            "app.services.qa.DatasetLoader"
+        ), patch("app.services.qa.AISummarizer"):
             service = create_qa_service(mock_settings)
             assert service is not None
             assert isinstance(service, QAService)
@@ -376,13 +430,12 @@ class TestQAServiceFactory:
     @pytest.mark.asyncio
     async def test_create_qa_service_with_none_settings(self):
         """Test QA service creation with None settings."""
-        with patch('app.services.qa.get_settings') as mock_get_settings:
+        with patch("app.services.qa.get_settings") as mock_get_settings:
             mock_get_settings.return_value = MagicMock()
 
-            with patch('app.services.qa.ModelLoader'), \
-                 patch('app.services.qa.DatasetLoader'), \
-                 patch('app.services.qa.AISummarizer'):
-
+            with patch("app.services.qa.ModelLoader"), patch(
+                "app.services.qa.DatasetLoader"
+            ), patch("app.services.qa.AISummarizer"):
                 service = create_qa_service(None)
                 assert service is not None
                 assert isinstance(service, QAService)
@@ -395,14 +448,18 @@ class TestQAServicePerformance:
     def qa_service_with_data(self, qa_service):
         """Create QA service populated with test data."""
         # Add test dataset
-        qa_service.df = pd.DataFrame({
-            'Question': [f'Test question {i}' for i in range(100)],
-            'Answer': [f'Test answer {i}' for i in range(100)],
-            'Field': ['health'] * 100
-        })
+        qa_service.df = pd.DataFrame(
+            {
+                "Question": [f"Test question {i}" for i in range(100)],
+                "Answer": [f"Test answer {i}" for i in range(100)],
+                "Field": ["health"] * 100,
+            }
+        )
 
         # Pre-compute embeddings
-        qa_service.question_embeddings = [[[i/100, (i+1)/100, (i+2)/100] for i in range(100)]]
+        qa_service.question_embeddings = [
+            [[i / 100, (i + 1) / 100, (i + 2) / 100] for i in range(100)]
+        ]
         qa_service.is_initialized = True
 
         return qa_service
@@ -415,7 +472,9 @@ class TestQAServicePerformance:
         start_time = asyncio.get_event_loop().time()
 
         for question in questions[:5]:  # Test subset for performance
-            qa_service_with_data.find_similar_questions(question, threshold=0.5, top_k=3)
+            qa_service_with_data.find_similar_questions(
+                question, threshold=0.5, top_k=3
+            )
 
         end_time = asyncio.get_event_loop().time()
         duration = end_time - start_time
@@ -429,13 +488,15 @@ class TestQAServicePerformance:
         # Mock fast summarizer
         qa_service_with_data.ai_summarizer.summarize_with_streaming.return_value = [
             "Fast response chunk 1",
-            "Fast response chunk 2"
+            "Fast response chunk 2",
         ]
 
         start_time = asyncio.get_event_loop().time()
 
         events = []
-        async for event in qa_service_with_data.ask_question_stream("What is diabetes?"):
+        async for event in qa_service_with_data.ask_question_stream(
+            "What is diabetes?"
+        ):
             events.append(event)
             if len(events) >= 2:  # Stop after first few events
                 break
@@ -468,14 +529,14 @@ class TestQAServicePerformance:
     @pytest.mark.asyncio
     async def test_concurrent_requests(self, qa_service_with_data):
         """Test handling concurrent requests."""
+
         async def process_question(question):
-            qa_service_with_data.find_similar_questions(question, threshold=0.5, top_k=3)
+            qa_service_with_data.find_similar_questions(
+                question, threshold=0.5, top_k=3
+            )
 
         # Run concurrent requests
-        tasks = [
-            process_question(f"What is health benefit {i}?")
-            for i in range(10)
-        ]
+        tasks = [process_question(f"What is health benefit {i}?") for i in range(10)]
 
         start_time = asyncio.get_event_loop().time()
         await asyncio.gather(*tasks)
@@ -506,7 +567,9 @@ class TestQAServiceErrorHandling:
         qa_service.find_similar_questions = MagicMock(return_value=[])
 
         events = []
-        async for event in qa_service.ask_question_stream(long_question, threshold=0.5, top_k=3):
+        async for event in qa_service.ask_question_stream(
+            long_question, threshold=0.5, top_k=3
+        ):
             events.append(event)
 
         # Should return apology for long questions too
@@ -515,11 +578,13 @@ class TestQAServiceErrorHandling:
     def test_malformed_dataset(self, qa_service):
         """Test handling malformed dataset."""
         # Create malformed DataFrame
-        qa_service.df = pd.DataFrame({
-            'Question': ['Valid question', None, 'Another question'],
-            'Answer': ['Valid answer', 'Missing question answer', 'Another answer'],
-            'Field': ['health', 'health', None]  # Missing field
-        })
+        qa_service.df = pd.DataFrame(
+            {
+                "Question": ["Valid question", None, "Another question"],
+                "Answer": ["Valid answer", "Missing question answer", "Another answer"],
+                "Field": ["health", "health", None],  # Missing field
+            }
+        )
 
         # Should handle malformed data gracefully
         qa_service.model_loader.get_embeddings.return_value = [[[0.1, 0.2, 0.3]]]
@@ -533,13 +598,19 @@ class TestQAServiceErrorHandling:
     async def test_ai_summarizer_timeout(self, qa_service):
         """Test handling AI summarizer timeout."""
         # Mock timeout
-        qa_service.find_similar_questions = MagicMock(return_value=[
-            {'question': 'Test', 'answer': 'Test answer', 'similarity': 0.9}
-        ])
-        qa_service.ai_summarizer.summarize_with_streaming.side_effect = asyncio.TimeoutError()
+        qa_service.find_similar_questions = MagicMock(
+            return_value=[
+                {"question": "Test", "answer": "Test answer", "similarity": 0.9}
+            ]
+        )
+        qa_service.ai_summarizer.summarize_with_streaming.side_effect = (
+            asyncio.TimeoutError()
+        )
 
         events = []
-        async for event in qa_service.ask_question_stream("Test question", threshold=0.5, top_k=3):
+        async for event in qa_service.ask_question_stream(
+            "Test question", threshold=0.5, top_k=3
+        ):
             events.append(event)
 
         # Should handle timeout gracefully

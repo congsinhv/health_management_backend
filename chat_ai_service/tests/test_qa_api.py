@@ -12,7 +12,8 @@ from httpx import AsyncClient
 # Import from parent directory
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.main import create_qa_app
 from app.api.qa import create_qa_app as create_qa_router
@@ -21,7 +22,7 @@ from app.core.shared.exceptions import (
     ValidationException,
     ServiceUnavailableException,
     QAModelNotLoadedException,
-    OpenAIException
+    OpenAIException,
 )
 from app.core.error_context import ErrorContext
 
@@ -48,6 +49,7 @@ class TestQAEndpoints:
     def async_client(self, app, mock_qa_service):
         """Create async client for streaming tests."""
         from httpx import AsyncClient, ASGITransport
+
         app.state.qa_service = mock_qa_service
         client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
         yield client
@@ -81,17 +83,15 @@ class TestQAEndpoints:
     def test_ask_question_success(self, client, mock_qa_service):
         """Test successful question answering."""
         # Mock streaming response
-        mock_qa_service.ask_question_stream.return_value = iter([
-            "Diabetes is a metabolic disease",
-            "that affects blood sugar levels.",
-            "It requires proper management."
-        ])
+        mock_qa_service.ask_question_stream.return_value = iter(
+            [
+                "Diabetes is a metabolic disease",
+                "that affects blood sugar levels.",
+                "It requires proper management.",
+            ]
+        )
 
-        request_data = {
-            "question": "What is diabetes?",
-            "threshold": 0.55,
-            "top_k": 5
-        }
+        request_data = {"question": "What is diabetes?", "threshold": 0.55, "top_k": 5}
 
         response = client.post("/api/v1/qa/ask", json=request_data)
         assert response.status_code == 200
@@ -103,22 +103,14 @@ class TestQAEndpoints:
 
     def test_ask_question_empty(self, client):
         """Test question answering with empty question."""
-        request_data = {
-            "question": "",
-            "threshold": 0.55,
-            "top_k": 5
-        }
+        request_data = {"question": "", "threshold": 0.55, "top_k": 5}
 
         response = client.post("/api/v1/qa/ask", json=request_data)
         assert response.status_code == 422  # Validation error
 
     def test_ask_question_whitespace_only(self, client):
         """Test question answering with whitespace-only question."""
-        request_data = {
-            "question": "   ",
-            "threshold": 0.55,
-            "top_k": 5
-        }
+        request_data = {"question": "   ", "threshold": 0.55, "top_k": 5}
 
         response = client.post("/api/v1/qa/ask", json=request_data)
         assert response.status_code == 422  # Validation error
@@ -128,11 +120,7 @@ class TestQAEndpoints:
         # Remove QA service from app state
         client.app.state.qa_service = None
 
-        request_data = {
-            "question": "What is diabetes?",
-            "threshold": 0.55,
-            "top_k": 5
-        }
+        request_data = {"question": "What is diabetes?", "threshold": 0.55, "top_k": 5}
 
         response = client.post("/api/v1/qa/ask", json=request_data)
         assert response.status_code == 503  # Service unavailable
@@ -140,19 +128,20 @@ class TestQAEndpoints:
     def test_ask_question_streaming_success(self, async_client, mock_qa_service):
         """Test successful streaming question answering."""
         # Mock streaming response with different chunk types
-        mock_qa_service.ask_question_stream.return_value = iter([
-            {"event": "question_received", "data": {"question": "What is diabetes?"}},
-            {"event": "answers_found", "data": {"count": 3}},
-            "Diabetes is a metabolic disease",
-            "that affects blood sugar levels.",
-            {"event": "stream_complete", "data": {"total_tokens": 5}}
-        ])
+        mock_qa_service.ask_question_stream.return_value = iter(
+            [
+                {
+                    "event": "question_received",
+                    "data": {"question": "What is diabetes?"},
+                },
+                {"event": "answers_found", "data": {"count": 3}},
+                "Diabetes is a metabolic disease",
+                "that affects blood sugar levels.",
+                {"event": "stream_complete", "data": {"total_tokens": 5}},
+            ]
+        )
 
-        request_data = {
-            "question": "What is diabetes?",
-            "threshold": 0.55,
-            "top_k": 5
-        }
+        request_data = {"question": "What is diabetes?", "threshold": 0.55, "top_k": 5}
 
         response = asyncio.run(
             async_client.post("/api/v1/qa/ask-stream", json=request_data)
@@ -162,14 +151,14 @@ class TestQAEndpoints:
 
     def test_ask_question_streaming_no_results(self, async_client, mock_qa_service):
         """Test streaming question answering with no results."""
-        mock_qa_service.ask_question_stream.return_value = iter([
-            "Sorry, I couldn't find relevant information for your question."
-        ])
+        mock_qa_service.ask_question_stream.return_value = iter(
+            ["Sorry, I couldn't find relevant information for your question."]
+        )
 
         request_data = {
             "question": "What is quantum computing?",
             "threshold": 0.9,
-            "top_k": 3
+            "top_k": 3,
         }
 
         response = asyncio.run(
@@ -181,11 +170,7 @@ class TestQAEndpoints:
         """Test streaming question answering when service unavailable."""
         async_client.app.state.qa_service = None
 
-        request_data = {
-            "question": "What is diabetes?",
-            "threshold": 0.55,
-            "top_k": 5
-        }
+        request_data = {"question": "What is diabetes?", "threshold": 0.55, "top_k": 5}
 
         response = asyncio.run(
             async_client.post("/api/v1/qa/ask-stream", json=request_data)
@@ -194,11 +179,7 @@ class TestQAEndpoints:
 
     def test_ask_question_streaming_empty_question(self, async_client):
         """Test streaming question answering with empty question."""
-        request_data = {
-            "question": "",
-            "threshold": 0.55,
-            "top_k": 5
-        }
+        request_data = {"question": "", "threshold": 0.55, "top_k": 5}
 
         response = asyncio.run(
             async_client.post("/api/v1/qa/ask-stream", json=request_data)
@@ -212,8 +193,8 @@ class TestQAEndpoints:
             "components": {
                 "model_loaded": True,
                 "embeddings_ready": True,
-                "ai_available": True
-            }
+                "ai_available": True,
+            },
         }
 
         response = client.get("/api/v1/qa/health")
@@ -249,8 +230,8 @@ class TestQAEndpoints:
             "components": {
                 "model_loaded": True,
                 "embeddings_ready": False,
-                "ai_available": False
-            }
+                "ai_available": False,
+            },
         }
 
         response = client.get("/api/v1/qa/health")
@@ -270,10 +251,7 @@ class TestQAEndpoints:
             "embeddings_ready": True,
             "streaming_enabled": True,
             "openai_configured": True,
-            "model_info": {
-                "name": "test-model",
-                "dimension": 768
-            }
+            "model_info": {"name": "test-model", "dimension": 768},
         }
 
         response = client.get("/api/v1/qa/status")
@@ -309,7 +287,9 @@ class TestQAEndpointErrorHandling:
 
         # Mock failing QA service
         mock_service = MagicMock()
-        mock_service.ask_question_stream = AsyncMock(side_effect=Exception("Service error"))
+        mock_service.ask_question_stream = AsyncMock(
+            side_effect=Exception("Service error")
+        )
         mock_service.get_health_check.side_effect = Exception("Health check error")
 
         app.state.qa_service = mock_service
@@ -322,11 +302,7 @@ class TestQAEndpointErrorHandling:
 
     def test_ask_question_service_error(self, client_with_failing_service):
         """Test question answering with service error."""
-        request_data = {
-            "question": "What is diabetes?",
-            "threshold": 0.55,
-            "top_k": 5
-        }
+        request_data = {"question": "What is diabetes?", "threshold": 0.55, "top_k": 5}
 
         response = client_with_failing_service.post("/api/v1/qa/ask", json=request_data)
         assert response.status_code == 500
@@ -356,19 +332,15 @@ class TestStreamingFunctionality:
     def test_process_question_non_streaming_success(self, mock_qa_service):
         """Test _process_question_non_streaming with success."""
         # Mock streaming response
-        mock_qa_service.ask_question_stream.return_value = iter([
-            "Diabetes is a metabolic disease",
-            "that affects blood sugar levels."
-        ])
+        mock_qa_service.ask_question_stream.return_value = iter(
+            ["Diabetes is a metabolic disease", "that affects blood sugar levels."]
+        )
 
         from app.api.qa import _process_question_non_streaming
 
         result = asyncio.run(
             _process_question_non_streaming(
-                mock_qa_service,
-                "What is diabetes?",
-                0.55,
-                5
+                mock_qa_service, "What is diabetes?", 0.55, 5
             )
         )
 
@@ -384,10 +356,7 @@ class TestStreamingFunctionality:
 
         result = asyncio.run(
             _process_question_non_streaming(
-                mock_qa_service,
-                "What is diabetes?",
-                0.55,
-                5
+                mock_qa_service, "What is diabetes?", 0.55, 5
             )
         )
 
@@ -397,24 +366,23 @@ class TestStreamingFunctionality:
 
     def test_process_question_non_streaming_sorry_response(self, mock_qa_service):
         """Test _process_question_non_streaming with 'sorry' response."""
-        mock_qa_service.ask_question_stream.return_value = iter([
-            "Sorry, I couldn't find information for your question."
-        ])
+        mock_qa_service.ask_question_stream.return_value = iter(
+            ["Sorry, I couldn't find information for your question."]
+        )
 
         from app.api.qa import _process_question_non_streaming
 
         result = asyncio.run(
             _process_question_non_streaming(
-                mock_qa_service,
-                "What is diabetes?",
-                0.55,
-                5
+                mock_qa_service, "What is diabetes?", 0.55, 5
             )
         )
 
         assert result["question"] == "What is diabetes?"
         assert result["answers"] == {}
-        assert result["summary"] == "Sorry, I couldn't find information for your question."
+        assert (
+            result["summary"] == "Sorry, I couldn't find information for your question."
+        )
 
     def test_process_question_non_streaming_error(self, mock_qa_service):
         """Test _process_question_non_streaming with error."""
@@ -424,10 +392,7 @@ class TestStreamingFunctionality:
 
         result = asyncio.run(
             _process_question_non_streaming(
-                mock_qa_service,
-                "What is diabetes?",
-                0.55,
-                5
+                mock_qa_service, "What is diabetes?", 0.55, 5
             )
         )
 
@@ -436,18 +401,23 @@ class TestStreamingFunctionality:
         assert "Xin lỗi" in result["summary"]  # Vietnamese apology
 
     @pytest.mark.asyncio
-    async def test_event_generator_disconnect_detection(self, mock_qa_service, mock_request):
+    async def test_event_generator_disconnect_detection(
+        self, mock_qa_service, mock_request
+    ):
         """Test event generator handles client disconnection."""
         # Mock request to be disconnected
         mock_request.is_disconnected.return_value = True
 
         # Mock streaming response
-        mock_qa_service.ask_question_stream.return_value = iter([
-            "Diabetes is a metabolic disease"
-        ])
+        mock_qa_service.ask_question_stream.return_value = iter(
+            ["Diabetes is a metabolic disease"]
+        )
 
         from app.api.qa import ask_question_stream
-        request_data = QuestionRequest(question="What is diabetes?", threshold=0.55, top_k=5)
+
+        request_data = QuestionRequest(
+            question="What is diabetes?", threshold=0.55, top_k=5
+        )
 
         # This should handle disconnection gracefully
         try:
@@ -480,11 +450,7 @@ class TestRequestValidation:
     def test_question_request_validation(self):
         """Test QuestionRequest schema validation."""
         # Valid request
-        request = QuestionRequest(
-            question="What is diabetes?",
-            threshold=0.55,
-            top_k=5
-        )
+        request = QuestionRequest(question="What is diabetes?", threshold=0.55, top_k=5)
         assert request.question == "What is diabetes?"
         assert request.threshold == 0.55
         assert request.top_k == 5
@@ -500,15 +466,14 @@ class TestRequestValidation:
         with pytest.raises(Exception):  # Pydantic validation error
             QuestionRequest(
                 question="What is diabetes?",
-                threshold=1.5  # Invalid: should be 0.0-1.0
+                threshold=1.5,  # Invalid: should be 0.0-1.0
             )
 
     def test_question_request_invalid_top_k(self):
         """Test QuestionRequest with invalid top_k."""
         with pytest.raises(Exception):  # Pydantic validation error
             QuestionRequest(
-                question="What is diabetes?",
-                top_k=25  # Invalid: should be 1-20
+                question="What is diabetes?", top_k=25  # Invalid: should be 1-20
             )
 
     def test_question_request_long_question(self):
@@ -532,18 +497,17 @@ class TestErrorContextIntegration:
         app.state.qa_service = mock_qa_service
 
         # Mock ErrorContext methods
-        with patch('app.api.qa.ErrorContext') as mock_error_context:
+        with patch("app.api.qa.ErrorContext") as mock_error_context:
             mock_error_context.set_request_id = MagicMock()
             mock_error_context.add_context = MagicMock()
             mock_error_context.return_value.__enter__ = MagicMock()
             mock_error_context.return_value.__exit__ = MagicMock()
 
             client = TestClient(app)
-            client.post("/api/v1/qa/ask", json={
-                "question": "What is diabetes?",
-                "threshold": 0.55,
-                "top_k": 5
-            })
+            client.post(
+                "/api/v1/qa/ask",
+                json={"question": "What is diabetes?", "threshold": 0.55, "top_k": 5},
+            )
 
             # Verify ErrorContext was called
             mock_error_context.set_request_id.assert_called()
@@ -554,16 +518,15 @@ class TestErrorContextIntegration:
         app = create_qa_app()
         app.state.qa_service = mock_qa_service
 
-        with patch('app.api.qa.ErrorContext') as mock_error_context:
+        with patch("app.api.qa.ErrorContext") as mock_error_context:
             mock_error_context.set_request_id = MagicMock()
             mock_error_context.add_context = MagicMock()
 
             client = TestClient(app)
-            client.post("/api/v1/qa/ask", json={
-                "question": "What is diabetes?",
-                "threshold": 0.55,
-                "top_k": 5
-            })
+            client.post(
+                "/api/v1/qa/ask",
+                json={"question": "What is diabetes?", "threshold": 0.55, "top_k": 5},
+            )
 
             # Check that context was added with expected keys
             context_calls = mock_error_context.add_context.call_args_list

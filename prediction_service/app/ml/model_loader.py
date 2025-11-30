@@ -29,12 +29,13 @@ class ONNXModelLoader:
                 raise FileNotFoundError(f"ONNX model not found: {self.model_path}")
 
             if not os.path.exists(self.label_encoder_path):
-                raise FileNotFoundError(f"Label encoder not found: {self.label_encoder_path}")
+                raise FileNotFoundError(
+                    f"Label encoder not found: {self.label_encoder_path}"
+                )
 
             # Create ONNX Runtime session
             self.session = ort.InferenceSession(
-                self.model_path,
-                providers=["CPUExecutionProvider"]
+                self.model_path, providers=["CPUExecutionProvider"]
             )
 
             # Load label encoder
@@ -78,8 +79,7 @@ class ONNXModelLoader:
         # Run inference
         try:
             results = self.session.run(
-                output_names,
-                {input_name: features.astype(np.float32)}
+                output_names, {input_name: features.astype(np.float32)}
             )
 
             # Extract prediction (first output is usually label)
@@ -94,9 +94,15 @@ class ONNXModelLoader:
                 label_indices = prediction_output
             elif len(prediction_output.shape) == 2:
                 # Two outputs - labels and probabilities
-                label_indices = prediction_output[:, 0] if prediction_output.shape[0] > 1 else prediction_output[0]
+                label_indices = (
+                    prediction_output[:, 0]
+                    if prediction_output.shape[0] > 1
+                    else prediction_output[0]
+                )
             else:
-                raise RuntimeError(f"Unexpected output shape: {prediction_output.shape}")
+                raise RuntimeError(
+                    f"Unexpected output shape: {prediction_output.shape}"
+                )
 
             # Get first prediction (for batch size 1)
             if len(label_indices.shape) == 1:
@@ -128,11 +134,11 @@ class ONNXModelLoader:
             "inputs": [input.name for input in self.session.get_inputs()],
             "outputs": [output.name for output in self.session.get_outputs()],
             "num_classes": len(self.label_encoder),
-            "classes": list(self.label_encoder.values())
+            "classes": list(self.label_encoder.values()),
         }
 
     def __del__(self):
         """Cleanup resources."""
-        if hasattr(self, 'session') and self.session is not None:
+        if hasattr(self, "session") and self.session is not None:
             # ONNX Runtime session cleanup
             self.session = None

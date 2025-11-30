@@ -7,6 +7,7 @@ from skl2onnx.common.data_types import FloatTensorType
 import onnx
 import os
 
+
 def convert_classifier_to_onnx():
     """Convert obesity classifier to ONNX."""
     print("Loading sklearn model...")
@@ -15,7 +16,7 @@ def convert_classifier_to_onnx():
     rf_model = joblib.load("../../models_obesity/obesity_classifier_final.pkl")
 
     # Check if it's a fitted model
-    if not hasattr(rf_model, 'feature_names_in_'):
+    if not hasattr(rf_model, "feature_names_in_"):
         raise ValueError("Model is not fitted or doesn't have feature information")
 
     print(f"Model type: {type(rf_model)}")
@@ -23,15 +24,13 @@ def convert_classifier_to_onnx():
     print(f"Feature names: {rf_model.feature_names_in_}")
 
     # Define input shape based on model features
-    initial_type = [("float_input", FloatTensorType([None, len(rf_model.feature_names_in_)]))]
+    initial_type = [
+        ("float_input", FloatTensorType([None, len(rf_model.feature_names_in_)]))
+    ]
 
     # Convert to ONNX
     print("Converting to ONNX...")
-    onnx_model = convert_sklearn(
-        rf_model,
-        initial_types=initial_type,
-        target_opset=12
-    )
+    onnx_model = convert_sklearn(rf_model, initial_types=initial_type, target_opset=12)
 
     # Save ONNX model
     os.makedirs("../../models", exist_ok=True)
@@ -42,6 +41,7 @@ def convert_classifier_to_onnx():
     print(f"Model size: {len(onnx_model.SerializeToString()) / 1024 / 1024:.2f} MB")
 
     return onnx_model
+
 
 def convert_label_encoder_to_onnx():
     """Convert label encoder to ONNX."""
@@ -63,6 +63,7 @@ def convert_label_encoder_to_onnx():
 
     return classes
 
+
 def verify_onnx_model():
     """Verify the ONNX model can be loaded and checked."""
     print("Verifying ONNX model...")
@@ -80,6 +81,7 @@ def verify_onnx_model():
     except Exception as e:
         print(f"✗ ONNX model verification failed: {e}")
         return False
+
 
 if __name__ == "__main__":
     print("=== Converting sklearn models to ONNX ===")

@@ -17,12 +17,11 @@ class Settings(BaseSettings):
 
     # Model settings
     model_path: str = Field(
-        default="models/obesity_classifier.onnx",
-        description="Path to ONNX model file"
+        default="models/obesity_classifier.onnx", description="Path to ONNX model file"
     )
     label_encoder_path: str = Field(
         default="models/label_encoder.json",
-        description="Path to label encoder JSON file"
+        description="Path to label encoder JSON file",
     )
 
     # OpenAI settings
@@ -35,7 +34,7 @@ class Settings(BaseSettings):
 
     cors_origins: str = Field(
         default="http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:8080",
-        alias="CORS_ORIGINS"
+        alias="CORS_ORIGINS",
     )
 
     @property
@@ -43,7 +42,9 @@ class Settings(BaseSettings):
         """Parse CORS origins from environment."""
         if not self.cors_origins:
             return []
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        return [
+            origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
+        ]
 
     model_config = SettingsConfigDict(
         env_file=".env",

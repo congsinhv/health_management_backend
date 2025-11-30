@@ -13,7 +13,8 @@ from fastapi import FastAPI
 
 # Import from the parent directory
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.main import create_qa_app
 from app.config import Settings, get_settings
@@ -40,7 +41,7 @@ def mock_settings():
         ENABLE_REDIS_CACHE=False,
         qa_enabled=True,
         GCP_PROJECT_ID="test-project",
-        GCP_MODEL_BUCKET="test-bucket"
+        GCP_MODEL_BUCKET="test-bucket",
     )
 
 
@@ -54,12 +55,14 @@ def mock_model_loader():
     loader.load_model = MagicMock(return_value=MagicMock())
     loader.get_embeddings = MagicMock(return_value=[[0.1, 0.2, 0.3]])
     loader.is_model_available = MagicMock(return_value=True)
-    loader.get_model_info = MagicMock(return_value={
-        "loaded": True,
-        "model_name": "test-model",
-        "onnx_enabled": False,
-        "dimension": 768
-    })
+    loader.get_model_info = MagicMock(
+        return_value={
+            "loaded": True,
+            "model_name": "test-model",
+            "onnx_enabled": False,
+            "dimension": 768,
+        }
+    )
     return loader
 
 
@@ -73,26 +76,30 @@ def mock_qa_service():
     service.df = MagicMock()
     service.ai_summarizer = MagicMock()
     service.initialize = AsyncMock()
-    service.get_health_check = MagicMock(return_value={
-        "status": "healthy",
-        "components": {
+    service.get_health_check = MagicMock(
+        return_value={
+            "status": "healthy",
+            "components": {
+                "model_loaded": True,
+                "embeddings_ready": True,
+                "ai_available": True,
+            },
+        }
+    )
+    service.get_service_status = MagicMock(
+        return_value={
+            "status": "healthy",
             "model_loaded": True,
             "embeddings_ready": True,
-            "ai_available": True
+            "streaming_enabled": True,
+            "openai_configured": True,
+            "model_info": {
+                "name": "test-model",
+                "dimension": 768,
+                "max_seq_length": 512,
+            },
         }
-    })
-    service.get_service_status = MagicMock(return_value={
-        "status": "healthy",
-        "model_loaded": True,
-        "embeddings_ready": True,
-        "streaming_enabled": True,
-        "openai_configured": True,
-        "model_info": {
-            "name": "test-model",
-            "dimension": 768,
-            "max_seq_length": 512
-        }
-    })
+    )
     service.ask_question_stream = AsyncMock()
     return service
 
@@ -144,7 +151,7 @@ def mock_sentence_transformer():
     model.tokenizer = MagicMock()
     model.tokenizer.return_value = {
         "input_ids": [[1, 2, 3, 4, 5]],
-        "attention_mask": [[1, 1, 1, 1, 1]]
+        "attention_mask": [[1, 1, 1, 1, 1]],
     }
     return model
 
@@ -153,11 +160,14 @@ def mock_sentence_transformer():
 def mock_dataset():
     """Mock dataset for Q&A service."""
     import pandas as pd
-    df = pd.DataFrame({
-        'Question': ['What is diabetes?', 'How to prevent diabetes?'],
-        'Answer': ['Diabetes is a metabolic disease...', 'To prevent diabetes...'],
-        'Field': ['health', 'health']
-    })
+
+    df = pd.DataFrame(
+        {
+            "Question": ["What is diabetes?", "How to prevent diabetes?"],
+            "Answer": ["Diabetes is a metabolic disease...", "To prevent diabetes..."],
+            "Field": ["health", "health"],
+        }
+    )
     return df
 
 
@@ -165,23 +175,23 @@ def mock_dataset():
 def sample_question_request():
     """Sample question request for testing."""
     from app.schemas.qa import QuestionRequest
-    return QuestionRequest(
-        question="What is diabetes?",
-        threshold=0.55,
-        top_k=5
-    )
+
+    return QuestionRequest(question="What is diabetes?", threshold=0.55, top_k=5)
 
 
 @pytest.fixture
 def sample_question_response():
     """Sample question response for testing."""
     from app.schemas.qa import QuestionResponse
+
     return QuestionResponse(
         question="What is diabetes?",
         answers={
-            "health": ["Diabetes is a metabolic disease that affects blood sugar levels."]
+            "health": [
+                "Diabetes is a metabolic disease that affects blood sugar levels."
+            ]
         },
-        summary="Diabetes is a metabolic disease that affects blood sugar levels."
+        summary="Diabetes is a metabolic disease that affects blood sugar levels.",
     )
 
 
@@ -189,12 +199,17 @@ def sample_question_response():
 def mock_onnx_session():
     """Mock ONNX Runtime session."""
     session = MagicMock()
-    session.run = MagicMock(return_value=[
-        # Mock last_hidden_state
-        [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
-    ])
+    session.run = MagicMock(
+        return_value=[
+            # Mock last_hidden_state
+            [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+        ]
+    )
     session.get_inputs = MagicMock(return_value=[MagicMock()])
-    session.get_inputs.return_value = [MagicMock(name="input_ids"), MagicMock(name="attention_mask")]
+    session.get_inputs.return_value = [
+        MagicMock(name="input_ids"),
+        MagicMock(name="attention_mask"),
+    ]
     return session
 
 
@@ -210,13 +225,16 @@ def event_loop():
 @pytest.fixture(autouse=True)
 def mock_environment():
     """Mock environment variables for testing."""
-    with patch.dict(os.environ, {
-        'DEBUG': 'true',
-        'LOG_LEVEL': 'DEBUG',
-        'OPENAI_API_KEY': 'test-key',
-        'QA_ENABLED': 'true',
-        'MODEL_AUTO_DOWNLOAD': 'false'
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "DEBUG": "true",
+            "LOG_LEVEL": "DEBUG",
+            "OPENAI_API_KEY": "test-key",
+            "QA_ENABLED": "true",
+            "MODEL_AUTO_DOWNLOAD": "false",
+        },
+    ):
         yield
 
 
@@ -227,7 +245,7 @@ def mock_torch():
     torch_mock.cuda.is_available.return_value = False
     torch_mock.onnx.export = MagicMock()
 
-    with patch.dict('sys.modules', {'torch': torch_mock}):
+    with patch.dict("sys.modules", {"torch": torch_mock}):
         yield torch_mock
 
 
@@ -238,7 +256,7 @@ def mock_numpy():
     np_mock.sum = MagicMock(return_value=1.0)
     np_mock.clip = MagicMock(return_value=1.0)
 
-    with patch.dict('sys.modules', {'numpy': np_mock}):
+    with patch.dict("sys.modules", {"numpy": np_mock}):
         yield np_mock
 
 
@@ -248,7 +266,7 @@ def mock_sentence_transformers():
     st_mock = MagicMock()
     st_mock.SentenceTransformer = MagicMock()
 
-    with patch.dict('sys.modules', {'sentence_transformers': st_mock}):
+    with patch.dict("sys.modules", {"sentence_transformers": st_mock}):
         yield st_mock
 
 
@@ -258,7 +276,7 @@ def mock_onnxruntime():
     ort_mock = MagicMock()
     ort_mock.InferenceSession = MagicMock()
 
-    with patch.dict('sys.modules', {'onnxruntime': ort_mock}):
+    with patch.dict("sys.modules", {"onnxruntime": ort_mock}):
         yield ort_mock
 
 
@@ -284,7 +302,7 @@ def mock_openai_error():
 @pytest.fixture
 def mock_dataset_error():
     """Mock dataset loading error."""
-    with patch('pandas.read_csv', side_effect=Exception("Dataset loading failed")):
+    with patch("pandas.read_csv", side_effect=Exception("Dataset loading failed")):
         yield
 
 

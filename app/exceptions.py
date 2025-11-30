@@ -20,5 +20,5 @@ warnings.warn(
     "app.exceptions is deprecated. Use app.core.shared.exceptions instead. "
     "This compatibility shim will be removed in Phase 3.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
