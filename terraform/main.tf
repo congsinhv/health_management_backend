@@ -30,6 +30,7 @@ provider "google-beta" {
   region  = var.region
 }
 
+# Enable all required Google Cloud APIs
 resource "google_project_service" "required_apis" {
   for_each = toset([
     "cloudresourcemanager.googleapis.com",
@@ -44,240 +45,375 @@ resource "google_project_service" "required_apis" {
     "cloudscheduler.googleapis.com",
     "storage.googleapis.com",
     "redis.googleapis.com",
+    "monitoring.googleapis.com",
+    "cloudtrace.googleapis.com",
+    "errorreporting.googleapis.com"
   ])
 
   service            = each.key
   disable_on_destroy = false
 }
 
-# Create a dedicated service account for Cloud Run
-resource "google_service_account" "cloud_run_sa" {
-  account_id   = "vhealth-backend-${var.environment}"
-  display_name = "Cloud Run Service Account for VHealth Backend - ${var.environment}"
-  description  = "Service account used by Cloud Run services in ${var.environment} environment"
+# VPC Network for Direct VPC Egress
+module "vpc_network" {
+  source = "./modules/vpc_network"
+
+  project_id                     = var.project_id
+  environment                    = var.environment
+  region                         = var.region
+  subnet_cidr                    = var.subnet_cidr
+  use_vpc_connector              = var.use_vpc_connector_fallback
+  connector_cidr                 = var.vpc_connector_cidr
+  connector_min_instances        = var.vpc_connector_min_instances
+  connector_max_instances        = var.vpc_connector_max_instances
+  enable_private_service_connect = var.enable_private_service_connect
 
   depends_on = [google_project_service.required_apis]
 }
 
-# Temporarily disabled - IAM binding managed manually to avoid permission issues
-# resource "google_project_iam_member" "cloud_run_sql_client" {
-#   project = var.project_id
-#   role    = "roles/cloudsql.client"
-#   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
-#
-#   depends_on = [google_service_account.cloud_run_sa]
-# }
+# Service Accounts for Microservices
+module "service_accounts" {
+  source = "./modules/service_accounts"
 
-resource "google_storage_bucket_iam_member" "cloud_run_storage_writer" {
-  bucket = "vhealth-${var.environment}-public"
-  role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
-
-  depends_on = [
-    google_service_account.cloud_run_sa,
-    google_project_service.required_apis
-  ]
-}
-
-# Temporarily commented out due to existing resources
-# module "artifact_registry" {
-#   source = "./modules/artifact_registry"
-
-#   project_id            = var.project_id
-#   region                = var.region
-#   repository_id         = var.artifact_registry_repository_id
-#   environment           = var.environment
-#   service_account_email = google_service_account.cloud_run_sa.email
-
-#   depends_on = [
-#     google_project_service.required_apis,
-#     google_service_account.cloud_run_sa
-#   ]
-# }
-
-module "vpc_connector" {
-  source = "./modules/vpc_connector"
-
-  project_id     = var.project_id
-  region         = var.region
-  connector_name = var.vpc_connector_name
-  vpc_network    = var.vpc_network
-  ip_cidr_range  = var.vpc_connector_ip_range
-  min_instances  = var.vpc_connector_min_instances
-  max_instances  = var.vpc_connector_max_instances
-  machine_type   = var.vpc_connector_machine_type
-  environment    = var.environment
+  project_id                  = var.project_id
+  environment                 = var.environment
+  region                      = var.region
+  title_case_environment      = var.title_case_environment
+  openai_secret_id            = var.openai_secret_id
+  app_secrets_id              = var.app_secrets_id
+  enable_chat_ai_db_access    = var.enable_chat_ai_db_access
+  enable_prediction_db_access = var.enable_prediction_db_access
 
   depends_on = [google_project_service.required_apis]
 }
 
-module "secret_manager" {
-  source = "./modules/secret_manager"
+# Existing Cloud SQL Database (managed separately)
+data "google_sql_database_instance" "existing" {
+  count   = var.use_existing_cloud_sql ? 1 : 0
+  name    = var.cloud_sql_instance_name
+  project = var.project_id
+  region  = var.region
+}
+
+# Existing Redis/Memorystore (managed separately)
+data "google_redis_instance" "existing" {
+  count   = var.use_existing_redis ? 1 : 0
+  name    = var.redis_instance_name
+  project = var.project_id
+  region  = var.region
+}
+
+# Main API Service
+module "main_api_service" {
+  source = "./modules/cloud_run"
 
   project_id            = var.project_id
+  region                = var.region
+  service_name          = "${var.environment}-main-api"
+  image                 = var.main_api_image
+  service_account_email = module.service_accounts.main_api_email
   environment           = var.environment
-  service_account_email = google_service_account.cloud_run_sa.email
-  secrets = {
-    # Database credentials stored separately for flexibility
-    db_name     = "health_management" # Hardcoded since database already exists
-    db_username = module.cloud_sql.db_user
-    db_password = module.cloud_sql.db_password
-    db_host     = module.cloud_sql.public_ip_address
-    # Construct DATABASE_URL for Cloud Run to connect to Cloud SQL via public IP
-    # Note: Password is URL-encoded to handle special characters
-    database_url         = "postgresql://${module.cloud_sql.db_user}:${urlencode(module.cloud_sql.db_password)}@${module.cloud_sql.public_ip_address}:5432/health_management?sslmode=require"
-    secret_key           = var.secret_key
-    google_client_id     = var.google_client_id
-    google_client_secret = var.google_client_secret
-    mail_username        = var.mail_username
-    mail_password        = var.mail_password
-    mail_from            = var.mail_from
-    mail_server          = var.mail_server
-    # Scheduler endpoint URL - configure this to point to actual scheduled endpoint
-    scheduler_endpoint_url = var.scheduler_endpoint_url
-    # Redis connection details
-    redis_host         = var.enable_redis_cache ? module.memorystore.redis_host : ""
-    redis_port         = var.enable_redis_cache ? module.memorystore.redis_port : ""
-    redis_auth_secret  = var.enable_redis_cache ? module.memorystore.redis_auth_secret : ""
-    enable_redis_cache = var.enable_redis_cache ? "true" : "false"
+
+  # Direct VPC Egress Configuration
+  use_direct_vpc_egress = true
+  vpc_network_id        = module.vpc_network.network_id
+  vpc_subnet_id         = module.vpc_network.subnet_id
+
+  # Resource Configuration
+  cpu_limit        = var.main_api_cpu
+  cpu_minimum      = var.main_api_cpu_minimum
+  memory_limit     = var.main_api_memory
+  min_instances    = var.main_api_min_instances
+  max_instances    = var.main_api_max_instances
+  timeout_seconds  = var.main_api_timeout
+  concurrency      = var.main_api_concurrency
+  session_affinity = false
+
+  # Database Configuration
+  cloud_sql_connection_name = var.use_existing_cloud_sql ? data.google_sql_database_instance.existing[0].connection_name : null
+  database_url              = var.database_url
+  redis_url                 = var.use_existing_redis ? data.google_redis_instance.existing[0].host : var.redis_url
+
+  # Service URLs for Inter-Service Communication
+  chat_ai_url    = module.chat_ai_service.service_url
+  prediction_url = module.prediction_service.service_url
+
+  # Health Check Configuration
+  health_check_path      = var.health_check_path
+  startup_delay_seconds  = var.main_api_startup_delay
+  liveness_delay_seconds = var.main_api_liveness_delay
+
+  # Environment Variables
+  env_vars = merge(
+    var.main_api_env_vars,
+    {
+      CHAT_AI_SERVICE_URL    = module.chat_ai_service.service_url
+      PREDICTION_SERVICE_URL = module.prediction_service.service_url
+      DATABASE_URL           = var.database_url
+      REDIS_URL              = var.use_existing_redis ? "${data.google_redis_instance.existing[0].host}:${data.google_redis_instance.existing[0].port}" : var.redis_url
+      DEBUG                  = var.debug_enabled ? "true" : "false"
+      LOG_LEVEL              = var.log_level
+    }
+  )
+
+  # Secrets
+  secret_env_vars = {
+    SECRET_KEY           = var.app_secrets_id
+    OPENAI_API_KEY       = var.openai_secret_id
+    GOOGLE_CLIENT_ID     = var.google_client_secret_id
+    GOOGLE_CLIENT_SECRET = var.google_client_secret_id
+  }
+
+  # Traffic Configuration
+  ingress             = var.main_api_ingress
+  allow_public_access = true
+  custom_domain       = var.main_api_custom_domain
+
+  additional_labels = {
+    service_type = "main-api"
+    component    = "api"
   }
 
   depends_on = [
     google_project_service.required_apis,
-    google_service_account.cloud_run_sa,
-    module.cloud_sql,
-    module.memorystore
+    module.vpc_network,
+    module.service_accounts
   ]
 }
 
-# Grant Cloud Run service account access to pre-existing OpenAI API key secret
-# This secret was created manually and is not managed by Terraform
-resource "google_secret_manager_secret_iam_member" "openai_secret_access" {
-  secret_id = "vhealth-${var.environment}-openai-api-key"
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+# Chat AI Service
+module "chat_ai_service" {
+  source = "./modules/cloud_run"
+
+  project_id            = var.project_id
+  region                = var.region
+  service_name          = "${var.environment}-chat-ai"
+  image                 = var.chat_ai_image
+  service_account_email = module.service_accounts.chat_ai_email
+  environment           = var.environment
+
+  # Direct VPC Egress Configuration
+  use_direct_vpc_egress = true
+  vpc_network_id        = module.vpc_network.network_id
+  vpc_subnet_id         = module.vpc_network.subnet_id
+
+  # Resource Configuration
+  cpu_limit        = var.chat_ai_cpu
+  cpu_minimum      = var.chat_ai_cpu_minimum
+  memory_limit     = var.chat_ai_memory
+  min_instances    = var.chat_ai_min_instances
+  max_instances    = var.chat_ai_max_instances
+  timeout_seconds  = var.chat_ai_timeout
+  concurrency      = var.chat_ai_concurrency
+  session_affinity = true # For stateful conversations
+
+  # Database Configuration (optional)
+  redis_url = var.use_existing_redis ? "${data.google_redis_instance.existing[0].host}:${data.google_redis_instance.existing[0].port}" : var.redis_url
+
+  # Service URLs
+  main_api_url = module.main_api_service.service_url
+
+  # Health Check Configuration
+  health_check_path      = var.health_check_path
+  startup_delay_seconds  = var.chat_ai_startup_delay
+  liveness_delay_seconds = var.chat_ai_liveness_delay
+
+  # Environment Variables
+  env_vars = merge(
+    var.chat_ai_env_vars,
+    {
+      REDIS_URL           = var.use_existing_redis ? "${data.google_redis_instance.existing[0].host}:${data.google_redis_instance.existing[0].port}" : var.redis_url
+      MAIN_API_URL        = module.main_api_service.service_url
+      QA_MODEL_PATH       = var.qa_model_path
+      GCP_MODEL_BUCKET    = var.gcp_model_bucket
+      MODEL_AUTO_DOWNLOAD = "true"
+      DEBUG               = var.debug_enabled ? "true" : "false"
+      LOG_LEVEL           = var.log_level
+    }
+  )
+
+  # Secrets
+  secret_env_vars = {
+    OPENAI_API_KEY = var.openai_secret_id
+  }
+
+  # Traffic Configuration
+  ingress             = var.chat_ai_ingress
+  allow_public_access = false # Only accessible via Main API
+  custom_domain       = null
+
+  additional_labels = {
+    service_type = "chat-ai"
+    component    = "ai"
+  }
 
   depends_on = [
     google_project_service.required_apis,
-    google_service_account.cloud_run_sa
+    module.vpc_network,
+    module.service_accounts,
+    module.main_api_service
   ]
 }
 
-module "cloud_sql" {
-  source = "./modules/cloud_sql"
+# Prediction Service
+module "prediction_service" {
+  source = "./modules/cloud_run"
 
-  project_id          = var.project_id
-  region              = var.region
-  instance_name       = var.cloud_sql_instance_name
-  database_version    = var.cloud_sql_database_version
-  tier                = var.cloud_sql_tier
-  availability_type   = var.cloud_sql_availability_type
-  backup_enabled      = var.cloud_sql_backup_enabled
-  backup_start_time   = var.cloud_sql_backup_start_time
-  database_name       = var.cloud_sql_database_name
-  deletion_protection = var.cloud_sql_deletion_protection
-  environment         = var.environment
+  project_id            = var.project_id
+  region                = var.region
+  service_name          = "${var.environment}-prediction"
+  image                 = var.prediction_image
+  service_account_email = module.service_accounts.prediction_email
+  environment           = var.environment
 
-  depends_on = [google_project_service.required_apis]
-}
+  # Direct VPC Egress Configuration
+  use_direct_vpc_egress = true
+  vpc_network_id        = module.vpc_network.network_id
+  vpc_subnet_id         = module.vpc_network.subnet_id
 
-# Reference existing private IP allocation (already exists in GCP)
-# Note: SQL uses public IP, so this is only for Redis and other private services
-data "google_compute_global_address" "private_ip_alloc" {
-  name = "vhealth-private-ip-${var.environment}"
-}
+  # Resource Configuration
+  cpu_limit        = var.prediction_cpu
+  cpu_minimum      = var.prediction_cpu_minimum
+  memory_limit     = var.prediction_memory
+  min_instances    = var.prediction_min_instances # 0 for on-demand
+  max_instances    = var.prediction_max_instances
+  timeout_seconds  = var.prediction_timeout
+  concurrency      = var.prediction_concurrency
+  session_affinity = false
 
-# Manage existing VPC peering connection
-# IMPORTANT: Must be imported first: terraform import google_service_networking_connection.private_vpc_connection vhealth-dev:servicenetworking.googleapis.com:default
-resource "google_service_networking_connection" "private_vpc_connection" {
-  network = "projects/${var.project_id}/global/networks/${var.vpc_network}"
-  service = "servicenetworking.googleapis.com"
-  reserved_peering_ranges = [
-    data.google_compute_global_address.private_ip_alloc.name
-  ]
+  # Database Configuration (optional)
+  redis_url = var.use_existing_redis ? "${data.google_redis_instance.existing[0].host}:${data.google_redis_instance.existing[0].port}" : var.redis_url
 
-  depends_on = [
-    google_project_service.required_apis
-  ]
-}
+  # Service URLs
+  main_api_url = module.main_api_service.service_url
 
-# Provision Memorystore Redis
-module "memorystore" {
-  source = "./modules/memorystore"
+  # Health Check Configuration
+  health_check_path      = var.health_check_path
+  startup_delay_seconds  = var.prediction_startup_delay
+  liveness_delay_seconds = var.prediction_liveness_delay
 
-  instance_name  = "vhealth-cache-${var.environment}"
-  tier           = var.redis_tier
-  memory_size_gb = var.redis_memory_size_gb
-  region         = var.region
-  redis_version  = var.redis_version
-  display_name   = "VHealth API Cache - ${var.environment}"
-  vpc_network    = "projects/${var.project_id}/global/networks/${var.vpc_network}"
-  environment    = var.environment
+  # Environment Variables
+  env_vars = merge(
+    var.prediction_env_vars,
+    {
+      REDIS_URL             = var.use_existing_redis ? "${data.google_redis_instance.existing[0].host}:${data.google_redis_instance.existing[0].port}" : var.redis_url
+      MAIN_API_URL          = module.main_api_service.service_url
+      PREDICTION_MODEL_PATH = var.prediction_model_path
+      GCP_MODEL_BUCKET      = var.gcp_model_bucket
+      MODEL_AUTO_DOWNLOAD   = "true"
+      DEBUG                 = var.debug_enabled ? "true" : "false"
+      LOG_LEVEL             = var.log_level
+    }
+  )
 
-  maintenance_window_day  = var.redis_maintenance_day
-  maintenance_window_hour = var.redis_maintenance_hour
+  # Secrets
+  secret_env_vars = {
+    OPENAI_API_KEY = var.openai_secret_id
+  }
+
+  # Traffic Configuration
+  ingress             = var.prediction_ingress
+  allow_public_access = false # Only accessible via Main API
+  custom_domain       = null
+
+  additional_labels = {
+    service_type = "prediction"
+    component    = "ml"
+  }
 
   depends_on = [
     google_project_service.required_apis,
-    module.vpc_connector,
-    google_service_networking_connection.private_vpc_connection
+    module.vpc_network,
+    module.service_accounts,
+    module.main_api_service
   ]
 }
 
-# Grant Cloud Run SA access to Redis auth secret
-resource "google_secret_manager_secret_iam_member" "redis_auth_access" {
-  secret_id = module.memorystore.redis_auth_secret
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+# IAM Bindings for Service-to-Service Communication
+module "iam_bindings" {
+  source = "./modules/iam_bindings"
 
-  depends_on = [module.memorystore]
+  project_id                   = var.project_id
+  region                       = var.region
+  main_api_sa_email            = module.service_accounts.main_api_email
+  chat_ai_sa_email             = module.service_accounts.chat_ai_email
+  prediction_sa_email          = module.service_accounts.prediction_email
+  main_api_service_name        = module.main_api_service.service_name
+  chat_ai_service_name         = module.chat_ai_service.service_name
+  prediction_service_name      = module.prediction_service.service_name
+  enable_reverse_communication = var.enable_reverse_communication
+  enable_debug_access          = var.enable_debug_access
+  enable_time_restrictions     = var.enable_time_restrictions
+
+  main_api_service_dependency   = module.main_api_service.service
+  chat_ai_service_dependency    = module.chat_ai_service.service
+  prediction_service_dependency = module.prediction_service.service
+
+  depends_on = [
+    module.main_api_service,
+    module.chat_ai_service,
+    module.prediction_service
+  ]
 }
 
-# Create a service account for Cloud Scheduler
-resource "google_service_account" "cloud_scheduler_sa" {
-  account_id   = "vhealth-scheduler-${var.environment}"
-  display_name = "Cloud Scheduler Service Account - ${var.environment}"
-  description  = "Service account used by Cloud Scheduler to invoke Cloud Run endpoints"
+# Monitoring Dashboard
+module "monitoring" {
+  count  = var.enable_monitoring ? 1 : 0
+  source = "./modules/monitoring"
 
-  depends_on = [google_project_service.required_apis]
+  project_id  = var.project_id
+  environment = var.environment
+  services = {
+    main_api = {
+      service_name = module.main_api_service.service_name
+      display_name = "Main API"
+    }
+    chat_ai = {
+      service_name = module.chat_ai_service.service_name
+      display_name = "Chat AI"
+    }
+    prediction = {
+      service_name = module.prediction_service.service_name
+      display_name = "Prediction"
+    }
+  }
+
+  depends_on = [
+    module.main_api_service,
+    module.chat_ai_service,
+    module.prediction_service
+  ]
 }
 
-# Temporarily commented out due to existing resources
-# # Cloud Scheduler module for periodic tasks
-# module "cloud_scheduler" {
-#   source = "./modules/cloud_scheduler"
+# Alert Policies
+module "alert_policies" {
+  count  = var.enable_alerting ? 1 : 0
+  source = "./modules/alert_policies"
 
-#   project_id      = var.project_id
-#   region          = var.region
-#   environment     = var.environment
-#   job_name        = "vhealth-scheduler-${var.environment}"
-#   description     = "Periodic task that runs every 30 minutes - ${var.environment}"
-#   schedule        = var.scheduler_cron_schedule
-#   time_zone       = var.scheduler_time_zone
-#   http_target_uri = var.scheduler_endpoint_url
-#   http_method     = "POST"
-#   http_headers = {
-#     "Content-Type" = "application/json"
-#   }
+  project_id              = var.project_id
+  environment             = var.environment
+  notification_channel_id = var.notification_channel_id
+  services = {
+    main_api = {
+      service_name         = module.main_api_service.service_name
+      error_rate_threshold = 0.05 # 5%
+      latency_threshold_ms = 2000
+    }
+    chat_ai = {
+      service_name         = module.chat_ai_service.service_name
+      error_rate_threshold = 0.08 # 8%
+      latency_threshold_ms = 5000
+    }
+    prediction = {
+      service_name         = module.prediction_service.service_name
+      error_rate_threshold = 0.06 # 6%
+      latency_threshold_ms = 3000
+    }
+  }
 
-#   # Enable OIDC authentication if Cloud Run requires authentication
-#   oidc_token            = var.scheduler_use_oidc_auth
-#   service_account_email = var.scheduler_use_oidc_auth ? google_service_account.cloud_scheduler_sa.email : null
-
-#   # Retry configuration
-#   retry_config = {
-#     retry_count          = 3
-#     max_retry_duration   = "0s"
-#     min_backoff_duration = "5s"
-#     max_backoff_duration = "3600s"
-#     max_doublings        = 5
-#   }
-
-#   paused = var.scheduler_paused
-
-#   depends_on = [
-#     google_project_service.required_apis,
-#     google_service_account.cloud_scheduler_sa
-#   ]
-# }
-
+  depends_on = [
+    module.main_api_service,
+    module.chat_ai_service,
+    module.prediction_service
+  ]
+}

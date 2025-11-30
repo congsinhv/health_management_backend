@@ -327,3 +327,364 @@ variable "enable_redis_cache" {
   type        = bool
   default     = true
 }
+
+# Microservices Architecture Variables
+variable "title_case_environment" {
+  description = "Environment name in title case"
+  type        = string
+  default     = "Development"
+}
+
+# VPC Network Configuration (Direct VPC Egress)
+variable "subnet_cidr" {
+  description = "CIDR range for the subnet"
+  type        = string
+}
+
+variable "use_vpc_connector_fallback" {
+  description = "Whether to use VPC Connector as fallback"
+  type        = bool
+  default     = false
+}
+
+variable "enable_private_service_connect" {
+  description = "Enable Private Service Connect for Cloud SQL"
+  type        = bool
+  default     = false
+}
+
+# Service Account Configuration
+variable "openai_secret_id" {
+  description = "Secret Manager secret ID for OpenAI API key"
+  type        = string
+}
+
+variable "app_secrets_id" {
+  description = "Secret Manager secret ID for application secrets"
+  type        = string
+}
+
+variable "google_client_secret_id" {
+  description = "Secret Manager secret ID for Google client secrets"
+  type        = string
+}
+
+# Main API Service Configuration
+variable "main_api_image" {
+  description = "Container image for Main API service"
+  type        = string
+}
+
+variable "main_api_cpu" {
+  description = "CPU limit for Main API service"
+  type        = string
+}
+
+variable "main_api_cpu_minimum" {
+  description = "CPU minimum reservation for Main API service"
+  type        = string
+  default     = null
+}
+
+variable "main_api_memory" {
+  description = "Memory limit for Main API service"
+  type        = string
+}
+
+variable "main_api_min_instances" {
+  description = "Minimum instances for Main API service"
+  type        = number
+}
+
+variable "main_api_max_instances" {
+  description = "Maximum instances for Main API service"
+  type        = number
+}
+
+variable "main_api_timeout" {
+  description = "Request timeout for Main API service (seconds)"
+  type        = number
+}
+
+variable "main_api_concurrency" {
+  description = "Maximum concurrent requests for Main API"
+  type        = number
+}
+
+variable "main_api_startup_delay" {
+  description = "Startup probe delay for Main API service"
+  type        = number
+  default     = 10
+}
+
+variable "main_api_liveness_delay" {
+  description = "Liveness probe delay for Main API service"
+  type        = number
+  default     = 30
+}
+
+variable "main_api_ingress" {
+  description = "Ingress traffic setting for Main API"
+  type        = string
+  default     = "INGRESS_TRAFFIC_ALL"
+}
+
+variable "main_api_custom_domain" {
+  description = "Custom domain for Main API service"
+  type        = string
+  default     = null
+}
+
+# Chat AI Service Configuration
+variable "chat_ai_image" {
+  description = "Container image for Chat AI service"
+  type        = string
+}
+
+variable "chat_ai_cpu" {
+  description = "CPU limit for Chat AI service"
+  type        = string
+}
+
+variable "chat_ai_cpu_minimum" {
+  description = "CPU minimum reservation for Chat AI service"
+  type        = string
+  default     = null
+}
+
+variable "chat_ai_memory" {
+  description = "Memory limit for Chat AI service"
+  type        = string
+}
+
+variable "chat_ai_min_instances" {
+  description = "Minimum instances for Chat AI service"
+  type        = number
+}
+
+variable "chat_ai_max_instances" {
+  description = "Maximum instances for Chat AI service"
+  type        = number
+}
+
+variable "chat_ai_timeout" {
+  description = "Request timeout for Chat AI service (seconds)"
+  type        = number
+}
+
+variable "chat_ai_concurrency" {
+  description = "Maximum concurrent requests for Chat AI"
+  type        = number
+}
+
+variable "chat_ai_startup_delay" {
+  description = "Startup probe delay for Chat AI service"
+  type        = number
+  default     = 15
+}
+
+variable "chat_ai_liveness_delay" {
+  description = "Liveness probe delay for Chat AI service"
+  type        = number
+  default     = 45
+}
+
+variable "chat_ai_ingress" {
+  description = "Ingress traffic setting for Chat AI"
+  type        = string
+  default     = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+}
+
+# Prediction Service Configuration
+variable "prediction_image" {
+  description = "Container image for Prediction service"
+  type        = string
+}
+
+variable "prediction_cpu" {
+  description = "CPU limit for Prediction service"
+  type        = string
+}
+
+variable "prediction_cpu_minimum" {
+  description = "CPU minimum reservation for Prediction service"
+  type        = string
+  default     = null
+}
+
+variable "prediction_memory" {
+  description = "Memory limit for Prediction service"
+  type        = string
+}
+
+variable "prediction_min_instances" {
+  description = "Minimum instances for Prediction service"
+  type        = number
+}
+
+variable "prediction_max_instances" {
+  description = "Maximum instances for Prediction service"
+  type        = number
+}
+
+variable "prediction_timeout" {
+  description = "Request timeout for Prediction service (seconds)"
+  type        = number
+}
+
+variable "prediction_concurrency" {
+  description = "Maximum concurrent requests for Prediction"
+  type        = number
+}
+
+variable "prediction_startup_delay" {
+  description = "Startup probe delay for Prediction service"
+  type        = number
+  default     = 10
+}
+
+variable "prediction_liveness_delay" {
+  description = "Liveness probe delay for Prediction service"
+  type        = number
+  default     = 30
+}
+
+variable "prediction_ingress" {
+  description = "Ingress traffic setting for Prediction"
+  type        = string
+  default     = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+}
+
+# Model and Storage Configuration
+variable "gcp_model_bucket" {
+  description = "GCS bucket for model storage"
+  type        = string
+}
+
+variable "qa_model_path" {
+  description = "Path to QA model in GCS"
+  type        = string
+}
+
+variable "prediction_model_path" {
+  description = "Path to prediction model in GCS"
+  type        = string
+}
+
+# Database Configuration
+variable "database_url" {
+  description = "Database connection URL"
+  type        = string
+  default     = null
+}
+
+variable "redis_url" {
+  description = "Redis connection URL"
+  type        = string
+  default     = null
+}
+
+# Existing Resources Integration
+variable "use_existing_cloud_sql" {
+  description = "Use existing Cloud SQL instance"
+  type        = bool
+  default     = true
+}
+
+variable "redis_instance_name" {
+  description = "Name of existing Redis instance"
+  type        = string
+  default     = null
+}
+
+variable "use_existing_redis" {
+  description = "Use existing Redis instance"
+  type        = bool
+  default     = true
+}
+
+# Service Communication
+variable "enable_reverse_communication" {
+  description = "Enable AI services to call back to Main API"
+  type        = bool
+  default     = false
+}
+
+variable "enable_debug_access" {
+  description = "Enable debug access for services"
+  type        = bool
+  default     = false
+}
+
+variable "enable_time_restrictions" {
+  description = "Enable time-based access restrictions"
+  type        = bool
+  default     = false
+}
+
+# Database Access for AI Services
+variable "enable_chat_ai_db_access" {
+  description = "Enable direct database access for Chat AI service"
+  type        = bool
+  default     = false
+}
+
+variable "enable_prediction_db_access" {
+  description = "Enable direct database access for Prediction service"
+  type        = bool
+  default     = false
+}
+
+# Application Configuration
+variable "debug_enabled" {
+  description = "Enable debug mode"
+  type        = bool
+  default     = false
+}
+
+variable "health_check_path" {
+  description = "Health check path for services"
+  type        = string
+  default     = "/health"
+}
+
+# Monitoring and Alerting
+variable "enable_monitoring" {
+  description = "Enable monitoring dashboard"
+  type        = bool
+  default     = false
+}
+
+variable "enable_alerting" {
+  description = "Enable alert policies"
+  type        = bool
+  default     = false
+}
+
+variable "notification_channel_id" {
+  description = "Notification channel ID for alerts"
+  type        = string
+  default     = null
+}
+
+# Main API Environment Variables
+variable "main_api_env_vars" {
+  description = "Additional environment variables for Main API"
+  type        = map(string)
+  default     = {}
+}
+
+# Chat AI Environment Variables
+variable "chat_ai_env_vars" {
+  description = "Additional environment variables for Chat AI"
+  type        = map(string)
+  default     = {}
+}
+
+# Prediction Environment Variables
+variable "prediction_env_vars" {
+  description = "Additional environment variables for Prediction"
+  type        = map(string)
+  default     = {}
+}
+
