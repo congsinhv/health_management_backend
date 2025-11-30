@@ -127,7 +127,7 @@ async def test_generate_and_upload_pdf_success(pdf_service, mock_connection):
 @pytest.mark.asyncio
 async def test_generate_and_upload_pdf_not_found(pdf_service):
     """Test PDF generation for non-existent prediction."""
-    from app.exceptions import ResourceNotFoundException
+    from app.core.shared.exceptions import ResourceNotFoundException
     from app.services.pdf_service import PdfGenerationError
 
     # Mock the prediction repository to raise ResourceNotFoundException

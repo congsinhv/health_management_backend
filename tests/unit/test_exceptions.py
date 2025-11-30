@@ -6,7 +6,7 @@ and error detail sanitization functionality.
 """
 
 import pytest
-from app.exceptions import (
+from app.core.shared.exceptions import (
     VHealthException,
     ResourceNotFoundException,
     AuthenticationException,
@@ -303,7 +303,7 @@ class TestInheritanceHierarchy:
 
     def test_authentication_subclasses(self):
         """Test authentication exception inheritance."""
-        from app.exceptions import (
+        from app.core.shared.exceptions import (
             TokenExpiredException,
             TokenInvalidException,
             InvalidCredentialsException,
@@ -334,7 +334,7 @@ class TestInheritanceHierarchy:
 
     def test_validation_subclasses(self):
         """Test validation exception inheritance."""
-        from app.exceptions import (
+        from app.core.shared.exceptions import (
             MissingFieldException,
             InvalidFormatException,
             OutOfRangeException,
@@ -351,7 +351,7 @@ class TestInheritanceHierarchy:
 
     def test_service_specific_exceptions(self):
         """Test service-specific exception inheritance."""
-        from app.exceptions import (
+        from app.core.shared.exceptions import (
             EmailException,
             PDFGenerationException,
             QAServiceException,

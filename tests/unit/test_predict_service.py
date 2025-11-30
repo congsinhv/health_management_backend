@@ -79,7 +79,7 @@ class TestObesityPredictorComplete:
 
     def test_ensure_models_downloaded_no_gcs_config(self, mock_model_files):
         """Test _ensure_models_downloaded raises error when GCS not configured."""
-        from app.exceptions import PredictionModelException
+        from app.core.shared.exceptions import PredictionModelException
 
         predictor = ObesityPredictorComplete.__new__(ObesityPredictorComplete)
 

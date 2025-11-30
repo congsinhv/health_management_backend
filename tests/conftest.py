@@ -8,6 +8,9 @@ from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timezone
 from app.main import app
+from app.core.shared.http_client import ServiceClient
+from app.core.shared.exceptions import VHealthException
+from tests.shared_utils import create_mock_service_client
 
 
 @pytest.fixture
@@ -175,3 +178,69 @@ def mock_openai_stream():
         return mock_stream
 
     return create_mock_stream
+
+
+# New shared package fixtures for microservices testing
+
+
+@pytest.fixture
+def mock_service_client():
+    """Mock service client for service-to-service communication."""
+    return create_mock_service_client()
+
+
+@pytest.fixture
+def mock_vhealth_exception():
+    """Mock VHealthException for testing."""
+    return VHealthException(
+        message="Test exception",
+        details={"test_field": "test_value"},
+        error_code="TestException"
+    )
+
+
+@pytest.fixture
+def sample_qa_request():
+    """Sample QA request for testing."""
+    from app.interfaces.qa_interface import QARequest
+    return QARequest(
+        question="What is diabetes?",
+        user_id=1,
+        conversation_id=None,
+        context=None,
+        threshold=0.55
+    )
+
+
+@pytest.fixture
+def sample_prediction_request():
+    """Sample prediction request for testing."""
+    from app.interfaces.predict_interface import PredictionRequest
+    return PredictionRequest(
+        age=30,
+        gender="male",
+        height=175.0,
+        weight=70.0,
+        activity_level="moderate",
+        smoking_status="never",
+        alcohol_consumption="moderate",
+        systolic_bp=120.0,
+        diastolic_bp=80.0,
+        family_history_diabetes=False,
+        family_history_heart_disease=False,
+        user_id=1,
+        prediction_type="general"
+    )
+
+
+@pytest.fixture
+def async_service_client():
+    """Async service client fixture with proper cleanup."""
+    import asyncio
+
+    async def client():
+        client = ServiceClient("https://test-service.com")
+        yield client
+        await client.close()
+
+    return asyncio.run(client.__aenter__())
