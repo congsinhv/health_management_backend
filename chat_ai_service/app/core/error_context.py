@@ -13,7 +13,7 @@ Usage:
     ErrorContext.add_context("operation", "qa_inference")
 
     # Use context manager for operations
-    with ErrorContext("process_question", {"question_length": len(question)}):
+    with ErrorContext.operation("process_question", {"question_length": len(question)}):
         result = await process_question(question)
 
     # Get context for logging

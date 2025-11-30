@@ -114,7 +114,7 @@ async def ask_question(
     ErrorContext.add_context("operation", "qa_inference")
     ErrorContext.add_context("question_length", len(question_data.question))
 
-    with ErrorContext(
+    with ErrorContext.operation(
         "ask_question",
         {
             "threshold": question_data.threshold,
@@ -283,7 +283,7 @@ async def qa_health_check(request: Request):
     ErrorContext.add_context("endpoint", "qa_health_check")
     ErrorContext.add_context("operation", "health_check")
 
-    with ErrorContext("qa_health_check"):
+    with ErrorContext.operation("qa_health_check"):
         qa_service = request.app.state.qa_service
 
         if qa_service is None:

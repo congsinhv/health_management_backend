@@ -1,8 +1,11 @@
 FROM python:3.13-slim
 
-# Install system dependencies for ONNX Runtime
+# Install system dependencies for ONNX Runtime and build tools for aiohttp
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
+    gcc \
+    g++ \
+    make \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -12,12 +15,13 @@ RUN useradd --create-home --shell /bin/bash appuser
 WORKDIR /home/appuser/app
 
 # Copy requirements first
-COPY ../requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY ../app/ ./app/
-COPY ../models/ ./models/
+COPY app/ ./app/
+COPY models/ ./models/
+COPY *.pkl ./
 
 # Change ownership
 RUN chown -R appuser:appuser /home/appuser
