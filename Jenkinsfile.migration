@@ -131,6 +131,12 @@ pipeline {
                 script {
                     withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                         sh """
+                            # Activate service account for gcloud CLI
+                            echo "Activating service account..."
+                            gcloud auth activate-service-account --key-file=\$GOOGLE_APPLICATION_CREDENTIALS
+                            gcloud config set project ${env.GCP_PROJECT}
+                            echo "✓ Service account activated"
+
                             # Fetch secrets from GCP Secret Manager
                             echo "Fetching DB credentials for environment: ${params.ENVIRONMENT}"
 
