@@ -4,7 +4,7 @@ Configuration settings for the Health Management application.
 
 from typing import Optional, List
 from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 import logging
 
 logger = logging.getLogger(__name__)
@@ -61,28 +61,41 @@ class Settings(BaseSettings):
 
     custom_domain: Optional[str] = Field(None, description="Custom domain")
 
-    # CORS settings
-    cors_origins: List[str] = Field(
-        default_factory=lambda: [
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:8080",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:3001",
-            "http://127.0.0.1:8080",
-            "http://192.168.1.3:3000",
-            "http://192.168.1.3:3001",
-            "http://192.168.1.3:8080",
-        ]
+    # CORS settings - stored as comma-separated string in env var
+    # Using str type to prevent pydantic-settings from trying to parse as JSON
+    cors_origins_str: str = Field(
+        default="http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:8080,http://192.168.1.3:3000,http://192.168.1.3:3001,http://192.168.1.3:8080",
+        alias="CORS_ORIGINS",
     )
+
+    @property
+    def cors_origins(self) -> List[str]:
+        """Parse CORS origins from comma-separated string."""
+        if not self.cors_origins_str:
+            return []
+        # Try JSON first (for backward compatibility), then comma-separated
+        if self.cors_origins_str.startswith("["):
+            import json
+
+            try:
+                return json.loads(self.cors_origins_str)
+            except json.JSONDecodeError:
+                pass
+        # Handle comma-separated string from environment variable
+        return [
+            origin.strip()
+            for origin in self.cors_origins_str.split(",")
+            if origin.strip()
+        ]
 
     @model_validator(mode="after")
     def add_custom_domain_to_cors(self):
         """Add custom domain to CORS origins if provided."""
         if self.custom_domain:
             origin = f"https://{self.custom_domain}"
-            if origin not in self.cors_origins:
-                self.cors_origins.append(origin)
+            # Check if origin is already in the string
+            if origin not in self.cors_origins_str:
+                self.cors_origins_str = f"{self.cors_origins_str},{origin}"
         return self
 
     cors_allow_credentials: bool = True
@@ -233,12 +246,16 @@ class Settings(BaseSettings):
 
         return url
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
         # Avoid Pydantic protected namespace warning for model_* fields
-        protected_namespaces = ()
+        protected_namespaces=(),
+        # Don't try to parse env vars as JSON for complex types
+        # This allows our field_validator to handle the parsing
+        env_parse_none_str="None",
+    )
 
 
 # Global settings instance

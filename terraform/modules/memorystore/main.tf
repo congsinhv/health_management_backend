@@ -1,15 +1,15 @@
 resource "google_redis_instance" "cache" {
-  name               = var.instance_name
-  tier               = var.tier
-  memory_size_gb     = var.memory_size_gb
-  region             = var.region
-  redis_version      = var.redis_version
-  display_name       = var.display_name
+  name           = var.instance_name
+  tier           = var.tier
+  memory_size_gb = var.memory_size_gb
+  region         = var.region
+  redis_version  = var.redis_version
+  display_name   = var.display_name
 
   authorized_network = var.vpc_network
   connect_mode       = "PRIVATE_SERVICE_ACCESS"
 
-  auth_enabled       = true
+  auth_enabled            = true
   transit_encryption_mode = "SERVER_AUTHENTICATION"
 
   # Standard tier only
@@ -31,7 +31,7 @@ resource "google_redis_instance" "cache" {
 
   # Redis configuration
   redis_configs = {
-    maxmemory-policy = "allkeys-lru"
+    maxmemory-policy       = "allkeys-lru"
     notify-keyspace-events = "Ex"
   }
 

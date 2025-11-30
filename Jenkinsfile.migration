@@ -1,8 +1,8 @@
 import groovy.transform.Field
 
-@Field final String DEV_ENV = 'dev'
+@Field final String TEST_ENV = 'test'
 @Field final String PROD_ENV = 'prod'
-@Field final String GCP_PROJECT_DEV = 'vhealth-dev'
+@Field final String GCP_PROJECT_DEV = 'vhealth-test'
 @Field final String GCP_PROJECT_PROD = 'vhealth-prod'
 
 
@@ -10,7 +10,7 @@ String getGCPProject(String env_name) {
   switch (env_name) {
     case PROD_ENV:
       return GCP_PROJECT_PROD
-    case DEV_ENV:
+    case TEST_ENV:
       return GCP_PROJECT_DEV
     default:
       return null
@@ -28,12 +28,13 @@ pipeline {
         )
         choice(
             name: 'ENVIRONMENT',
-            choices: [DEV_ENV, PROD_ENV],
+            choices: [TEST_ENV, PROD_ENV],
             description: 'Target environment for migration',
         )
         string(
             name: 'BRANCH_NAME',
             description: 'Git branch to checkout for migration scripts',
+            defaultValue: 'develop',
         )
         choice(
             name: 'MIGRATION_ACTION',
@@ -50,6 +51,7 @@ pipeline {
         GCP_PROJECT = "${getGCPProject(params.ENVIRONMENT)}"
         VENV_PATH = "${WORKSPACE}/venv"
         PYTHONPATH = "${WORKSPACE}/scripts"
+        ENV_CREDENTIAL = "gcp-service-account-key-${params.ENVIRONMENT}"
     }
 
     stages {
@@ -79,17 +81,8 @@ pipeline {
                     echo "========================================="
 
                     // Validate parameters
-                    if (params.ENVIRONMENT != DEV_ENV && params.ENVIRONMENT != PROD_ENV) {
+                    if (params.ENVIRONMENT != TEST_ENV && params.ENVIRONMENT != PROD_ENV) {
                         error("Invalid ENVIRONMENT: ${params.ENVIRONMENT}")
-                    }
-
-                    // Add manual approval for production
-                    if (params.ENVIRONMENT == PROD_ENV) {
-                        timeout(time: 10, unit: 'MINUTES') {
-                            input message: "⚠️ WARNING: You are about to run migrations on PRODUCTION. Continue?",
-                                  ok: 'Yes, proceed with production migration',
-                                  submitter: 'admin'
-                        }
                     }
                 }
             }
@@ -136,30 +129,35 @@ pipeline {
         stage('Fetch Database Credentials') {
             steps {
                 script {
-                    echo "Fetching database credentials from GCP Secret Manager..."
-                    echo "GCP Project: ${env.GCP_PROJECT}"
+                    withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                        sh """
+                            # Activate service account for gcloud CLI
+                            echo "Activating service account..."
+                            gcloud auth activate-service-account --key-file=\$GOOGLE_APPLICATION_CREDENTIALS
+                            gcloud config set project ${env.GCP_PROJECT}
+                            echo "✓ Service account activated"
 
-                    sh """
-                        # Fetch secrets from GCP Secret Manager
-                        echo "Fetching DB credentials for environment: ${params.ENVIRONMENT}"
+                            # Fetch secrets from GCP Secret Manager
+                            echo "Fetching DB credentials for environment: ${params.ENVIRONMENT}"
 
-                        DB_NAME=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-name" --project="${env.GCP_PROJECT}")
-                        DB_USER=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-username" --project="${env.GCP_PROJECT}")
-                        DB_PASSWORD=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-password" --project="${env.GCP_PROJECT}")
-                        DB_HOST=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-host" --project="${env.GCP_PROJECT}")
+                            DB_NAME=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-name" --project="${env.GCP_PROJECT}")
+                            DB_USER=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-username" --project="${env.GCP_PROJECT}")
+                            DB_PASSWORD=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-password" --project="${env.GCP_PROJECT}")
+                            DB_HOST=\$(gcloud secrets versions access latest --secret="vhealth-${params.ENVIRONMENT}-db-host" --project="${env.GCP_PROJECT}")
 
-                        # Build PostgreSQL connection URL
-                        # Format: postgresql://username:password@host:5432/database
-                        echo "postgresql://\${DB_USER}:\${DB_PASSWORD}@\${DB_HOST}:5432/\${DB_NAME}" > ${WORKSPACE}/db_url.txt
+                            # Build PostgreSQL connection URL
+                            # Format: postgresql://username:password@host:5432/database
+                            echo "postgresql://\${DB_USER}:\${DB_PASSWORD}@\${DB_HOST}:5432/\${DB_NAME}" > ${WORKSPACE}/db_url.txt
 
-                        if [ -s ${WORKSPACE}/db_url.txt ]; then
-                            echo "✓ Database URL constructed successfully"
+                            if [ -s ${WORKSPACE}/db_url.txt ]; then
+                                echo "✓ Database URL constructed successfully"
 
-                        else
-                            echo "✗ Failed to construct database URL"
-                            exit 1
-                        fi
-                    """
+                            else
+                                echo "✗ Failed to construct database URL"
+                                exit 1
+                            fi
+                        """
+                    }
                 }
             }
         }

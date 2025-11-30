@@ -1,12 +1,13 @@
-output "artifact_registry_repository" {
-  description = "Artifact Registry repository name"
-  value       = module.artifact_registry.repository_name
-}
+# Commented out due to existing resources
+# output "artifact_registry_repository" {
+#   description = "Artifact Registry repository name"
+#   value       = module.artifact_registry.repository_name
+# }
 
-output "artifact_registry_url" {
-  description = "Artifact Registry repository URL"
-  value       = module.artifact_registry.repository_url
-}
+# output "artifact_registry_url" {
+#   description = "Artifact Registry repository URL"
+#   value       = module.artifact_registry.repository_url
+# }
 
 output "cloud_run_service_account_email" {
   description = "Cloud Run service account email"
@@ -33,10 +34,11 @@ output "cloud_sql_connection_name" {
   value       = module.cloud_sql.connection_name
 }
 
-output "cloud_sql_database_name" {
-  description = "Cloud SQL database name"
-  value       = module.cloud_sql.database_name
-}
+# Commented out since database already exists
+# output "cloud_sql_database_name" {
+#   description = "Cloud SQL database name"
+#   value       = module.cloud_sql.database_name
+# }
 
 output "cloud_sql_public_ip" {
   description = "Cloud SQL public IP address"
@@ -109,31 +111,31 @@ output "region" {
   value       = var.region
 }
 
-# Cloud Scheduler Outputs
-output "scheduler_job_name" {
-  description = "Cloud Scheduler job name"
-  value       = module.cloud_scheduler.job_name
-}
+# Cloud Scheduler Outputs - commented out due to existing resources
+# output "scheduler_job_name" {
+#   description = "Cloud Scheduler job name"
+#   value       = module.cloud_scheduler.job_name
+# }
 
-output "scheduler_job_id" {
-  description = "Cloud Scheduler job ID"
-  value       = module.cloud_scheduler.job_id
-}
+# output "scheduler_job_id" {
+#   description = "Cloud Scheduler job ID"
+#   value       = module.cloud_scheduler.job_id
+# }
 
-output "scheduler_schedule" {
-  description = "Cloud Scheduler cron schedule"
-  value       = module.cloud_scheduler.schedule
-}
+# output "scheduler_schedule" {
+#   description = "Cloud Scheduler cron schedule"
+#   value       = module.cloud_scheduler.schedule
+# }
 
-output "scheduler_target_uri" {
-  description = "Cloud Scheduler HTTP target URI"
-  value       = module.cloud_scheduler.http_target_uri
-}
+# output "scheduler_target_uri" {
+#   description = "Cloud Scheduler HTTP target URI"
+#   value       = module.cloud_scheduler.http_target_uri
+# }
 
-output "scheduler_state" {
-  description = "Cloud Scheduler job state"
-  value       = module.cloud_scheduler.state
-}
+# output "scheduler_state" {
+#   description = "Cloud Scheduler job state"
+#   value       = module.cloud_scheduler.state
+# }
 
 output "scheduler_service_account_email" {
   description = "Cloud Scheduler service account email"

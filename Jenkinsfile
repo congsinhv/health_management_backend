@@ -4,7 +4,7 @@ pipeline {
     parameters {
         choice(
             name: 'ENVIRONMENT',
-            choices: ['dev', 'prod'],
+            choices: ['test', 'prod'],
             description: 'Target environment for deployment'
         )
         string(
@@ -22,7 +22,8 @@ pipeline {
     environment {
         GCP_REGION = 'asia-southeast1'
         ENV = "${params.ENVIRONMENT}"
-        GCP_PROJECT_ID = "${params.ENVIRONMENT == 'prod' ? 'vhealth-prod' : 'vhealth-dev'}"
+        CUSTOM_DOMAIN = "${params.ENVIRONMENT == 'prod' ? 'vhealth.io.vn' : params.ENVIRONMENT + '.vhealth.io.vn'}"
+        GCP_PROJECT_ID = "vhealth-${params.ENVIRONMENT}"
         TF_BACKEND_BUCKET = "${GCP_PROJECT_ID}-backend-tfstate"
 
         ARTIFACT_REGISTRY_REPO = "vhealth-backend-${params.ENVIRONMENT}"
@@ -35,7 +36,7 @@ pipeline {
 
         TF_IN_AUTOMATION = 'true'
         TF_VAR_FILE = "terraform/environments/${params.ENVIRONMENT}.tfvars"
-        GOOGLE_APPLICATION_CREDENTIALS = credentials('gcp-service-account-key')
+        ENV_CREDENTIAL = "gcp-service-account-key-${params.ENVIRONMENT}"
     }
 
     options {
@@ -80,32 +81,36 @@ pipeline {
         stage('Authenticate to GCP') {
             steps {
                 script {
-                    echo 'Authenticating to GCP...'
-                    sh '''
-                        gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
-                        gcloud config set project ${GCP_PROJECT_ID}
-                        gcloud config set compute/region ${GCP_REGION}
-                        gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet
-                    '''
+                    withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                        sh """
+                            echo 'Using credentials: ${ENV_CREDENTIAL}'
+                            gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+                            gcloud config set project "${GCP_PROJECT_ID}"
+                            gcloud config set compute/region "${GCP_REGION}"
+                            gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+                        """
+                    }
                 }
             }
         }
 
         stage('Terraform Init & Validate') {
             steps {
-                dir('terraform') {
-                    script {
-                        echo 'Initializing Terraform...'
-                        sh """
-                            terraform init \
-                                -backend-config="bucket=${TF_BACKEND_BUCKET}" \
-                                -backend-config="prefix=terraform/state/${params.ENVIRONMENT}" \
-                                -reconfigure \
-                                -no-color \
-                                -upgrade
-                        """
-                        echo 'Validating Terraform configuration...'
-                        sh 'terraform validate -no-color'
+                withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    dir('terraform') {
+                        script {
+                            echo 'Initializing Terraform...'
+                            sh """
+                                terraform init \
+                                    -backend-config="bucket=${TF_BACKEND_BUCKET}" \
+                                    -backend-config="prefix=terraform/state/${params.ENVIRONMENT}" \
+                                    -reconfigure \
+                                    -no-color \
+                                    -upgrade
+                            """
+                            echo 'Validating Terraform configuration...'
+                            sh 'terraform validate -no-color'
+                        }
                     }
                 }
             }
@@ -113,51 +118,57 @@ pipeline {
 
         stage('Fetch Secrets from GCP Secret Manager') {
             steps {
-                script {
-                    def fetchSecret = { secretName, placeholder ->
-                        try {
-                            return sh(
-                                script: """
-                                    gcloud secrets versions access latest \
-                                        --secret=vhealth-${params.ENVIRONMENT}-${secretName} \
-                                        --project=${GCP_PROJECT_ID} 2>/dev/null \
-                                    || echo '${placeholder}'
-                                """,
-                                returnStdout: true
-                            ).trim()
-                        } catch (Exception e) {
-                            return placeholder
+                withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    script {
+                        def fetchSecret = { secretName, placeholder ->
+                            try {
+                                return sh(
+                                    script: """
+                                        gcloud secrets versions access latest \
+                                            --secret=vhealth-${params.ENVIRONMENT}-${secretName} \
+                                            --project=${GCP_PROJECT_ID} 2>/dev/null \
+                                        || echo '${placeholder}'
+                                    """,
+                                    returnStdout: true
+                                ).trim()
+                            } catch (Exception e) {
+                                return placeholder
+                            }
                         }
+
+                        echo 'Fetching secrets from GCP Secret Manager...'
+
+                        env.TF_VAR_secret_key = sh(
+                            script: "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'",
+                            returnStdout: true
+                        ).trim()
+
+                        env.TF_VAR_google_client_id     = fetchSecret("google-client-id", "placeholder-client-id")
+                        env.TF_VAR_google_client_secret = fetchSecret("google-client-secret", "placeholder-client-secret")
+                        env.TF_VAR_mail_username        = fetchSecret("mail-username", "placeholder@example.com")
+                        env.TF_VAR_mail_password        = fetchSecret("mail-password", "placeholder-password")
+                        env.TF_VAR_mail_from            = fetchSecret("mail-from", "no-reply@vhealth.io.vn")
+                        env.TF_VAR_mail_server          = fetchSecret("mail-server", "smtp.gmail.com")
+
+                        echo 'Secrets fetched successfully!'
                     }
-
-                    echo 'Fetching secrets from GCP Secret Manager...'
-
-                    env.TF_VAR_secret_key = sh(
-                        script: "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'",
-                        returnStdout: true
-                    ).trim()
-
-                    env.TF_VAR_google_client_id     = fetchSecret("google-client-id", "placeholder-client-id")
-                    env.TF_VAR_google_client_secret = fetchSecret("google-client-secret", "placeholder-client-secret")
-                    env.TF_VAR_mail_username        = fetchSecret("mail-username", "placeholder@example.com")
-                    env.TF_VAR_mail_password        = fetchSecret("mail-password", "placeholder-password")
-                    env.TF_VAR_mail_from            = fetchSecret("mail-from", "no-reply@vhealth.io.vn")
-                    env.TF_VAR_mail_server          = fetchSecret("mail-server", "smtp.gmail.com")
-
-                    echo 'Secrets fetched successfully!'
                 }
             }
         }
 
         stage('Import VPC Connection') {
             steps {
-                dir('terraform') {
-                    script {
-                        echo 'Importing existing VPC peering connection (if not already imported)...'
-                        sh """
-                            terraform import google_service_networking_connection.private_vpc_connection \
-                                ${GCP_PROJECT_ID}:default:servicenetworking.googleapis.com || true
-                        """
+                withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    dir('terraform') {
+                        script {
+                            echo 'Importing existing VPC peering connection (if not already imported)...'
+                            sh """
+                                terraform import -no-color \
+                                    -var-file="environments/${params.ENVIRONMENT}.tfvars" \
+                                    google_service_networking_connection.private_vpc_connection \
+                                    ${GCP_PROJECT_ID}:servicenetworking.googleapis.com:default || true
+                            """
+                        }
                     }
                 }
             }
@@ -167,21 +178,23 @@ pipeline {
             parallel {
                 stage('Setup Q&A Models') {
                     steps {
-                        script {
-                            echo 'Setting up Q&A model storage...'
+                        withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                            script {
+                                echo 'Setting up Q&A model storage...'
 
-                            env.GCS_MODEL_BUCKET = "vhealth-${params.ENVIRONMENT}-models"
+                                env.GCS_MODEL_BUCKET = "vhealth-${params.ENVIRONMENT}-models"
 
-                            def bucketExists = sh(
-                                script: "gsutil ls -b gs://${GCS_MODEL_BUCKET} 2>/dev/null || echo 'not_found'",
-                                returnStdout: true
-                            ).trim()
-                            if (bucketExists.contains('not_found')) {
-                                echo "Creating GCS bucket: ${GCS_MODEL_BUCKET}"
-                                sh """
-                                    gsutil mb -p ${GCP_PROJECT_ID} -l ${GCP_REGION} gs://${GCS_MODEL_BUCKET}
-                                    gsutil lifecycle set - gs://${GCS_MODEL_BUCKET} <<EOF
-{
+                                def bucketExists = sh(
+                                    script: "gsutil ls -b gs://${GCS_MODEL_BUCKET} 2>/dev/null || echo 'not_found'",
+                                    returnStdout: true
+                                ).trim()
+                                if (bucketExists.contains('not_found')) {
+                                    echo "Creating GCS bucket: ${GCS_MODEL_BUCKET}"
+                                    sh """
+                                        gsutil mb -p ${GCP_PROJECT_ID} -l ${GCP_REGION} gs://${GCS_MODEL_BUCKET}
+                                    """
+                                    // Set lifecycle policy using a temp file (heredocs don't work reliably in Jenkins sh blocks)
+                                    writeFile file: 'lifecycle.json', text: '''{
   "lifecycle": {
     "rule": [
       {
@@ -190,18 +203,20 @@ pipeline {
       }
     ]
   }
-}
-EOF
-                                """
-                            } else {
-                                echo "GCS bucket already exists: ${GCS_MODEL_BUCKET}"
-                            }
-                            def modelExists = sh(
-                                script: "gsutil -q stat gs://${GCS_MODEL_BUCKET}/models/vietnamese-sbert/config.json || echo 'not_found'",
-                                returnStdout: true
-                            ).trim()
-                            if (modelExists.contains('not_found')) {
-                                echo """
+}'''
+                                    sh """
+                                        gsutil lifecycle set lifecycle.json gs://${GCS_MODEL_BUCKET}
+                                        rm -f lifecycle.json
+                                    """
+                                } else {
+                                    echo "GCS bucket already exists: ${GCS_MODEL_BUCKET}"
+                                }
+                                def modelExists = sh(
+                                    script: "gsutil -q stat gs://${GCS_MODEL_BUCKET}/models/vietnamese-sbert/config.json || echo 'not_found'",
+                                    returnStdout: true
+                                ).trim()
+                                if (modelExists.contains('not_found')) {
+                                    echo """
 ========================================
 WARNING: Q&A model files not found in GCS!
 ========================================
@@ -212,47 +227,50 @@ To upload model files, run:
 
 The service will attempt to download from Hugging Face as fallback.
 ========================================
-                                """
-                            } else {
-                                echo "Model files found in GCS bucket"
-                            }
-                            // Ensure OpenRouter API key secret exists
-                            def secretExists = sh(
-                                script: "gcloud secrets describe vhealth-${params.ENVIRONMENT}-openrouter-api-key --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'not_found'",
-                                returnStdout: true
-                            ).trim()
-                            if (secretExists.contains('not_found')) {
-                                echo """
+                                    """
+                                } else {
+                                    echo "Model files found in GCS bucket"
+                                }
+                                // Ensure OpenAI API key secret exists
+                                def secretExists = sh(
+                                    script: "gcloud secrets describe vhealth-${params.ENVIRONMENT}-openai-api-key --project=${GCP_PROJECT_ID} 2>/dev/null || echo 'not_found'",
+                                    returnStdout: true
+                                ).trim()
+                                if (secretExists.contains('not_found')) {
+                                    echo """
 ========================================
-WARNING: OpenRouter API key secret not found!
+WARNING: OpenAI API key secret not found!
 ========================================
 To create the secret, run:
-  echo -n 'your-api-key-here' | gcloud secrets create vhealth-${params.ENVIRONMENT}-openrouter-api-key \\
+  echo -n 'your-api-key-here' | gcloud secrets create vhealth-${params.ENVIRONMENT}-openai-api-key \\
     --project=${GCP_PROJECT_ID} \\
     --data-file=- \\
     --replication-policy=automatic
 
 AI summarization will not be available without this secret.
 ========================================
-                                """
-                            } else {
-                                echo "OpenRouter API key secret exists"
+                                    """
+                                } else {
+                                    echo "OpenAI API key secret exists"
+                                }
                             }
                         }
                     }
                 }
                 stage('Terraform Plan') {
                     steps {
-                        dir('terraform') {
-                            script {
-                                echo 'Planning Terraform changes...'
-                                sh """
-                                    terraform plan \
-                                        -var-file="environments/${params.ENVIRONMENT}.tfvars" \
-                                        -out=tfplan \
-                                        -no-color \
-                                        -compact-warnings
-                                """
+                        withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                            dir('terraform') {
+                                script {
+                                    echo 'Planning Terraform changes...'
+                                    sh """
+                                        terraform plan \
+                                            -var-file="environments/${params.ENVIRONMENT}.tfvars" \
+                                            -out=tfplan \
+                                            -no-color \
+                                            -compact-warnings
+                                    """
+                                }
                             }
                         }
                     }
@@ -260,31 +278,19 @@ AI summarization will not be available without this secret.
             }
         }
 
-        stage('Approve Terraform Apply') {
-            when {
-                expression { return params.ENVIRONMENT == 'prod' }
-            }
-            steps {
-                script {
-                    echo 'Production deployment detected. Manual approval required.'
-                    input message: 'Apply Terraform changes to PRODUCTION?',
-                          ok: 'Deploy',
-                          submitter: 'admin'
-                }
-            }
-        }
-
         stage('Terraform Apply') {
             steps {
-                dir('terraform') {
-                    script {
-                        echo 'Applying Terraform changes...'
-                        sh 'terraform apply -auto-approve -no-color tfplan'
+                withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    dir('terraform') {
+                        script {
+                            echo 'Applying Terraform changes...'
+                            sh 'terraform apply -auto-approve -no-color tfplan'
 
-                        sh '''
-                            terraform output -json > terraform_outputs.json
-                            cat terraform_outputs.json
-                        '''
+                            sh '''
+                                terraform output -json > terraform_outputs.json
+                                cat terraform_outputs.json
+                            '''
+                        }
                     }
                 }
             }
@@ -371,133 +377,137 @@ AI summarization will not be available without this secret.
             }
         }
 
-        stage('Approve Cloud Run Deployment') {
-            when {
-                expression { return params.ENVIRONMENT == 'prod' }
-            }
-            steps {
-                script {
-                    echo 'Production deployment detected. Manual approval required.'
-                    input message: 'Deploy to Cloud Run PRODUCTION?',
-                          ok: 'Deploy',
-                          submitter: 'admin'
-                }
-            }
-        }
-
         stage('Deploy to Cloud Run') {
             steps {
-                script {
-                    echo 'Deploying to Cloud Run...'
+                withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    script {
+                        echo 'Deploying to Cloud Run...'
 
-                    def cloudRunService = sh(
-                        script: 'cd terraform && terraform output -raw cloud_run_service_name',
-                        returnStdout: true
-                    ).trim()
+                        def cloudRunService = sh(
+                            script: 'cd terraform && terraform output -raw cloud_run_service_name',
+                            returnStdout: true
+                        ).trim()
 
-                    def serviceAccount = sh(
-                        script: 'cd terraform && terraform output -raw cloud_run_service_account_email',
-                        returnStdout: true
-                    ).trim()
+                        def serviceAccount = sh(
+                            script: 'cd terraform && terraform output -raw cloud_run_service_account_email',
+                            returnStdout: true
+                        ).trim()
 
-                    def vpcConnector = sh(
-                        script: 'cd terraform && terraform output -raw vpc_connector_id',
-                        returnStdout: true
-                    ).trim()
+                        def vpcConnector = sh(
+                            script: 'cd terraform && terraform output -raw vpc_connector_id',
+                            returnStdout: true
+                        ).trim()
 
-                    def revisionSuffix = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
-                    sh """
-                        gcloud run deploy ${cloudRunService} \
-                            --image ${IMAGE_FULL} \
-                            --platform managed \
-                            --region ${GCP_REGION} \
-                            --project ${GCP_PROJECT_ID} \
-                            --service-account ${serviceAccount} \
-                            --vpc-connector ${vpcConnector} \
-                            --vpc-egress private-ranges-only \
-                            --set-env-vars "DEBUG=${params.ENVIRONMENT == 'dev' ? 'True' : 'False'}" \
-                            --set-env-vars "LOG_LEVEL=INFO" \
-                            --set-env-vars "APP_NAME=VHealth Backend" \
-                            --set-env-vars "ENVIRONMENT=${params.ENVIRONMENT}" \
-                            --set-env-vars "QA_ENABLED=true" \
-                            --set-env-vars "GCP_PROJECT_ID=${GCP_PROJECT_ID}" \
-                            --set-env-vars "GCP_MODEL_BUCKET=vhealth-${params.ENVIRONMENT}-models" \
-                            --set-env-vars "MODEL_AUTO_DOWNLOAD=true" \
-                            --set-env-vars "GCP_MODEL_BLOB_PATH=models/vietnamese-sbert/" \
-                            --set-env-vars "GCP_DATA_BLOB_PATH=data/" \
-                            --set-env-vars "CUSTOM_DOMAIN=${params.ENVIRONMENT == 'prod' ? 'portal' : params.ENVIRONMENT}.vhealth.io.vn" \
-                            --set-secrets "DATABASE_URL=vhealth-${params.ENVIRONMENT}-database-url:latest" \
-                            --set-secrets "SECRET_KEY=vhealth-${params.ENVIRONMENT}-secret-key:latest" \
-                            --set-secrets "GOOGLE_CLIENT_ID=vhealth-${params.ENVIRONMENT}-google-client-id:latest" \
-                            --set-secrets "GOOGLE_CLIENT_SECRET=vhealth-${params.ENVIRONMENT}-google-client-secret:latest" \
-                            --set-secrets "MAIL_USERNAME=vhealth-${params.ENVIRONMENT}-mail-username:latest" \
-                            --set-secrets "MAIL_PASSWORD=vhealth-${params.ENVIRONMENT}-mail-password:latest" \
-                            --set-secrets "MAIL_FROM=vhealth-${params.ENVIRONMENT}-mail-from:latest" \
-                            --set-secrets "MAIL_SERVER=vhealth-${params.ENVIRONMENT}-mail-server:latest" \
-                            --set-secrets "OPENAI_API_KEY=vhealth-${params.ENVIRONMENT}-openai-api-key:latest" \
-                            --set-env-vars "WEBUI_URL=${params.ENVIRONMENT == 'prod' ? 'https://vhealth.io.vn' : 'https://dev.vhealth.io.vn'}" \
-                            --cpu 2 \
-                            --memory 2Gi \
-                            --min-instances 0 \
-                            --max-instances 10 \
-                            --timeout 300 \
-                            --concurrency 15 \
-                            --allow-unauthenticated \
-                            --revision-suffix ${revisionSuffix} \
-                            --no-traffic \
-                            --quiet
-                    """
-                    sh """
-                        gcloud run services update-traffic ${cloudRunService} \
-                            --to-revisions ${cloudRunService}-${revisionSuffix}=100 \
-                            --region ${GCP_REGION} \
-                            --project ${GCP_PROJECT_ID} \
-                            --quiet
-                    """
+                        def revisionSuffix = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
+                        
+                        // Check if service already exists
+                        def serviceExists = sh(
+                            script: "gcloud run services describe ${cloudRunService} --region=${GCP_REGION} --project=${GCP_PROJECT_ID} --format='value(name)' 2>/dev/null || echo ''",
+                            returnStdout: true
+                        ).trim()
+                        
+                        def noTrafficFlag = serviceExists ? '--no-traffic' : ''
+                        
+                        sh """
+                            gcloud run deploy ${cloudRunService} \
+                                --image ${IMAGE_FULL} \
+                                --platform managed \
+                                --region ${GCP_REGION} \
+                                --project ${GCP_PROJECT_ID} \
+                                --service-account ${serviceAccount} \
+                                --vpc-connector ${vpcConnector} \
+                                --vpc-egress private-ranges-only \
+                                --set-env-vars "DEBUG=${params.ENVIRONMENT == 'test' ? 'True' : 'False'}" \
+                                --set-env-vars "LOG_LEVEL=INFO" \
+                                --set-env-vars "APP_NAME=VHealth Backend" \
+                                --set-env-vars "ENVIRONMENT=${params.ENVIRONMENT}" \
+                                --set-env-vars "QA_ENABLED=true" \
+                                --set-env-vars "GCP_PROJECT_ID=${GCP_PROJECT_ID}" \
+                                --set-env-vars "GCP_MODEL_BUCKET=vhealth-${params.ENVIRONMENT}-models" \
+                                --set-env-vars "MODEL_AUTO_DOWNLOAD=true" \
+                                --set-env-vars "GCP_MODEL_BLOB_PATH=models/vietnamese-sbert/" \
+                                --set-env-vars "GCP_DATA_BLOB_PATH=data/" \
+                                --set-env-vars "CUSTOM_DOMAIN=${env.CUSTOM_DOMAIN}" \
+                                --set-env-vars "^@^CORS_ORIGINS=https://${env.CUSTOM_DOMAIN},https://api.${env.CUSTOM_DOMAIN}" \
+                                --set-secrets "DATABASE_URL=vhealth-${params.ENVIRONMENT}-database-url:latest" \
+                                --set-secrets "SECRET_KEY=vhealth-${params.ENVIRONMENT}-secret-key:latest" \
+                                --set-secrets "GOOGLE_CLIENT_ID=vhealth-${params.ENVIRONMENT}-google-client-id:latest" \
+                                --set-secrets "GOOGLE_CLIENT_SECRET=vhealth-${params.ENVIRONMENT}-google-client-secret:latest" \
+                                --set-secrets "MAIL_USERNAME=vhealth-${params.ENVIRONMENT}-mail-username:latest" \
+                                --set-secrets "MAIL_PASSWORD=vhealth-${params.ENVIRONMENT}-mail-password:latest" \
+                                --set-secrets "MAIL_FROM=vhealth-${params.ENVIRONMENT}-mail-from:latest" \
+                                --set-secrets "MAIL_SERVER=vhealth-${params.ENVIRONMENT}-mail-server:latest" \
+                                --set-secrets "OPENAI_API_KEY=vhealth-${params.ENVIRONMENT}-openai-api-key:latest" \
+                                --set-env-vars "WEBUI_URL=https://${env.CUSTOM_DOMAIN}" \
+                                --cpu 2 \
+                                --memory 2Gi \
+                                --min-instances 0 \
+                                --max-instances 10 \
+                                --timeout 300 \
+                                --concurrency 15 \
+                                --allow-unauthenticated \
+                                --revision-suffix ${revisionSuffix} \
+                                ${noTrafficFlag} \
+                                --quiet
+                        """
+                        
+                        // Only update traffic if service already existed (blue-green deployment)
+                        if (serviceExists) {
+                            sh """
+                                gcloud run services update-traffic ${cloudRunService} \
+                                    --to-revisions ${cloudRunService}-${revisionSuffix}=100 \
+                                    --region ${GCP_REGION} \
+                                    --project ${GCP_PROJECT_ID} \
+                                    --quiet
+                            """
+                        }
 
-                    def serviceUrl = sh(
-                        script: "gcloud run services describe ${cloudRunService} --region=${GCP_REGION} --project=${GCP_PROJECT_ID} --format='value(status.url)'",
-                        returnStdout: true
-                    ).trim()
+                        def serviceUrl = sh(
+                            script: "gcloud run services describe ${cloudRunService} --region=${GCP_REGION} --project=${GCP_PROJECT_ID} --format='value(status.url)'",
+                            returnStdout: true
+                        ).trim()
 
-                    echo "=========================================="
-                    echo "Service deployed successfully!"
-                    echo "Revision: ${revisionSuffix}"
-                    echo "Service URL: ${serviceUrl}"
-                    echo "=========================================="
+                        echo "=========================================="
+                        echo "Service deployed successfully!"
+                        echo "Revision: ${revisionSuffix}"
+                        echo "Service URL: ${serviceUrl}"
+                        echo "=========================================="
+                    }
                 }
             }
         }
 
         stage('Smoke Tests') {
             steps {
-                script {
-                    echo 'Running smoke tests...'
+                withCredentials([file(credentialsId: "${ENV_CREDENTIAL}", variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    script {
+                        echo 'Running smoke tests...'
 
-                    def cloudRunService = sh(
-                        script: 'cd terraform && terraform output -raw cloud_run_service_name',
-                        returnStdout: true
-                    ).trim()
+                        def cloudRunService = sh(
+                            script: 'cd terraform && terraform output -raw cloud_run_service_name',
+                            returnStdout: true
+                        ).trim()
 
-                    def serviceUrl = sh(
-                        script: "gcloud run services describe ${cloudRunService} --region=${GCP_REGION} --project=${GCP_PROJECT_ID} --format='value(status.url)'",
-                        returnStdout: true
-                    ).trim()
+                        def serviceUrl = sh(
+                            script: "gcloud run services describe ${cloudRunService} --region=${GCP_REGION} --project=${GCP_PROJECT_ID} --format='value(status.url)'",
+                            returnStdout: true
+                        ).trim()
 
-                    sh """
-                        echo "Testing service at: ${serviceUrl}"
+                        sh """
+                            echo "Testing service at: ${serviceUrl}"
 
-                        echo "Testing health endpoint..."
-                        curl -f ${serviceUrl}/health || exit 1
+                            echo "Testing health endpoint..."
+                            curl -f ${serviceUrl}/health || exit 1
 
-                        echo "Testing root endpoint..."
-                        curl -f ${serviceUrl}/ || exit 1
+                            echo "Testing root endpoint..."
+                            curl -f ${serviceUrl}/ || exit 1
 
-                        echo "Testing Q&A health endpoint..."
-                        curl -f ${serviceUrl}/api/v1/qa/health || exit 1
+                            echo "Testing Q&A health endpoint..."
+                            curl -f ${serviceUrl}/api/v1/qa/health || exit 1
 
-                        echo "All smoke tests passed!"
-                    """
+                            echo "All smoke tests passed!"
+                        """
+                    }
                 }
             }
         }

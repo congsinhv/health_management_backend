@@ -8,10 +8,11 @@ output "connection_name" {
   value       = google_sql_database_instance.instance.connection_name
 }
 
-output "database_name" {
-  description = "Database name"
-  value       = google_sql_database.database.name
-}
+# Database name output - commented out since database already exists
+# output "database_name" {
+#   description = "Database name"
+#   value       = google_sql_database.database.name
+# }
 
 output "public_ip_address" {
   description = "Public IP address"
