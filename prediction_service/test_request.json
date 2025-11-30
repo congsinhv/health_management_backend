@@ -1,0 +1,16 @@
+{
+  "age": 30,
+  "gender": "male",
+  "height": 1.75,
+  "weight": 85,
+  "family_history": true,
+  "FAVC": "yes",
+  "FCVC": 2.5,
+  "NCP": 3,
+  "CAEC": "Sometimes",
+  "CH2O": 2.5,
+  "FAF": 1.0,
+  "TUE": 3.0,
+  "CALC": "Sometimes",
+  "MTRANS": "Automobile"
+}
