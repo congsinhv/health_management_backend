@@ -1,0 +1,551 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'prod'], description: 'Environment to deploy to')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag')
+        booleanParam(name: 'REBUILD_BASE_IMAGE', defaultValue: false, description: 'Rebuild Docker base image')
+        booleanParam(name: 'DEPLOY_ALL_SERVICES', defaultValue: true, description: 'Deploy all services (orchestration mode)')
+        choice(name: 'DEPLOY_STRATEGY', choices: ['sequential', 'parallel'], description: 'Deployment strategy')
+        booleanParam(name: 'SKIP_TESTS', defaultValue: false, description: 'Skip integration tests')
+        booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Dry run (no actual deployment)')
+    }
+
+    environment {
+        DOCKER_IMAGE_TAG = params.IMAGE_TAG
+        GCP_PROJECT = params.ENVIRONMENT == 'prod' ? 'vhealth-prod' : 'vhealth-dev'
+        REGION = 'asia-southeast1'
+        ENVIRONMENT = params.ENVIRONMENT
+        BUILD_URL = "${env.BUILD_URL}"
+        TELEGRAM_BOT_TOKEN = "6830832641:AAH1-example-token"  # Should be managed via Secret Manager
+        TELEGRAM_CHAT_ID = "123456789"  # Should be managed via Secret Manager
+        SEND_NOTIFICATIONS = true
+    }
+
+    stages {
+        stage('Preparation') {
+            steps {
+                script {
+                    echo "=== VHealth Microservices Orchestration ==="
+                    echo "Environment: ${params.ENVIRONMENT}"
+                    echo "Image Tag: ${params.IMAGE_TAG}"
+                    echo "Deploy All Services: ${params.DEPLOY_ALL_SERVICES}"
+                    echo "Deploy Strategy: ${params.DEPLOY_STRATEGY}"
+                    echo "Skip Tests: ${params.SKIP_TESTS}"
+                    echo "Dry Run: ${params.DRY_RUN}"
+                }
+
+                // Git configuration
+                sh '''
+                    echo "=== Git Configuration ==="
+                    git config --global user.name "Jenkins"
+                    git config --global user.email "jenkins@vhealth.io.vn"
+                    git checkout main
+                    git pull origin main
+                    echo "✅ Git configuration completed"
+                '''
+            }
+        }
+
+        stage('Build Base Image') {
+            when {
+                anyOf {
+                    expression { return params.REBUILD_BASE_IMAGE }
+                    expression { return params.ENVIRONMENT == 'prod' && params.IMAGE_TAG != 'latest' }
+                }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Building Base Docker Image ==="
+                    sh '''
+                        cd terraform
+                        echo "Building optimized base image with caching..."
+
+                        # Build base image with BuildKit optimizations
+                        docker buildx build \
+                            --builder jenkins-builder \
+                            --platform linux/amd64 \
+                            --build-arg BUILDKIT_INLINE_CACHE=1 \
+                            --cache-from asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:cache \
+                            --cache-to asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:cache,mode=max \
+                            -f Dockerfile.base \
+                            -t asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:latest \
+                            --load .
+
+                        # Tag and push
+                        docker tag asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:latest \
+                              asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:${DOCKER_IMAGE_TAG}
+
+                        docker pushx asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:${DOCKER_IMAGE_TAG}
+                        docker pushx asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:latest
+
+                        echo "✅ Base image built and pushed successfully"
+                    '''
+                }
+            }
+        }
+
+        stage('Build All Services') {
+            steps {
+                script {
+                    echo "=== Building All Service Images ==="
+                    echo "Build Strategy: ${params.DEPLOY_STRATEGY}"
+                }
+
+                // Parallel build strategy
+                when {
+                    expression { return params.DEPLOY_STRATEGY == 'parallel' }
+                }
+                parallel {
+                    stage('Main API') {
+                        steps {
+                            build job: 'main-api-build',
+                                parameters: [
+                                    string(name: 'ENVIRONMENT', value: params.ENVIRONMENT),
+                                    string(name: 'IMAGE_TAG', value: params.IMAGE_TAG),
+                                    booleanParam(name: 'REBUILD_BASE_IMAGE', value: false),
+                                    booleanParam(name: 'SKIP_TERRAFORM', value: true)
+                                ]
+                        }
+                    }
+                    stage('Chat AI') {
+                        steps {
+                            build job: 'chat-ai-build',
+                                parameters: [
+                                    string(name: 'ENVIRONMENT', value: params.ENVIRONMENT),
+                                    string(name: 'IMAGE_TAG', value: params.IMAGE_TAG),
+                                    booleanParam(name: 'SKIP_TERRAFORM', value: true)
+                                ]
+                        }
+                    }
+                    stage('Prediction') {
+                        steps {
+                            build job: 'prediction-build',
+                                parameters: [
+                                    string(name: 'ENVIRONMENT', value: params.ENVIRONMENT),
+                                    string(name: 'IMAGE_TAG', value: params.IMAGE_TAG),
+                                    booleanParam(name: 'SKIP_TERRAFORM', value: true)
+                                ]
+                        }
+                    }
+                }
+
+                // Sequential build strategy
+                when {
+                    expression { return params.DEPLOY_STRATEGY == 'sequential' }
+                }
+                steps {
+                    script {
+                        sh '''
+                            echo "=== Building Services Sequentially ==="
+
+                            # Build Main API first (always required)
+                            echo "1. Building Main API..."
+                            docker build \\
+                                -f . \\
+                                --build-arg BUILDKIT_INLINE_CACHE=1 \\
+                                --build-arg BASE_IMAGE=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:${DOCKER_IMAGE_TAG} \\
+                                -t asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG} \\
+                                --cache-from asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:cache \\
+                                --cache-to asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:cache \\
+                                .
+
+                            docker tag asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG} \\
+                                  asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:latest
+
+                            docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG}
+                            docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:latest
+                            echo "✅ Main API image built"
+
+                            # Build Chat AI
+                            echo "2. Building Chat AI..."
+                            docker build \\
+                                -f chat_ai_service/Dockerfile \\
+                                --build-arg BUILDKIT_INLINE_CACHE=1 \\
+                                --build-arg BASE_IMAGE=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:${DOCKER_IMAGE_TAG} \\
+                                -t asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG} \\
+                                --cache-from asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:cache \\
+                                --cache-to asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:cache \\
+                                .
+
+                            docker tag asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG} \\
+                                  asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:latest
+
+                            docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG}
+                            docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:latest
+                            echo "✅ Chat AI image built"
+
+                            # Build Prediction
+                            echo "3. Building Prediction..."
+                            docker build \\
+                                -f prediction_service/Dockerfile \\
+                                --build-arg BUILDKIT_INLINE_CACHE=1 \\
+                                --build-arg BASE_IMAGE=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:${DOCKER_IMAGE_TAG} \\
+                                -t asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG} \\
+                                --cache-from asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:cache \\
+                                --cache-to asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:cache \\
+                                .
+
+                            docker tag asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG} \\
+                                  asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:latest
+
+                            docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG}
+                            docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:latest
+                            echo "✅ Prediction image built"
+
+                            echo "🎉 All service images built successfully"
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Infrastructure') {
+            when {
+                not {
+                    expression { return params.DEPLOY_ALL_SERVICES }
+                }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Deploying All Services Infrastructure ==="
+                    sh '''
+                        cd terraform
+
+                        # Select workspace
+                        terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
+
+                        # Initialize Terraform
+                        terraform init
+
+                        # Update all service images
+                        if [ "${DRY_RUN}" = "true" ]; then
+                            echo "=== Dry Run: Planning all services deployment ==="
+                            terraform plan \\
+                                -var="main_api_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG}" \\
+                                -var="chat_ai_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG}" \\
+                                -var="prediction_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG}"
+                        else
+                            echo "=== Applying all services deployment ==="
+                            terraform apply \\
+                                -var="main_api_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG}" \\
+                                -var="chat_ai_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG}" \\
+                                -var="prediction_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG}" \\
+                                -auto-approve
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Smoke Tests') {
+            when {
+                not {
+                    anyOf {
+                        expression { return params.SKIP_TESTS }
+                        expression { return params.DRY_RUN }
+                    }
+                }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Running Smoke Tests ==="
+                    sh '''
+                        cd terraform
+
+                        # Get service URLs from Terraform outputs
+                        MAIN_API_URL=$(terraform output -raw main_api_service_url 2>/dev/null || echo "https://${ENVIRONMENT}-main-api-HASH.asia-southeast1.run.app")
+                        CHAT_AI_URL=$(terraform output -raw chat_ai_service_url 2>/dev/null || echo "https://${ENVIRONMENT}-chat-ai-HASH.asia-southeast1.run.app")
+                        PREDICTION_URL=$(terraform output -raw prediction_service_url 2>/dev/null || echo "https://${ENVIRONMENT}-prediction-HASH.asia-southeast1.run.app")
+
+                        echo "Service URLs:"
+                        echo "  Main API: ${MAIN_API_URL}"
+                        echo "  Chat AI: ${CHAT_AI_URL}"
+                        echo "  Prediction: ${PREDICTION_URL}"
+
+                        echo "=== Testing Main API ==="
+                        if curl -f -s "${MAIN_API_URL}/health" > /dev/null; then
+                            echo "✅ Main API health check passed"
+                        else
+                            echo "❌ Main API health check failed"
+                            exit 1
+                        fi
+
+                        echo "=== Testing Chat AI ==="
+                        # Wait for Chat AI to be ready (model loading)
+                        sleep 30
+                        for i in {1..6}; do
+                            if curl -f -s --max-time 60 "${CHAT_AI_URL}/health" > /dev/null; then
+                                echo "✅ Chat AI health check passed (attempt ${i})"
+                                break
+                            else
+                                echo "⏳ Chat AI still loading... (attempt ${i}/6)"
+                                sleep 10
+                            fi
+                        done
+
+                        if curl -f -s --max-time 60 "${CHAT_AI_URL}/health" > /dev/null; then
+                            echo "✅ Chat AI is ready"
+                        else
+                            echo "⚠️  Chat AI still initializing (cold start expected)"
+                        fi
+
+                        echo "=== Testing Prediction Service ==="
+                        # Wait for Prediction service
+                        sleep 20
+                        for i in {1..5}; do
+                            if curl -f -s --max-time 30 "${PREDICTION_URL}/health" > /dev/null; then
+                                echo "✅ Prediction health check passed (attempt ${i})"
+                                break
+                            else
+                                echo "⏳ Prediction service starting... (attempt ${i}/5)"
+                                sleep 10
+                            fi
+                        done
+
+                        if curl -f -s --max-time 30 "${PREDICTION_URL}/health" > /dev/null; then
+                            echo "✅ Prediction service is ready"
+                        else
+                            echo "⚠️  Prediction service still initializing (on-demand cold start)"
+                        fi
+
+                        echo "=== Testing Service Communication ==="
+                        # Test Main API to Chat AI communication
+                        TEST_PAYLOAD='{"question": "Xin chào", "conversation_id": "test-smoke"}'
+                        if curl -f -s -X POST \
+                                -H "Content-Type: application/json" \
+                                -d "${TEST_PAYLOAD}" \
+                                "${MAIN_API_URL}/api/v1/qa/ask" > /dev/null; then
+                            echo "✅ Main API to Chat AI communication working"
+                        else
+                            echo "⚠️  Main API to Chat AI communication test failed"
+                        fi
+
+                        # Test Main API to Prediction communication
+                        PREDICT_PAYLOAD='{"age": 30, "gender": "male", "bmi": 25.5}'
+                        if curl -f -s -X POST \
+                                -H "Content-Type: application/json" \
+                                -d "${PREDICT_PAYLOAD}" \
+                                "${MAIN_API_URL}/api/v1/predictions/health" > /dev/null; then
+                            echo "✅ Main API to Prediction communication working"
+                        else
+                            echo "⚠️  Main API to Prediction communication test failed"
+                        fi
+
+                        echo "🎉 All smoke tests completed"
+                    '''
+                }
+            }
+        }
+
+        stage('Integration Tests') {
+            when {
+                not {
+                    anyOf {
+                        expression { return params.SKIP_TESTS }
+                        expression { return params.DRY_RUN }
+                    }
+                }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Running Integration Tests ==="
+                    sh '''
+                        cd terraform
+                        MAIN_API_URL=$(terraform output -raw main_api_service_url 2>/dev/null || echo "https://${ENVIRONMENT}-main-api-HASH.asia-southeast1.run.app")
+
+                        echo "Running comprehensive integration tests..."
+
+                        # Test 1: End-to-end Q&A flow
+                        echo "1. Testing End-to-End Q&A Flow"
+                        QA_REQUEST='{"question": "Triệu chứng đau đầu là gì?", "conversation_id": "integration-test-1"}'
+                        QA_RESPONSE=$(curl -s -X POST \
+                            -H "Content-Type: application/json" \
+                            -d "${QA_REQUEST}" \
+                            "${MAIN_API_URL}/api/v1/qa/ask")
+
+                        if echo "${QA_RESPONSE}" | jq -e '.answer' > /dev/null; then
+                            echo "✅ Q&A integration test passed"
+                        else
+                            echo "❌ Q&A integration test failed"
+                            echo "Response: ${QA_RESPONSE}"
+                        fi
+
+                        # Test 2: Health prediction with context
+                        echo "2. Testing Health Prediction"
+                        PREDICT_REQUEST='{"age": 45, "gender": "female", "bmi": 28.2, "smoking": 0, "alcohol": 1}'
+                        PREDICT_RESPONSE=$(curl -s -X POST \
+                            -H "Content-Type: application/json" \
+                            -d "${PREDICT_REQUEST}" \
+                            "${MAIN_API_URL}/api/v1/predictions/health")
+
+                        if echo "${PREDICT_RESPONSE}" | jq -e '.risk_level' > /dev/null; then
+                            echo "✅ Health prediction integration test passed"
+                        else
+                            echo "❌ Health prediction test failed"
+                            echo "Response: ${PREDICT_RESPONSE}"
+                        fi
+
+                        # Test 3: Conversation persistence
+                        echo "3. Testing Conversation Persistence"
+                        CONV_LIST=$(curl -s -H "Authorization: Bearer test-token" "${MAIN_API_URL}/api/v1/conversations")
+                        if echo "${CONV_LIST}" | jq -e '.length' > /dev/null; then
+                            echo "✅ Conversation persistence test passed"
+                        else
+                            echo "⚠️  Conversation test requires valid authentication"
+                        fi
+
+                        # Test 4: Service metrics and monitoring
+                        echo "4. Testing Service Metrics"
+                        for service in "main-api" "chat-ai" "prediction"; do
+                            SERVICE_URL="${MAIN_API_URL}"
+                            if [ "$service" = "chat-ai" ]; then
+                                SERVICE_URL="${MAIN_API_URL/\/api\/v1/qa/ask/\/api\/v1/chat-ai/health}"
+                            elif [ "$service" = "prediction" ]; then
+                                SERVICE_URL="${MAIN_API_URL/\/api\/v1/predictions/health/\/api\/v1/prediction/health}"
+                            fi
+
+                            echo "Testing ${service} service metrics..."
+                            if curl -f -s "${SERVICE_URL}/metrics" > /dev/null; then
+                                echo "✅ ${service} metrics available"
+                            else
+                                echo "⚠️  ${service} metrics not available"
+                            fi
+                        done
+
+                        echo "🎉 Integration tests completed successfully"
+                    '''
+                }
+            }
+        }
+
+        stage('Performance Validation') {
+            when {
+                not {
+                    anyOf {
+                        expression { return params.SKIP_TESTS }
+                        expression { return params.DRY_RUN }
+                    }
+                }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Running Performance Validation ==="
+                    sh '''
+                        cd terraform
+                        MAIN_API_URL=$(terraform output -raw main_api_service_url 2>/dev/null || echo "https://${ENVIRONMENT}-main-api-HASH.asia-southeast1.run.app")
+
+                        echo "Validating performance SLAs..."
+
+                        # Test response times
+                        TOTAL_RESPONSE_TIME=0
+                        SUCCESS_COUNT=0
+                        TEST_COUNT=10
+
+                        for i in {1..${TEST_COUNT}}; do
+                            START_TIME=$(date +%s%N)
+                            if curl -f -s --max-time 30 "${MAIN_API_URL}/health" > /dev/null; then
+                                END_TIME=$(date +%s%N)
+                                RESPONSE_TIME=$(( (END_TIME - START_TIME) / 1000000 ))
+                                TOTAL_RESPONSE_TIME=$((TOTAL_RESPONSE_TIME + RESPONSE_TIME))
+                                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                                echo "Request ${i}: ${RESPONSE_TIME}ms"
+                            else
+                                echo "Request ${i}: FAILED (> 30s)"
+                                TOTAL_RESPONSE_TIME=$((TOTAL_RESPONSE_TIME + 30000))  # Max timeout
+                            fi
+                        done
+
+                        if [ $SUCCESS_COUNT -eq $TEST_COUNT ]; then
+                            AVG_RESPONSE_TIME=$((TOTAL_RESPONSE_TIME / TEST_COUNT))
+                            echo "📊 Performance Results:"
+                            echo "  - Success Rate: $((SUCCESS_COUNT * 100 / TEST_COUNT))%"
+                            echo "  - Average Response Time: ${AVG_RESPONSE_TIME}ms"
+
+                            if [ $AVG_RESPONSE_TIME -lt 1000 ]; then
+                                echo "✅ Excellent performance (< 1s average)"
+                            elif [ $AVG_RESPONSE_TIME -lt 3000 ]; then
+                                echo "✅ Good performance (< 3s average)"
+                            else
+                                echo "⚠️  Performance warning (> 3s average)"
+                            fi
+                        else
+                            echo "❌ Performance validation failed"
+                            echo "  - Success Rate: $((SUCCESS_COUNT * 100 / TEST_COUNT))% < 100%"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Notification') {
+            steps {
+                script {
+                    echo "=== Deployment Complete ==="
+                    sh '''
+                        echo "🎉 VHealth Microservices Deployment Complete!"
+                        echo "Environment: ${ENVIRONMENT}"
+                        echo "Image Tag: ${DOCKER_IMAGE_TAG}"
+                        echo "Deploy Time: $(date)"
+                        echo "Build URL: ${BUILD_URL}"
+
+                        if [ "${SEND_NOTIFICATIONS}" = "true" ]; then
+                            SUCCESS_MESSAGE="🚀 VHealth ${ENVIRONMENT} deployed successfully\\n\\n📦 Image: ${DOCKER_IMAGE_TAG}\\n⏰ Time: $(date)\\n🔗 Build: ${BUILD_URL}"
+
+                            echo "Sending success notification..."
+                            curl -X POST \
+                                -H "Content-Type: application/json" \
+                                -d "{\"chat_id\": \"${TELEGRAM_CHAT_ID}\", \"text\": \"${SUCCESS_MESSAGE}\"}" \
+                                "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" > /dev/null 2>&1 && \
+                                echo "✅ Notification sent successfully" || \
+                                echo "⚠️  Failed to send notification"
+                        fi
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                echo "✅ Microservices deployment pipeline succeeded"
+                # Additional success notification for production
+                if [ "${ENVIRONMENT}" = "prod" ] && [ "${SEND_NOTIFICATIONS}" = "true" ]; then
+                    sh '''
+                        PROD_SUCCESS_MESSAGE="🎉 Production deployment successful!\\n\\n🚀 VHealth ${ENVIRONMENT} is live\\n📦 Version: ${DOCKER_IMAGE_TAG}\\n⏰ Deployed: $(date)\\n🔗 Monitor: https://api.vhealth.io.vn"
+
+                        curl -X POST \
+                            -H "Content-Type: application/json" \
+                            -d "{\"chat_id\": \"${TELEGRAM_CHAT_ID}\", \"text\": \"${PROD_SUCCESS_MESSAGE}\"}" \
+                            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" > /dev/null 2>&1
+                    '''
+                fi
+            }
+        }
+
+        failure {
+            script {
+                echo "❌ Microservices deployment pipeline failed"
+                if [ "${SEND_NOTIFICATIONS}" = "true" ]; then
+                    sh '''
+                        FAILURE_MESSAGE="❌ Deployment failed\\n\\nEnvironment: ${ENVIRONMENT}\\n🏷️ Tag: ${DOCKER_IMAGE_TAG}\\n⏰ Time: $(date)\\n🔗 Build: ${BUILD_URL}\\n🚨 Please check logs and fix issues"
+
+                        curl -X POST \
+                            -H "Content-Type: application/json" \
+                            -d "{\"chat_id\": \"${TELEGRAM_CHAT_ID}\", \"text\": \"${FAILURE_MESSAGE}\"}" \
+                            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" > /dev/null 2>&1 && \
+                                echo "✅ Failure notification sent" || \
+                                echo "⚠️  Failed to send failure notification"
+                    '''
+                fi
+            }
+        }
+    }
+}

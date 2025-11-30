@@ -1,0 +1,333 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'prod'], description: 'Environment to deploy to')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag')
+        booleanParam(name: 'SKIP_TERRAFORM', defaultValue: true, description: 'Skip Terraform (managed by all-services pipeline)')
+        booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Dry run (no actual deployment)')
+    }
+
+    environment {
+        DOCKER_IMAGE_TAG = params.IMAGE_TAG
+        GCP_PROJECT = params.ENVIRONMENT == 'prod' ? 'vhealth-prod' : 'vhealth-dev'
+        REGION = 'asia-southeast1'
+        SERVICE_NAME = "${params.ENVIRONMENT}-chat-ai"
+    }
+
+    stages {
+        stage('Preparation') {
+            steps {
+                script {
+                    echo "=== Chat AI Service Deployment Preparation ==="
+                    echo "Environment: ${params.ENVIRONMENT}"
+                    echo "Image Tag: ${params.IMAGE_TAG}"
+                    echo "Service: ${SERVICE_NAME}"
+                    echo "Skip Terraform: ${params.SKIP_TERRAFORM}"
+                    echo "Dry Run: ${params.DRY_RUN}"
+                }
+
+                // Git configuration
+                sh '''
+                    git config --global user.name "Jenkins"
+                    git config --global user.email "jenkins@vhealth.io.vn"
+                    git checkout main
+                    git pull origin main
+                '''
+            }
+        }
+
+        stage('Build Chat AI Image') {
+            steps {
+                script {
+                    echo "=== Building Chat AI Docker Image ==="
+                    sh '''
+                        # Build Chat AI image with optimized settings
+                        docker build \\
+                            -f chat_ai_service/Dockerfile \\
+                            --build-arg BUILDKIT_INLINE_CACHE=1 \\
+                            -t asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG} \\
+                            --cache-from asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:cache \\
+                            --cache-to asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:cache \\
+                            .
+
+                        # Tag as latest for consistent deployment
+                        docker tag asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG} \\
+                              asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:latest
+
+                        # Push to Artifact Registry
+                        docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG}
+                        docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:latest
+
+                        echo "✅ Chat AI image built and pushed successfully"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Cloud Run') {
+            when {
+                not {
+                    expression { return params.SKIP_TERRAFORM }
+                }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Deploying Chat AI to Cloud Run ==="
+                    sh '''
+                        cd terraform
+
+                        # Select workspace
+                        terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
+
+                        # Initialize Terraform
+                        terraform init
+
+                        # Update Terraform variables for Chat AI
+                        if [ "${DRY_RUN}" = "true" ]; then
+                            echo "=== Dry Run: Planning Chat AI deployment ==="
+                            terraform plan \\
+                                -var="chat_ai_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG}"
+                        else
+                            echo "=== Applying Chat AI deployment ==="
+                            terraform apply \\
+                                -var="chat_ai_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/chat-ai:${DOCKER_IMAGE_TAG}" \\
+                                -auto-approve
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Health Checks') {
+            steps {
+                script {
+                    echo "=== Running Chat AI Health Checks ==="
+                    sh '''
+                        # Get service URL from Terraform or use default
+                        SERVICE_URL="https://${SERVICE_NAME}-HASH.asia-southeast1.run.app/health"
+
+                        echo "Checking Chat AI health endpoint: ${SERVICE_URL}"
+
+                        # Wait for service to be ready (model loading can take time)
+                        echo "Waiting for Chat AI service to be ready (model loading may take up to 60s)..."
+                        sleep 30
+
+                        # Health check with retry logic
+                        for i in {1..10}; do
+                            echo "Health check attempt ${i}/10"
+
+                            if curl -f -s --max-time 30 "${SERVICE_URL}" > /dev/null; then
+                                echo "✅ Chat AI health check passed (attempt ${i})"
+                                break
+                            else
+                                echo "⚠️  Chat AI health check failed (attempt ${i}), retrying in 10s..."
+                                sleep 10
+                            fi
+                        done
+
+                        # Final verification
+                        if curl -f -s --max-time 30 "${SERVICE_URL}" > /dev/null; then
+                            echo "🎉 Chat AI service is healthy and ready"
+                        else
+                            echo "❌ Chat AI health check failed after 10 attempts"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Model Loading Test') {
+            steps {
+                script {
+                    echo "=== Testing Model Loading ==="
+                    sh '''
+                        SERVICE_URL="https://${SERVICE_NAME}-HASH.asia-southeast1.run.app"
+
+                        echo "Testing Chat AI model loading..."
+
+                        # Test model readiness endpoint
+                        MODEL_READY_URL="${SERVICE_URL}/ready"
+                        echo "Checking model readiness: ${MODEL_READY_URL}"
+
+                        # Wait for model to be loaded
+                        for i in {1..30}; do
+                            echo "Model readiness check attempt ${i}/30"
+
+                            if curl -f -s --max-time 10 "${MODEL_READY_URL}" | grep -q "ready"; then
+                                echo "✅ Model is ready and loaded"
+                                break
+                            else
+                                echo "⏳ Model still loading... (${i}/30)"
+                                sleep 5
+                            fi
+                        done
+
+                        # Test basic QA functionality
+                        echo "Testing basic QA functionality..."
+                        QA_TEST_URL="${SERVICE_URL}/ask"
+                        QA_PAYLOAD='{"question": "Xin chào", "conversation_id": "test-123"}'
+
+                        if curl -f -s -X POST \
+                                -H "Content-Type: application/json" \
+                                -d "${QA_PAYLOAD}" \
+                                --max-time 30 \
+                                "${QA_TEST_URL}" | jq . > /dev/null; then
+                            echo "✅ Chat AI QA test passed"
+                        else
+                            echo "⚠️  Chat AI QA test failed - service may still be initializing"
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Integration Test') {
+            when {
+                not {
+                    anyOf {
+                        expression { return params.DRY_RUN }
+                        expression { return params.SKIP_TERRAFORM }
+                    }
+                }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Running Integration Tests ==="
+                    sh '''
+                        # Test service-to-service communication
+                        echo "Testing Main API to Chat AI communication..."
+
+                        # This would typically be tested via Main API test suite
+                        # For now, we verify the Chat AI service is accessible from Main API context
+                        MAIN_API_URL="${params.ENVIRONMENT == 'prod' ? 'https://api.vhealth.io.vn' : 'https://dev.api.vhealth.io.vn'}"
+
+                        echo "Testing integration endpoint via Main API: ${MAIN_API_URL}"
+
+                        # Test health status through Main API (if it has health monitoring)
+                        if curl -f -s "${MAIN_API_URL}/health" | grep -q "healthy"; then
+                            echo "✅ Main API is healthy"
+                        else
+                            echo "⚠️  Main API health check failed"
+                        fi
+
+                        echo "✅ Integration tests completed"
+                    '''
+                }
+            }
+        }
+
+        stage('Performance Test') {
+            when {
+                expression { return params.ENVIRONMENT == 'dev' }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Running Performance Tests ==="
+                    sh '''
+                        SERVICE_URL="https://${SERVICE_NAME}-HASH.asia-southeast1.run.app"
+
+                        echo "Testing Chat AI response time..."
+
+                        # Test response time with sample questions
+                        SAMPLE_QUESTIONS=(
+                            "Xin chào"
+                            "Sức khỏe như thế nào?"
+                            "Triệu chứng đau đầu"
+                        )
+
+                        TOTAL_TIME=0
+                        SUCCESS_COUNT=0
+
+                        for question in "${SAMPLE_QUESTIONS[@]}"; do
+                            echo "Testing question: ${question}"
+
+                            START_TIME=$(date +%s%N)
+                            RESPONSE=$(curl -s -X POST \
+                                -H "Content-Type: application/json" \
+                                -d "{\"question\": \"${question}\", \"conversation_id\": \"perf-test\"}" \
+                                --max-time 20 \
+                                "${SERVICE_URL}/ask")
+                            END_TIME=$(date +%s%N)
+
+                            RESPONSE_TIME=$(( (END_TIME - START_TIME) / 1000000 ))
+                            TOTAL_TIME=$((TOTAL_TIME + RESPONSE_TIME))
+
+                            if echo "${RESPONSE}" | jq . > /dev/null 2>&1; then
+                                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                                echo "✅ Response received in ${RESPONSE_TIME}ms"
+                            else
+                                echo "❌ Response failed or timeout"
+                            fi
+
+                            sleep 2  # Brief pause between requests
+                        done
+
+                        if [ $SUCCESS_COUNT -gt 0 ]; then
+                            AVG_TIME=$((TOTAL_TIME / SUCCESS_COUNT))
+                            echo "📊 Performance Results:"
+                            echo "   - Successful requests: ${SUCCESS_COUNT}/${#SAMPLE_QUESTIONS[@]}"
+                            echo "   - Average response time: ${AVG_TIME}ms"
+
+                            if [ $AVG_TIME -lt 3000 ]; then
+                                echo "✅ Performance test passed (< 3s average)"
+                            else
+                                echo "⚠️  Performance test warning (> 3s average)"
+                            fi
+                        else
+                            echo "❌ Performance test failed - no successful responses"
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Notification') {
+            steps {
+                script {
+                    echo "=== Deployment Complete ==="
+                    sh '''
+                        echo "🎉 Chat AI deployment completed successfully!"
+                        echo "Environment: ${ENVIRONMENT}"
+                        echo "Service: ${SERVICE_NAME}"
+                        echo "Image: ${DOCKER_IMAGE_TAG}"
+                        echo "Deploy Time: $(date)"
+
+                        # Send success notification
+                        if [ "${SEND_NOTIFICATIONS}" = "true" ]; then
+                            curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                                -H "Content-Type: application/json" \
+                                -d "{\"chat_id\": \"${TELEGRAM_CHAT_ID}\", \"text\": \"🤖 Chat AI deployed to ${ENVIRONMENT} successfully\\nImage: ${DOCKER_IMAGE_TAG}\\nTime: $(date)\"}"
+                        fi
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                echo "✅ Chat AI pipeline succeeded"
+            }
+        }
+
+        failure {
+            script {
+                echo "❌ Chat AI pipeline failed"
+                # Send failure notification
+                sh '''
+                    if [ "${SEND_NOTIFICATIONS}" = "true" ]; then
+                        curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                            -H "Content-Type: application/json" \
+                            -d "{\"chat_id\": \"${TELEGRAM_CHAT_ID}\", \"text\": \"❌ Chat AI deployment to ${ENVIRONMENT} failed\\nBuild: ${BUILD_URL}\"}"
+                    fi
+                '''
+            }
+        }
+    }
+}

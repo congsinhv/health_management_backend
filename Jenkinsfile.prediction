@@ -1,0 +1,383 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'prod'], description: 'Environment to deploy to')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag')
+        booleanParam(name: 'SKIP_TERRAFORM', defaultValue: true, description: 'Skip Terraform (managed by all-services pipeline)')
+        booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Dry run (no actual deployment)')
+    }
+
+    environment {
+        DOCKER_IMAGE_TAG = params.IMAGE_TAG
+        GCP_PROJECT = params.ENVIRONMENT == 'prod' ? 'vhealth-prod' : 'vhealth-dev'
+        REGION = 'asia-southeast1'
+        SERVICE_NAME = "${params.ENVIRONMENT}-prediction"
+    }
+
+    stages {
+        stage('Preparation') {
+            steps {
+                script {
+                    echo "=== Prediction Service Deployment Preparation ==="
+                    echo "Environment: ${params.ENVIRONMENT}"
+                    echo "Image Tag: ${params.IMAGE_TAG}"
+                    echo "Service: ${SERVICE_NAME}"
+                    echo "Skip Terraform: ${params.SKIP_TERRAFORM}"
+                    echo "Dry Run: ${params.DRY_RUN}"
+                }
+
+                // Git configuration
+                sh '''
+                    git config --global user.name "Jenkins"
+                    git config --global user.email "jenkins@vhealth.io.vn"
+                    git checkout main
+                    git pull origin main
+                '''
+            }
+        }
+
+        stage('Build Prediction Image') {
+            steps {
+                script {
+                    echo "=== Building Prediction Docker Image ==="
+                    sh '''
+                        # Build Prediction image with ONNX optimizations
+                        docker build \\
+                            -f prediction_service/Dockerfile \\
+                            --build-arg BUILDKIT_INLINE_CACHE=1 \\
+                            -t asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG} \\
+                            --cache-from asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:cache \\
+                            --cache-to asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:cache \\
+                            .
+
+                        # Tag as latest for consistent deployment
+                        docker tag asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG} \\
+                              asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:latest
+
+                        # Push to Artifact Registry
+                        docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG}
+                        docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:latest
+
+                        echo "✅ Prediction image built and pushed successfully"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Cloud Run') {
+            when {
+                not {
+                    expression { return params.SKIP_TERRAFORM }
+                }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Deploying Prediction to Cloud Run ==="
+                    sh '''
+                        cd terraform
+
+                        # Select workspace
+                        terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
+
+                        # Initialize Terraform
+                        terraform init
+
+                        # Update Terraform variables for Prediction service
+                        if [ "${DRY_RUN}" = "true" ]; then
+                            echo "=== Dry Run: Planning Prediction deployment ==="
+                            terraform plan \\
+                                -var="prediction_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG}"
+                        else
+                            echo "=== Applying Prediction deployment ==="
+                            terraform apply \\
+                                -var="prediction_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/prediction:${DOCKER_IMAGE_TAG}" \\
+                                -auto-approve
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Health Checks') {
+            steps {
+                script {
+                    echo "=== Running Prediction Health Checks ==="
+                    sh '''
+                        # Get service URL from Terraform or use default
+                        SERVICE_URL="https://${SERVICE_NAME}-HASH.asia-southeast1.run.app/health"
+
+                        echo "Checking Prediction health endpoint: ${SERVICE_URL}"
+
+                        # Wait for service to be ready (on-demand service may have cold start)
+                        echo "Waiting for Prediction service to be ready..."
+                        sleep 30
+
+                        # Health check with retry logic
+                        for i in {1..10}; do
+                            echo "Health check attempt ${i}/10"
+
+                            if curl -f -s --max-time 30 "${SERVICE_URL}" > /dev/null; then
+                                echo "✅ Prediction health check passed (attempt ${i})"
+                                break
+                            else
+                                echo "⚠️  Prediction health check failed (attempt ${i}), retrying in 15s..."
+                                sleep 15
+                            fi
+                        done
+
+                        # Final verification
+                        if curl -f -s --max-time 30 "${SERVICE_URL}" > /dev/null; then
+                            echo "🎉 Prediction service is healthy and ready"
+                        else
+                            echo "❌ Prediction health check failed after 10 attempts"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Model Validation') {
+            steps {
+                script {
+                    echo "=== Validating ML Models ==="
+                    sh '''
+                        SERVICE_URL="https://${SERVICE_NAME}-HASH.asia-southeast1.run.app"
+
+                        echo "Testing model endpoints..."
+
+                        # Test model readiness endpoint
+                        MODEL_READY_URL="${SERVICE_URL}/model-ready"
+                        echo "Checking model readiness: ${MODEL_READY_URL}"
+
+                        # Wait for ONNX models to be loaded
+                        for i in {1..30}; do
+                            echo "Model readiness check attempt ${i}/30"
+
+                            if curl -f -s --max-time 20 "${MODEL_READY_URL}" | grep -q "ready"; then
+                                echo "✅ ONNX models are ready and loaded"
+                                break
+                            else
+                                echo "📂 Models still loading... (${i}/30)"
+                                sleep 5
+                            fi
+                        done
+
+                        # Test prediction functionality
+                        echo "Testing basic prediction functionality..."
+                        PREDICT_URL="${SERVICE_URL}/predict"
+                        PREDICT_PAYLOAD='{
+                            "age": 30,
+                            "gender": "male",
+                            "bmi": 25.5,
+                            "blood_pressure": 120,
+                            "cholesterol": 200,
+                            "glucose": 100,
+                            "smoking": 0
+                        }'
+
+                        START_TIME=$(date +%s%N)
+
+                        # Make prediction request
+                        if curl -f -s -X POST \
+                                -H "Content-Type: application/json" \
+                                -d "${PREDICT_PAYLOAD}" \
+                                --max-time 30 \
+                                "${PREDICT_URL}" > /dev/null; then
+
+                            END_TIME=$(date +%s%N)
+                            DURATION=$(( (END_TIME - START_TIME) / 1000000 ))
+
+                            echo "✅ Prediction test passed"
+                            echo "   Response time: ${DURATION}ms"
+
+                            # Check performance expectations
+                            if [ $DURATION -lt 1000 ]; then
+                                echo "🚀 Excellent performance (< 1s)"
+                            elif [ $DURATION -lt 3000 ]; then
+                                echo "✅ Good performance (< 3s)"
+                            else
+                                echo "⚠️  Performance warning (> 3s)"
+                            fi
+                        else
+                            echo "❌ Prediction test failed - model may not be loaded"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Integration Test') {
+            when {
+                not {
+                    anyOf {
+                        expression { return params.DRY_RUN }
+                        expression { return params.SKIP_TERRAFORM }
+                    }
+                }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Running Integration Tests ==="
+                    sh '''
+                        # Test communication with Main API
+                        echo "Testing Main API to Prediction communication..."
+
+                        MAIN_API_URL="${ENVIRONMENT == 'prod' ? 'https://api.vhealth.io.vn' : 'https://dev.api.vhealth.io.vn'}"
+
+                        # Test health status through Main API
+                        echo "Testing prediction service status through Main API: ${MAIN_API_URL}"
+
+                        # This would typically be tested through the Main API test suite
+                        # For now, we verify the service is accessible
+                        PREDICTION_URL="https://${SERVICE_NAME}-HASH.asia-southeast1.run.app"
+
+                        echo "Verifying Prediction service accessibility..."
+                        if curl -f -s --max-time 10 "${PREDICTION_URL}/health" > /dev/null; then
+                            echo "✅ Prediction service is accessible and healthy"
+                        else
+                            echo "❌ Prediction service is not accessible"
+                            exit 1
+                        fi
+
+                        echo "✅ Integration tests completed"
+                    '''
+                }
+            }
+        }
+
+        stage('Performance Test') {
+            when {
+                expression { return params.ENVIRONMENT == 'dev' }
+            }
+            }
+            steps {
+                script {
+                    echo "=== Running Performance Tests ==="
+                    sh '''
+                        PREDICT_URL="https://${SERVICE_NAME}-HASH.asia-southeast1.run.app/predict"
+
+                        echo "Running performance benchmark..."
+
+                        # Test prediction load with multiple requests
+                        PREDICT_PAYLOAD='{
+                            "age": 30,
+                            "gender": "male",
+                            "bmi": 25.5,
+                            "blood_pressure": 120,
+                            "cholesterol": 200,
+                            "glucose": 100,
+                            "smoking": 0
+                        }'
+
+                        TOTAL_TIME=0
+                        SUCCESS_COUNT=0
+                        REQUEST_COUNT=10
+
+                        echo "Running ${REQUEST_COUNT} consecutive predictions..."
+                        for i in {1..REQUEST_COUNT}; do
+                            echo "Performance test request ${i}/${REQUEST_COUNT}"
+
+                            START_TIME=$(date +%s%N)
+
+                            if curl -f -s -X POST \
+                                    -H "Content-Type: application/json" \
+                                    -d "${PREDICT_PAYLOAD}" \
+                                    --max-time 10 \
+                                    "${PREDICT_URL}" > /dev/null; then
+
+                                END_TIME=$(date +%s%N)
+                                DURATION=$(( (END_TIME - START_TIME) / 1000000 ))
+                                TOTAL_TIME=$((TOTAL_TIME + DURATION))
+                                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+
+                                echo "  ✅ Request ${i}: ${DURATION}ms"
+                            else
+                                echo "  ❌ Request ${i}: failed"
+                            fi
+
+                            # Brief pause between requests
+                            sleep 1
+                        done
+
+                        if [ $SUCCESS_COUNT -gt 0 ]; then
+                            AVG_TIME=$((TOTAL_TIME / SUCCESS_COUNT))
+                            echo "📊 Performance Results:"
+                            echo "   - Successful requests: ${SUCCESS_COUNT}/${REQUEST_COUNT}"
+                            echo "   - Average response time: ${AVG_TIME}ms"
+                            echo "   - Total time: ${TOTAL_TIME}ms"
+
+                            # Check performance expectations
+                            if [ $AVG_TIME -lt 500 ]; then
+                                echo "🚀 Excellent average performance (< 0.5s)"
+                            elif [ $AVG_TIME -lt 1000 ]; then
+                                echo "✅ Good average performance (< 1s)"
+                            else
+                                echo "⚠️  Performance warning (> 1s)"
+                            fi
+                        else
+                            echo "❌ Performance test failed - no successful requests"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Notification') {
+            steps {
+                script {
+                    echo "=== Deployment Complete ==="
+                    sh '''
+                        echo "🎉 Prediction service deployment completed successfully!"
+                        echo "Environment: ${ENVIRONMENT}"
+                        echo "Service: ${SERVICE_NAME}"
+                        echo "Image: ${DOCKER_IMAGE_TAG}"
+                        echo "Deploy Time: $(date)"
+
+                        # Send success notification
+                        if [ "${SEND_NOTIFICATIONS}" = "true" ]; then
+                            curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                                -H "Content-Type: application/json" \
+                                -d "{\"chat_id\": \"${TELEGRAM_CHAT_ID}\", \"text\": \"🎉 Prediction service deployed to ${ENVIRONMENT} successfully\\n📦 Image: ${DOCKER_IMAGE_TAG}\\n⏰ Time: $(date)\"}"
+                        fi
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                echo "✅ Prediction pipeline succeeded"
+                # Send success notification
+                sh '''
+                    if [ "${SEND_NOTIFICATIONS}" = "true" ]; then
+                        curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                            -H "Content-Type: application/json" \
+                            -d "{\"chat_id\": \"${TELEGRAM_CHAT_ID}\", \"text\": \"✅ Prediction pipeline succeeded\\n🚀 Service: ${SERVICE_NAME}\\n🏷️ Tag: ${DOCKER_IMAGE_TAG}\"}"
+                    fi
+                '''
+            }
+        }
+
+        failure {
+            script {
+                echo "❌ Prediction pipeline failed"
+                # Send failure notification
+                sh '''
+                    if [ "${SEND_NOTIFICATIONS}" = "true" ]; then
+                        curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                            -H "Content-Type: application/json" \
+                            -d "{\"chat_id\": \"${TELEGRAM_CHAT_ID}\", \"text\": \"❌ Prediction pipeline failed\\n💔 Service: ${SERVICE_NAME}\\n🏷️ Tag: ${DOCKER_IMAGE_TAG}\\n🔗 Build: ${BUILD_URL}\"}"
+                    fi
+                '''
+            }
+        }
+    }
+}

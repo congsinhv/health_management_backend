@@ -1,0 +1,283 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'prod'], description: 'Environment to deploy to')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag')
+        booleanParam(name: 'REBUILD_BASE_IMAGE', defaultValue: false, description: 'Rebuild Docker base image')
+        booleanParam(name: 'SKIP_TERRAFORM', defaultValue: false, description: 'Skip Terraform deployment')
+        booleanParam(name: 'DRY_RUN', defaultValue: false, description: 'Dry run (no actual deployment)')
+    }
+
+    environment {
+        DOCKER_IMAGE_TAG = params.IMAGE_TAG
+        GCP_PROJECT = params.ENVIRONMENT == 'prod' ? 'vhealth-prod' : 'vhealth-dev'
+        REGION = 'asia-southeast1'
+        SERVICE_NAME = "${params.ENVIRONMENT}-main-api"
+    }
+
+    stages {
+        stage('Preparation') {
+            steps {
+                script {
+                    echo "=== Main API Deployment Preparation ==="
+                    echo "Environment: ${params.ENVIRONMENT}"
+                    echo "Image Tag: ${params.IMAGE_TAG}"
+                    echo "Service: ${SERVICE_NAME}"
+                    echo "Dry Run: ${params.DRY_RUN}"
+                }
+
+                // Git configuration
+                sh '''
+                    git config --global user.name "Jenkins"
+                    git config --global user.email "jenkins@vhealth.io.vn"
+                    git checkout main
+                    git pull origin main
+                '''
+            }
+        }
+
+        stage('Build Base Image') {
+            when {
+                not {
+                    expression { return params.SKIP_TERRAFORM }
+                }
+            }
+            steps {
+                script {
+                    if (params.REBUILD_BASE_IMAGE) {
+                        echo "=== Rebuilding Docker Base Image ==="
+                        sh '''
+                            cd terraform
+                            docker build --no-cache -f Dockerfile.base -t base:latest .
+                            docker tag base:latest asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:latest
+                            docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:latest
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Build Main API Image') {
+            when {
+                not {
+                    expression { return params.SKIP_TERRAFORM }
+                }
+            }
+            steps {
+                script {
+                    echo "=== Building Main API Docker Image ==="
+                    sh '''
+                        # Build and tag the Main API image
+                        docker build \\
+                            --build-arg BASE_IMAGE=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/base:latest \\
+                            -f Dockerfile \\
+                            -t asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG} \\
+                            .
+
+                        # Tag as latest for consistent deployment
+                        docker tag asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG} \\
+                              asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:latest
+
+                        # Push to Artifact Registry
+                        docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG}
+                        docker push asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy Infrastructure') {
+            when {
+                not {
+                    expression { return params.SKIP_TERRAFORM }
+                }
+            }
+            steps {
+                script {
+                    echo "=== Updating Terraform Configuration ==="
+                    sh '''
+                        cd terraform
+
+                        # Select workspace
+                        terraform workspace select ${ENVIRONMENT} || terraform workspace new ${ENVIRONMENT}
+                        terraform workspace select ${ENVIRONMENT}
+
+                        # Initialize Terraform
+                        terraform init
+
+                        # Plan with updated image
+                        if [ "${DRY_RUN}" = "true" ]; then
+                            echo "=== Dry Run Mode: Terraform Plan ==="
+                            terraform plan \\
+                                -var="main_api_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG}"
+                        else
+                            echo "=== Applying Terraform Configuration ==="
+                            terraform plan \\
+                                -var="main_api_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG}"
+
+                            terraform apply \\
+                                -var="main_api_image=asia-southeast1-docker.pkg.dev/${GCP_PROJECT}/vhealth-backend-${ENVIRONMENT}/main-api:${DOCKER_IMAGE_TAG}" \\
+                                -auto-approve
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Health Checks') {
+            steps {
+                script {
+                    echo "=== Running Health Checks ==="
+                    sh '''
+                        # Wait for service to be ready
+                        echo "Waiting for ${SERVICE_NAME} to be ready..."
+                        sleep 30
+
+                        # Get service URL from Terraform outputs
+                        cd terraform
+                        terraform workspace select ${ENVIRONMENT}
+
+                        SERVICE_URL=$(terraform output -raw main_api_service_url 2>/dev/null || echo "https://${SERVICE_NAME}-HASH.asia-southeast1.run.app")
+                        echo "Service URL: ${SERVICE_URL}"
+
+                        # Health check endpoint
+                        HEALTH_URL="${SERVICE_URL}/health"
+                        echo "Checking health endpoint: ${HEALTH_URL}"
+
+                        # Retry health check
+                        for i in {1..6}; do
+                            if curl -f -s "${HEALTH_URL}" > /dev/null; then
+                                echo "✅ Health check passed (attempt ${i})"
+                                break
+                            else
+                                echo "❌ Health check failed (attempt ${i}), retrying in 10s..."
+                                sleep 10
+                            fi
+                        done
+
+                        # Final verification
+                        if curl -f -s "${HEALTH_URL}" > /dev/null; then
+                            echo "🎉 Main API is healthy and ready"
+                        else
+                            echo "❌ Main API health check failed after 6 attempts"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Smoke Tests') {
+            steps {
+                script {
+                    echo "=== Running Smoke Tests ==="
+                    sh '''
+                        cd terraform
+                        terraform workspace select ${ENVIRONMENT}
+                        SERVICE_URL=$(terraform output -raw main_api_service_url 2>/dev/null || echo "https://${SERVICE_NAME}-HASH.asia-southeast1.run.app")
+
+                        echo "Testing Main API endpoints..."
+
+                        # Test basic endpoints
+                        echo "1. Testing GET /health"
+                        curl -f -s "${SERVICE_URL}/health" | jq '.' || {
+                            echo "❌ Health endpoint test failed"
+                            exit 1
+                        }
+
+                        echo "2. Testing GET /"
+                        curl -f -s "${SERVICE_URL}/" | jq '.' || {
+                            echo "❌ Root endpoint test failed"
+                            exit 1
+                        }
+
+                        echo "3. Testing API documentation access"
+                        curl -f -s "${SERVICE_URL}/docs" | head -c 100 || {
+                            echo "❌ Documentation endpoint test failed"
+                            exit 1
+                        }
+
+                        echo "✅ All smoke tests passed"
+                    '''
+                }
+            }
+        }
+
+        stage('Performance Test') {
+            when {
+                not {
+                    anyOf {
+                        expression { return params.SKIP_TERRAFORM }
+                        expression { return params.ENVIRONMENT == 'dev' }
+                    }
+                }
+            }
+            steps {
+                script {
+                    echo "=== Running Performance Test ==="
+                    sh '''
+                        cd terraform
+                        SERVICE_URL=$(terraform output -raw main_api_service_url 2>/dev/null || echo "https://${SERVICE_NAME}-HASH.asia-southeast1.run.app")
+
+                        echo "Testing API performance..."
+
+                        # Response time test
+                        RESPONSE_TIME=$(curl -o /dev/null -s -w "%{time_total}" "${SERVICE_URL}/health")
+                        echo "Health check response time: ${RESPONSE_TIME}s"
+
+                        if (( $(echo "$RESPONSE_TIME < 1.0" | bc -l) )); then
+                            echo "✅ Performance test passed (< 1s)"
+                        else
+                            echo "⚠️  Performance test warning (> 1s): ${RESPONSE_TIME}s"
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Notification') {
+            steps {
+                script {
+                    echo "=== Deployment Complete ==="
+                    sh '''
+                        echo "🎉 Main API deployment completed successfully!"
+                        echo "Environment: ${ENVIRONMENT}"
+                        echo "Image: ${DOCKER_IMAGE_TAG}"
+                        echo "Service: ${SERVICE_NAME}"
+                        echo "Build URL: ${BUILD_URL}"
+                        echo "Deploy Time: $(date)"
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                echo "✅ Pipeline succeeded"
+                // Send success notification if needed
+                sh '''
+                    if [ "${SEND_NOTIFICATIONS}" = "true" ]; then
+                        curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                            -H "Content-Type: application/json" \
+                            -d '{"chat_id": "'${TELEGRAM_CHAT_ID}'", "text": "✅ VHealth Main API deployed to ${ENVIRONMENT} successfully"}'
+                    fi
+                '''
+            }
+        }
+
+        failure {
+            script {
+                echo "❌ Pipeline failed"
+                // Send failure notification
+                sh '''
+                    curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+                        -H "Content-Type: application/json" \
+                        -d '{"chat_id": "'${TELEGRAM_CHAT_ID}'", "text": "❌ VHealth Main API deployment to ${ENVIRONMENT} failed\n\nBuild: '${BUILD_URL}'"}'
+                '''
+            }
+        }
+    }
+}
