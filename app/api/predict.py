@@ -7,7 +7,7 @@ from app.services.predict_service import ObesityPredictorComplete
 from app.services.pdf_service import PdfGeneratorService, PdfGenerationError
 from app.db.database import get_database_pool
 from app.core.error_context import ErrorContext
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ServiceUnavailableException,
     ValidationException,
     ResourceNotFoundException,

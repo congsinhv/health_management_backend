@@ -8,7 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 from app.db.database import BaseRepository
 from app.schemas.user_profile import UserProfileCreate, UserProfileUpdate
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ResourceNotFoundException,
     DatabaseException,
     DatabaseConstraintException,

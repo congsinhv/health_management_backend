@@ -12,7 +12,7 @@ from app.auth.dependencies import get_current_active_user
 from fastapi import APIRouter, Depends, status, Query, Request
 from app.schemas.user import UserInDB
 from app.core.error_context import ErrorContext
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ResourceNotFoundException,
     ValidationException,
     DatabaseException,

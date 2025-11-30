@@ -10,7 +10,7 @@ from app.db.database import get_database_pool
 from app.auth.dependencies import get_current_active_user, get_current_active_superuser
 from fastapi import APIRouter, Depends, status, Query
 from app.core.error_context import ErrorContext
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ResourceNotFoundException,
     ValidationException,
     DatabaseException,

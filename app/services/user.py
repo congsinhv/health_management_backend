@@ -8,7 +8,7 @@ import asyncpg
 from typing import Optional, List, Dict, Any
 from datetime import timedelta, datetime, timezone
 from app.constants import UserProviders
-from app.exceptions import ResourceNotFoundException
+from app.core.shared.exceptions import ResourceNotFoundException
 from app.db.user import UserRepository
 from app.db.user_profile import UserProfileRepository
 from app.schemas.user import (
@@ -25,7 +25,7 @@ from app.schemas.user import (
     GoogleOAuthCallback,
 )
 from app.schemas.user_profile import UserProfileCreate, UserProfileResponse
-from app.core.security import (
+from app.core.shared.auth import (
     hash_password,
     verify_password,
     create_access_token,

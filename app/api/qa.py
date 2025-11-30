@@ -22,7 +22,7 @@ from app.middleware.rate_limit import get_rate_limiter
 from app.schemas.qa import QuestionRequest, QuestionResponse, QAHealthResponse
 from app.schemas.user import UserInDB
 from app.core.error_context import ErrorContext
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ValidationException,
     ServiceUnavailableException,
     RateLimitException,

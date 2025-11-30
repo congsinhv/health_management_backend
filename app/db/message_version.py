@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 import asyncpg
 
 from app.db.database import BaseRepository
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ResourceNotFoundException,
     DatabaseException,
     DatabaseConstraintException,

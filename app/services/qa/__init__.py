@@ -1,6 +1,6 @@
 """
 Q&A service package with decomposed components.
-from app.exceptions import (
+from app.core.shared.exceptions import (
     QAServiceException,
     QAModelNotLoadedException,
     QADatasetException,

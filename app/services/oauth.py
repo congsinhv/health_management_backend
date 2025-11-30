@@ -1,6 +1,6 @@
 """
 OAuth service for handling Google OAuth authentication.
-from app.exceptions import (
+from app.core.shared.exceptions import (
     OAuthException,
     OAuthTokenException,
     OAuthProviderException,

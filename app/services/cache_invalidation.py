@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional, Set, Callable
 from datetime import datetime, timedelta
 from enum import Enum
 
-from app.exceptions import (
+from app.core.shared.exceptions import (
     CacheException,
     CacheUnavailableException,
     ServiceUnavailableException,

@@ -1,4 +1,4 @@
-from app.exceptions import (
+from app.core.shared.exceptions import (
     PredictionException,
     PredictionModelException,
     PredictionDataException,

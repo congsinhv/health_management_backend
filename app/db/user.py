@@ -7,7 +7,7 @@ from typing import Optional, List
 from datetime import datetime
 from app.db.database import BaseRepository
 from app.schemas.user import UserCreate, UserUpdate
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ResourceNotFoundException,
     DatabaseException,
     DatabaseConstraintException,

@@ -1,6 +1,6 @@
 """
 Email service package with decomposed components.
-from app.exceptions import (
+from app.core.shared.exceptions import (
     EmailException,
     EmailConfigurationException,
     EmailSendException,

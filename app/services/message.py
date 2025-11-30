@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
 from app.config import logger
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ResourceNotFoundException,
     ValidationException,
     DatabaseException,

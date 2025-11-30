@@ -10,9 +10,9 @@ from app.services.auth_log import AuthLogService
 from app.services.oauth import google_oauth_service
 from app.db.database import get_database_pool
 from app.auth.dependencies import get_current_active_user
-from app.core.security import verify_refresh_token
+from app.core.shared.auth import verify_refresh_token
 from app.core.error_context import ErrorContext
-from app.exceptions import (
+from app.core.shared.exceptions import (
     AuthenticationException,
     ValidationException,
     ServiceUnavailableException,
@@ -79,7 +79,7 @@ async def verify_email(
             raise AuthenticationException("Email verification failed")
 
         # Get user_id from token to log success
-        from app.core.security import verify_verification_token
+        from app.core.shared.auth import verify_verification_token
 
         email = verify_verification_token(verification_data.token, "email_verification")
         if email:
@@ -118,7 +118,7 @@ async def verify_email_from_link(
             raise AuthenticationException("Email verification failed")
 
         # Get user_id from token to log success
-        from app.core.security import verify_verification_token
+        from app.core.shared.auth import verify_verification_token
 
         email = verify_verification_token(token, "email_verification")
         if email:
@@ -213,7 +213,7 @@ async def reset_password(
             raise AuthenticationException("Password reset failed")
 
         # Get user_id from token to log success
-        from app.core.security import verify_verification_token
+        from app.core.shared.auth import verify_verification_token
 
         email = verify_verification_token(reset_data.token, "password_reset")
         if email:

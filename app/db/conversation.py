@@ -8,7 +8,7 @@ import asyncpg
 
 from app.config import logger
 from app.db.database import BaseRepository
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ResourceNotFoundException,
     DatabaseException,
     DatabaseConstraintException,

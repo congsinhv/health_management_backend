@@ -17,7 +17,7 @@ from redis.exceptions import ConnectionError, TimeoutError, RedisError
 
 from app.config import settings
 
-from app.exceptions import (
+from app.core.shared.exceptions import (
     CacheException,
     CacheUnavailableException,
     CacheTimeoutException,

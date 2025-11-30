@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ResourceNotFoundException,
     ResourceConflictException,
     AuthenticationException,

@@ -12,7 +12,7 @@ from app.schemas.upload import UploadImageResponse
 from app.config import settings
 from app.utils.gcs_uploader import GCSUploader
 from app.core.error_context import ErrorContext
-from app.exceptions import (
+from app.core.shared.exceptions import (
     ValidationException,
     FileOperationException,
     StorageException,
