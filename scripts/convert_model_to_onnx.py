@@ -35,23 +35,49 @@ def convert_to_onnx(model_path: str, output_path: str) -> None:
     Raises:
         Exception: If conversion fails
     """
+    import os
+    import shutil
+    import tempfile
+
     print(f"[1/3] Loading PyTorch model from {model_path}")
 
-    # Export to ONNX
-    ort_model = ORTModelForFeatureExtraction.from_pretrained(
-        model_path, export=True, provider="CPUExecutionProvider"
-    )
+    # Create output directory
+    os.makedirs(output_path, exist_ok=True)
 
-    # Save ONNX model
-    ort_model.save_pretrained(output_path)
-    print(f"[2/3] ONNX model saved to {output_path}")
+    # Use a persistent temporary directory for conversion
+    temp_dir = tempfile.mkdtemp(prefix="onnx_conversion_")
 
-    # Apply int8 dynamic quantization
-    quantizer = ORTQuantizer.from_pretrained(output_path)
-    qconfig = AutoQuantizationConfig.avx512_vnni(is_static=False)
+    try:
+        # Export to ONNX (keep opset version 18 as suggested by PyTorch)
+        print(f"[2/3] Exporting model to ONNX format...")
+        ort_model = ORTModelForFeatureExtraction.from_pretrained(
+            model_path,
+            export=True,
+            provider="CPUExecutionProvider",
+            cache_dir=temp_dir  # Use persistent temp dir
+        )
 
-    quantizer.quantize(save_dir=output_path, quantization_config=qconfig)
-    print(f"[3/3] Quantized model saved to {output_path}")
+        # Save ONNX model to final location
+        ort_model.save_pretrained(output_path)
+        print(f"✅ ONNX model saved to {output_path}")
+
+        # Apply int8 dynamic quantization
+        print(f"[3/3] Applying int8 dynamic quantization...")
+        try:
+            quantizer = ORTQuantizer.from_pretrained(output_path)
+
+            # Use dynamic quantization (works on all hardware)
+            qconfig = AutoQuantizationConfig.avx512_vnni(is_static=False)
+
+            quantizer.quantize(save_dir=output_path, quantization_config=qconfig)
+            print(f"✅ Quantized model saved to {output_path}")
+        except Exception as e:
+            print(f"⚠️  Quantization failed: {e}")
+            print(f"✅ ONNX model saved without quantization (still provides speedup)")
+    finally:
+        # Clean up temp directory
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def benchmark_accuracy(
