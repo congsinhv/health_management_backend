@@ -259,12 +259,15 @@ async def qa_health_check(request: Request):
                 message="Q&A service is not initialized",
             )
 
+        # Check model loaded status (support lazy loading)
+        model_loaded = getattr(qa_service, "_model_loaded", False)
+
         return QAHealthResponse(
             status="healthy",
-            model_loaded=qa_service.model is not None,
-            embeddings_loaded=qa_service.question_embeddings is not None,
+            model_loaded=model_loaded,
+            embeddings_loaded=model_loaded,  # Same as model_loaded
             streaming_enabled=hasattr(qa_service, "stream_ask_question"),
             openai_configured=hasattr(qa_service, "openai_client")
             and qa_service.openai_client is not None,
-            message="Q&A service is operational",
+            message="Q&A service is operational (model loaded)" if model_loaded else "Q&A service is operational (lazy loading - model will load on first request)",
         )

@@ -47,6 +47,7 @@ openai==2.8.0
 # ONNX Runtime for optimized inference
 optimum[onnxruntime]==1.23.0
 onnxruntime==1.21.0
+onnxscript==0.5.6
 
 # SSE Streaming dependencies
 httpx-sse>=0.4.0

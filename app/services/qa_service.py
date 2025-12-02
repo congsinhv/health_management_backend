@@ -2,6 +2,7 @@
 Q&A Service using SBERT and OpenAI API.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -117,21 +118,31 @@ class QAService:
     ]
 
     def __init__(self, settings, cache_service=None):
-        """Initialize Q&A service with model, data, and optional cache service."""
+        """
+        Initialize Q&A service with lazy loading support.
+
+        Model and data are loaded on first request if lazy_loading=True.
+        """
         self.settings = settings
         self.model_path = settings.qa_model_path
         self.data_path = settings.qa_data_path
         self.vocab_path = settings.qa_vocab_path
         self.cache_service = cache_service
 
-        # Ensure models are available (download from GCS if needed)
-        if settings.model_auto_download:
-            self._ensure_model_and_data_exist()
+        # Lazy loading state
+        self._model = None
+        self._df = None
+        self._question_embeddings = None
+        self._vocab = None
+        self._model_loaded = False
+        self._loading_lock = asyncio.Lock()  # Prevent concurrent loads
 
-        # Load components
-        self.vocab = self._load_vocab()
-        self.model = self._load_model()
-        self.df, self.question_embeddings = self._load_data()
+        # Eager loading (backward compatibility)
+        if not settings.qa_lazy_loading:
+            logger.info("Eager loading enabled, loading model at startup...")
+            self._load_all_sync()
+        else:
+            logger.info("Lazy loading enabled, model will load on first request")
 
         # Q&A behavior settings
         self.max_per_field = settings.qa_max_per_field
@@ -142,6 +153,83 @@ class QAService:
             logger.info("QAService initialized with caching enabled")
         else:
             logger.info("QAService initialized without caching")
+
+    def _load_all_sync(self):
+        """Synchronous eager loading for backward compatibility."""
+        if self.settings.model_auto_download:
+            self._ensure_model_and_data_exist()
+
+        self._vocab = self._load_vocab()
+        self._model = self._load_model()
+        self._df, self._question_embeddings = self._load_data()
+        self._model_loaded = True
+        logger.info("Model and data loaded successfully (eager mode)")
+
+    async def _ensure_model_loaded(self):
+        """
+        Ensure model is loaded before processing requests.
+        Thread-safe lazy loading with asyncio.Lock.
+        """
+        if self._model_loaded:
+            return  # Already loaded
+
+        async with self._loading_lock:
+            # Double-check after acquiring lock
+            if self._model_loaded:
+                return
+
+            logger.info("Lazy loading model and data...")
+            start_time = time.time()
+
+            try:
+                # Download from GCS if needed
+                if self.settings.model_auto_download:
+                    self._ensure_model_and_data_exist()
+
+                # Load components (run in thread pool to avoid blocking)
+                loop = asyncio.get_event_loop()
+                self._vocab = await loop.run_in_executor(None, self._load_vocab)
+                self._model = await loop.run_in_executor(None, self._load_model)
+                self._df, self._question_embeddings = await loop.run_in_executor(
+                    None, self._load_data
+                )
+
+                self._model_loaded = True
+                elapsed = time.time() - start_time
+                logger.info(f"Model and data loaded successfully in {elapsed:.2f}s")
+
+            except Exception as e:
+                logger.error(f"Failed to load model: {e}")
+                raise RuntimeError(f"Q&A service unavailable: {e}") from e
+
+    # Property accessors (for backward compatibility)
+    @property
+    def model(self):
+        """Get model (throws error if not loaded)."""
+        if not self._model_loaded:
+            raise RuntimeError("Model not loaded. Call await _ensure_model_loaded() first.")
+        return self._model
+
+    @property
+    def vocab(self):
+        """Get vocabulary."""
+        if not self._model_loaded:
+            raise RuntimeError("Vocab not loaded. Call await _ensure_model_loaded() first.")
+        return self._vocab
+
+    @property
+    def df(self):
+        """Get dataset DataFrame."""
+        if not self._model_loaded:
+            raise RuntimeError("Data not loaded. Call await _ensure_model_loaded() first.")
+        return self._df
+
+    @property
+    def question_embeddings(self):
+        """Get pre-computed question embeddings."""
+        if not self._model_loaded:
+            raise RuntimeError("Embeddings not loaded. Call await _ensure_model_loaded() first.")
+        return self._question_embeddings
 
     def _ensure_model_and_data_exist(self) -> None:
         """
@@ -504,7 +592,8 @@ class QAService:
             )
 
             logger.info(f"Creating embeddings for {len(df)} questions...")
-            question_embeddings = self.model.encode(
+            # Use _model directly (safe in loading context)
+            question_embeddings = self._model.encode(
                 df[QAColumns.QUESTION_CLEAN].tolist(),
                 convert_to_tensor=True,
                 show_progress_bar=True,
@@ -533,8 +622,8 @@ class QAService:
         words = text.split()
 
         # Filter by vocabulary if available
-        if self.vocab:
-            words = [w for w in words if w in self.vocab]
+        if self._vocab:
+            words = [w for w in words if w in self._vocab]
 
         return " ".join(words)
 
@@ -635,6 +724,7 @@ class QAService:
     ) -> Dict[str, any]:
         """
         Process user question and return relevant answers.
+        Triggers lazy model loading on first call.
 
         Args:
             user_question: The question to answer
@@ -647,6 +737,9 @@ class QAService:
         Raises:
             ValueError: If question is empty
         """
+        # Ensure model is loaded
+        await self._ensure_model_loaded()
+
         if not user_question or not user_question.strip():
             raise ValueError(QAMessages.EMPTY_QUESTION)
 
@@ -757,7 +850,12 @@ class QAService:
         threshold: float = None,
         top_k: int = None,
     ) -> AsyncGenerator[str, None]:
-        """Stream complete Q&A response with progressive events."""
+        """
+        Stream complete Q&A response with progressive events.
+        Triggers lazy model loading on first call.
+        """
+        # Ensure model is loaded
+        await self._ensure_model_loaded()
 
         start_time = time.time()
         threshold = threshold or 0.55  # Default threshold

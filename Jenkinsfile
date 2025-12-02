@@ -441,7 +441,7 @@ AI summarization will not be available without this secret.
                                 --set-env-vars "WEBUI_URL=https://${env.CUSTOM_DOMAIN}" \
                                 --cpu 2 \
                                 --memory 2Gi \
-                                --min-instances 0 \
+                                --min-instances 1 \
                                 --max-instances 10 \
                                 --timeout 300 \
                                 --concurrency 15 \

@@ -145,6 +145,12 @@ class Settings(BaseSettings):
         description="ONNX execution provider (CPUExecutionProvider, CUDAExecutionProvider)",
     )
 
+    # Lazy loading settings (Phase 2)
+    qa_lazy_loading: bool = Field(
+        default=True,
+        description="Lazy load Q&A model on first request (faster startup)",
+    )
+
     # Obesity Prediction Model settings
     obesity_model_dir: str = Field(
         default="/tmp/models_obesity",

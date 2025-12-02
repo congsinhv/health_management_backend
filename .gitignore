@@ -165,6 +165,7 @@ logs/
 
 # Q&A Model files (should be downloaded from GCS, not tracked in git)
 models/vietnamese-sbert/*
+models/vietnamese-sbert-onnx/*
 !models/vietnamese-sbert/README.md
 models/**/*.safetensors
 models/**/*.bin
