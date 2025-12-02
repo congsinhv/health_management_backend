@@ -36,6 +36,7 @@ requests==2.32.3
 # Google Cloud dependencies for Cloud Run
 google-cloud-secret-manager==2.20.2
 google-cloud-storage>=2.10.0
+google-cloud-monitoring>=2.15.0  # For memory monitoring script (Phase 4)
 
 # Q&A Service dependencies
 sentence-transformers==5.1.2

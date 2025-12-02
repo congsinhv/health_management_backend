@@ -440,11 +440,11 @@ AI summarization will not be available without this secret.
                                 --set-secrets "OPENAI_API_KEY=vhealth-${params.ENVIRONMENT}-openai-api-key:latest" \
                                 --set-env-vars "WEBUI_URL=https://${env.CUSTOM_DOMAIN}" \
                                 --cpu 2 \
-                                --memory 2Gi \
+                                --memory 1Gi \
                                 --min-instances 1 \
                                 --max-instances 10 \
                                 --timeout 300 \
-                                --concurrency 15 \
+                                --concurrency 20 \
                                 --allow-unauthenticated \
                                 --revision-suffix ${revisionSuffix} \
                                 ${noTrafficFlag} \
