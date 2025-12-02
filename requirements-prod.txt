@@ -44,6 +44,10 @@ openpyxl==3.1.5
 torch==2.9.0
 openai==2.8.0
 
+# ONNX Runtime for optimized inference
+optimum[onnxruntime]==1.23.0
+onnxruntime==1.21.0
+
 # SSE Streaming dependencies
 httpx-sse>=0.4.0
 

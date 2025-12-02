@@ -303,16 +303,147 @@ class QAService:
 
     def _load_model(self) -> SentenceTransformer:
         """
-        Load or download SBERT model.
+        Load SBERT model with ONNX optimization if available.
 
-        First attempts to load from local path. If not found and GCS download
-        failed, falls back to Hugging Face download.
+        Detects available model format (ONNX or PyTorch) and loads accordingly.
+        Falls back to PyTorch if ONNX unavailable or disabled.
+
+        Returns:
+            Loaded SentenceTransformer model (or ONNX-compatible wrapper)
+
+        Raises:
+            Exception: If model cannot be loaded from any source
+        """
+        model_format = self._detect_model_format()
+
+        if model_format == "onnx" and self.settings.qa_model_format != "pytorch":
+            try:
+                logger.info("Loading ONNX model for optimized inference...")
+                return self._load_onnx_model()
+            except Exception as e:
+                logger.warning(f"ONNX loading failed: {e}, falling back to PyTorch")
+                return self._load_pytorch_model()
+        else:
+            logger.info("Loading PyTorch model (ONNX not available or disabled)")
+            return self._load_pytorch_model()
+
+    def _detect_model_format(self) -> str:
+        """
+        Detect available model format in model directory.
+
+        Returns:
+            "onnx" if ONNX files found, "pytorch" if PyTorch files found,
+            "unknown" otherwise
+        """
+        # Auto-detect disabled - force PyTorch
+        if self.settings.qa_model_format == "pytorch":
+            return "pytorch"
+
+        # Auto-detect disabled - force ONNX
+        if self.settings.qa_model_format == "onnx":
+            return "onnx"
+
+        # Auto mode - detect from files
+        model_dir = Path(self.model_path)
+
+        # Check for ONNX files (quantized preferred)
+        if (model_dir / "model_quantized.onnx").exists():
+            return "onnx"
+        elif (model_dir / "model.onnx").exists():
+            return "onnx"
+
+        # Check for PyTorch files
+        if (model_dir / "pytorch_model.bin").exists() or (
+            model_dir / "model.safetensors"
+        ).exists():
+            return "pytorch"
+
+        return "unknown"
+
+    def _load_onnx_model(self):
+        """
+        Load ONNX-optimized model using Optimum.
+
+        Returns:
+            ONNX model wrapped with SentenceTransformer-compatible interface
+
+        Raises:
+            ImportError: If optimum/transformers not installed
+            Exception: If ONNX model loading fails
+        """
+        try:
+            from optimum.onnxruntime import ORTModelForFeatureExtraction
+            from transformers import AutoTokenizer
+        except ImportError as e:
+            raise ImportError(
+                "optimum[onnxruntime] required for ONNX support. "
+                "Install: pip install optimum[onnxruntime]"
+            ) from e
+
+        # Load ONNX model
+        onnx_model = ORTModelForFeatureExtraction.from_pretrained(
+            self.model_path, provider=self.settings.qa_onnx_provider
+        )
+        tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+
+        # Wrap in SentenceTransformer-compatible interface
+        class ONNXSentenceTransformer:
+            """SentenceTransformer-compatible wrapper for ONNX models."""
+
+            def __init__(self, model, tokenizer):
+                self.model = model
+                self.tokenizer = tokenizer
+
+            def encode(self, texts, convert_to_tensor=False, show_progress_bar=False):
+                """
+                Encode texts to embeddings using ONNX model.
+
+                Compatible with SentenceTransformer.encode() interface.
+
+                Args:
+                    texts: Single text or list of texts
+                    convert_to_tensor: Return torch.Tensor (default: numpy)
+                    show_progress_bar: Unused (for compatibility)
+
+                Returns:
+                    Embeddings as torch.Tensor or numpy array
+                """
+                import torch
+
+                if isinstance(texts, str):
+                    texts = [texts]
+
+                # Tokenize
+                inputs = self.tokenizer(
+                    texts,
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                )
+
+                # Inference
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+
+                # Mean pooling
+                embeddings = outputs.last_hidden_state.mean(dim=1)
+
+                if convert_to_tensor:
+                    return embeddings
+                return embeddings.cpu().numpy()
+
+        return ONNXSentenceTransformer(onnx_model, tokenizer)
+
+    def _load_pytorch_model(self) -> SentenceTransformer:
+        """
+        Load standard PyTorch SentenceTransformer model.
 
         Returns:
             Loaded SentenceTransformer model
 
         Raises:
-            Exception: If model cannot be loaded from any source
+            Exception: If model cannot be loaded
         """
         try:
             if os.path.exists(self.model_path) and self._is_model_complete():

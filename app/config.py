@@ -135,6 +135,16 @@ class Settings(BaseSettings):
         default="tuvung.txt", description="Path to Vietnamese vocabulary file"
     )
 
+    # ONNX optimization settings
+    qa_model_format: str = Field(
+        default="auto",
+        description="Model format: auto (detect), pytorch, onnx",
+    )
+    qa_onnx_provider: str = Field(
+        default="CPUExecutionProvider",
+        description="ONNX execution provider (CPUExecutionProvider, CUDAExecutionProvider)",
+    )
+
     # Obesity Prediction Model settings
     obesity_model_dir: str = Field(
         default="/tmp/models_obesity",
