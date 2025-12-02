@@ -230,6 +230,9 @@ class Settings(BaseSettings):
     cache_ttl_qa_summary: int = Field(
         default=1800, description="TTL for Q&A AI summaries (30 minutes)"
     )
+    cache_ttl_qa_embedding: int = Field(
+        default=86400, description="TTL for Q&A embeddings (24 hours)"
+    )
     cache_ttl_conversation_list: int = Field(
         default=300, description="TTL for conversation list (5 minutes)"
     )
@@ -241,6 +244,16 @@ class Settings(BaseSettings):
     )
     cache_ttl_message_list: int = Field(
         default=180, description="TTL for message list (3 minutes)"
+    )
+
+    # Cache warming settings (Phase 3)
+    qa_cache_warmup_enabled: bool = Field(
+        default=True,
+        description="Pre-warm embedding cache at startup"
+    )
+    qa_cache_warmup_questions_file: str = Field(
+        default="data/top_questions.txt",
+        description="File with top questions for cache warming"
     )
 
     @property

@@ -57,6 +57,7 @@ prometheus-client>=0.20.0
 
 # Redis caching
 redis>=5.0.0
+msgpack-numpy==0.4.8  # Efficient numpy serialization for embedding cache
 
 # PDF Generation
 weasyprint==62.3

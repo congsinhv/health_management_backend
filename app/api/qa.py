@@ -17,7 +17,7 @@ except ImportError:
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import StreamingResponse
 
-from app.auth.dependencies import get_current_active_user
+from app.auth.dependencies import get_current_active_user, get_current_active_superuser
 from app.middleware.rate_limit import get_rate_limiter
 from app.schemas.qa import QuestionRequest, QuestionResponse, QAHealthResponse
 from app.schemas.user import UserInDB
@@ -271,3 +271,61 @@ async def qa_health_check(request: Request):
             and qa_service.openai_client is not None,
             message="Q&A service is operational (model loaded)" if model_loaded else "Q&A service is operational (lazy loading - model will load on first request)",
         )
+
+
+@router.get("/cache/stats", status_code=status.HTTP_200_OK)
+async def cache_stats(
+    request: Request,
+    current_user: Annotated[UserInDB, Depends(get_current_active_superuser)],
+):
+    """
+    Get cache statistics including embedding cache hit rates (Phase 3).
+
+    Admin-only endpoint showing Redis cache performance metrics.
+
+    Returns:
+        Cache statistics including hit/miss rates, memory usage, and keyspace info
+    """
+    # Set error context
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "cache_stats")
+    ErrorContext.add_context("user_id", current_user.id)
+
+    with ErrorContext("cache_stats"):
+        cache_service = request.app.state.cache_service
+
+        if not cache_service or not cache_service.enabled:
+            return {
+                "enabled": False,
+                "message": "Cache service is not enabled"
+            }
+
+        try:
+            # Get Redis info
+            info = await cache_service.redis_client.info("stats")
+            memory_info = await cache_service.redis_client.info("memory")
+
+            keyspace_hits = info.get("keyspace_hits", 0)
+            keyspace_misses = info.get("keyspace_misses", 0)
+            total_requests = keyspace_hits + keyspace_misses
+
+            return {
+                "enabled": True,
+                "hit_rate": round(
+                    (keyspace_hits / max(total_requests, 1)) * 100, 2
+                ),
+                "keyspace_hits": keyspace_hits,
+                "keyspace_misses": keyspace_misses,
+                "total_requests": total_requests,
+                "used_memory_human": memory_info.get("used_memory_human", "N/A"),
+                "used_memory_peak_human": memory_info.get("used_memory_peak_human", "N/A"),
+                "connected_clients": info.get("connected_clients", 0),
+                "total_commands_processed": info.get("total_commands_processed", 0),
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting cache stats: {e}")
+            raise ServiceUnavailableException(
+                message="Failed to retrieve cache statistics",
+                details={"error": str(e)}
+            )

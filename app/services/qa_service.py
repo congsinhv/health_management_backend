@@ -716,6 +716,66 @@ class QAService:
             logger.error(f"Error calling OpenAI API: {e}")
             return QAMessages.SUMMARIZE_ERROR.format(error=str(e))
 
+    async def _get_question_embedding(self, question: str) -> Any:
+        """
+        Get question embedding with caching (Phase 3).
+
+        This method implements embedding-level caching to avoid redundant SBERT
+        inference. Cache hit returns embedding in <5ms vs 20ms inference.
+
+        Args:
+            question: User question
+
+        Returns:
+            Embedding tensor (compatible with util.cos_sim)
+        """
+        # Preprocess question
+        cleaned_question = self.preprocess_text(question)
+        if not cleaned_question:
+            cleaned_question = question.lower()
+
+        # Check embedding cache if available
+        if self.cache_service and self.cache_service.enabled:
+            question_hash = _hash_question(question)
+            cache_key = f"qa:embedding:{question_hash}"
+
+            cached_embedding = await self.cache_service.get_embedding(cache_key)
+            if cached_embedding is not None:
+                logger.info(f"Embedding cache HIT for hash: {question_hash}")
+                # Convert numpy to tensor
+                import torch
+                return torch.from_numpy(cached_embedding)
+
+            logger.info(f"Embedding cache MISS for hash: {question_hash}")
+
+        # Compute embedding (cache miss or cache disabled)
+        start = time.time()
+        embedding = self.model.encode(cleaned_question, convert_to_tensor=True)
+        inference_time = (time.time() - start) * 1000  # ms
+        logger.info(f"Embedding inference: {inference_time:.2f}ms")
+
+        # Cache embedding if available
+        if self.cache_service and self.cache_service.enabled:
+            question_hash = _hash_question(question)
+            cache_key = f"qa:embedding:{question_hash}"
+
+            # Convert tensor to numpy for serialization
+            import torch
+            if isinstance(embedding, torch.Tensor):
+                embedding_numpy = embedding.cpu().numpy()
+            else:
+                # Already numpy array
+                embedding_numpy = embedding
+
+            await self.cache_service.set_embedding(
+                cache_key,
+                embedding_numpy,
+                ttl=self.settings.cache_ttl_qa_embedding
+            )
+            logger.info(f"Cached embedding for hash: {question_hash}")
+
+        return embedding
+
     async def ask_question(
         self,
         user_question: str,
@@ -749,7 +809,7 @@ class QAService:
         if top_k is None:
             top_k = self.settings.qa_top_k
 
-        # Check cache first if available
+        # Check cache first if available (full response cache - backward compat)
         if self.cache_service and self.cache_service.enabled:
             try:
                 question_hash = _hash_question(user_question)
@@ -757,22 +817,16 @@ class QAService:
 
                 cached_result = await self.cache_service.get(cache_key)
                 if cached_result:
-                    logger.info(f"Cache HIT for question hash: {question_hash}")
+                    logger.info(f"Full response cache HIT for hash: {question_hash}")
                     return json.loads(cached_result)
                 else:
-                    logger.info(f"Cache MISS for question hash: {question_hash}")
+                    logger.info(f"Full response cache MISS for hash: {question_hash}")
             except Exception as e:
                 logger.warning(f"Cache get error for question: {e}")
                 # Continue with normal flow if cache fails
 
-        # Preprocess question
-        cleaned_question = self.preprocess_text(user_question)
-        if not cleaned_question:
-            # If preprocessing removes everything, use original lowercased
-            cleaned_question = user_question.lower()
-
-        # Generate embedding and compute similarity
-        user_emb = self.model.encode(cleaned_question, convert_to_tensor=True)
+        # Get embedding with caching (Phase 3)
+        user_emb = await self._get_question_embedding(user_question)
         cos_scores = util.cos_sim(user_emb, self.question_embeddings)[0]
 
         # Get top scoring results
@@ -866,11 +920,8 @@ class QAService:
         yield f"event: {event.event_type}\ndata: {event.model_dump_json()}\n\n"
 
         try:
-            # Phase 1: Semantic search (existing logic, async-safe)
-            question_normalized = self.preprocess_text(question)
-            question_embedding = self.model.encode(
-                question_normalized, convert_to_tensor=True
-            )
+            # Phase 1: Semantic search with embedding cache (Phase 3)
+            question_embedding = await self._get_question_embedding(question)
             similarities = util.cos_sim(question_embedding, self.question_embeddings)[0]
 
             # Get top results

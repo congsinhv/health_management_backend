@@ -50,6 +50,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def warm_cache_background(qa_service: QAService):
+    """
+    Run cache warming in background (Phase 3).
+
+    Pre-computes embeddings for top questions to reduce first-request latency.
+    Runs non-blocking, errors are logged but don't crash startup.
+    """
+    try:
+        from pathlib import Path
+        from scripts.cache_warmer import load_top_questions, warm_cache
+
+        logger.info("Starting background cache warming...")
+
+        # Load questions
+        questions = await load_top_questions(
+            settings.qa_cache_warmup_questions_file
+        )
+
+        if not questions:
+            logger.warning("No questions to warm, skipping")
+            return
+
+        # Warm cache (top 50)
+        await warm_cache(qa_service, questions[:50])
+        logger.info("Background cache warming completed successfully")
+
+    except Exception as e:
+        logger.warning(f"Cache warming failed (non-critical): {e}")
+        # Don't crash startup if warming fails
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
@@ -158,6 +189,19 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Q&A Service is disabled in settings")
         app.state.qa_service = None
+
+    # Cache warming (Phase 3) - run in background if QA service available
+    if (
+        settings.qa_enabled
+        and settings.qa_cache_warmup_enabled
+        and hasattr(app.state, "qa_service")
+        and app.state.qa_service is not None
+        and app.state.cache_service.enabled
+    ):
+        import asyncio
+        asyncio.create_task(warm_cache_background(app.state.qa_service))
+    else:
+        logger.info("Cache warming skipped (QA disabled, cache disabled, or warmup disabled)")
 
     yield
 
