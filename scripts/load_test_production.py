@@ -164,7 +164,9 @@ async def main():
     await asyncio.sleep(5)
 
     print("\nScenario 2: Medium load (15 concurrent users)")
-    await tester.run_load_test(TEST_QUESTIONS, concurrent_users=15, requests_per_user=10)
+    await tester.run_load_test(
+        TEST_QUESTIONS, concurrent_users=15, requests_per_user=10
+    )
     await asyncio.sleep(5)
 
     print("\nScenario 3: Heavy load (30 concurrent users)")

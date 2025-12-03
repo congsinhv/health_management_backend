@@ -207,28 +207,36 @@ class QAService:
     def model(self):
         """Get model (throws error if not loaded)."""
         if not self._model_loaded:
-            raise RuntimeError("Model not loaded. Call await _ensure_model_loaded() first.")
+            raise RuntimeError(
+                "Model not loaded. Call await _ensure_model_loaded() first."
+            )
         return self._model
 
     @property
     def vocab(self):
         """Get vocabulary."""
         if not self._model_loaded:
-            raise RuntimeError("Vocab not loaded. Call await _ensure_model_loaded() first.")
+            raise RuntimeError(
+                "Vocab not loaded. Call await _ensure_model_loaded() first."
+            )
         return self._vocab
 
     @property
     def df(self):
         """Get dataset DataFrame."""
         if not self._model_loaded:
-            raise RuntimeError("Data not loaded. Call await _ensure_model_loaded() first.")
+            raise RuntimeError(
+                "Data not loaded. Call await _ensure_model_loaded() first."
+            )
         return self._df
 
     @property
     def question_embeddings(self):
         """Get pre-computed question embeddings."""
         if not self._model_loaded:
-            raise RuntimeError("Embeddings not loaded. Call await _ensure_model_loaded() first.")
+            raise RuntimeError(
+                "Embeddings not loaded. Call await _ensure_model_loaded() first."
+            )
         return self._question_embeddings
 
     def _ensure_model_and_data_exist(self) -> None:
@@ -744,6 +752,7 @@ class QAService:
                 logger.info(f"Embedding cache HIT for hash: {question_hash}")
                 # Convert numpy to tensor
                 import torch
+
                 return torch.from_numpy(cached_embedding)
 
             logger.info(f"Embedding cache MISS for hash: {question_hash}")
@@ -761,6 +770,7 @@ class QAService:
 
             # Convert tensor to numpy for serialization
             import torch
+
             if isinstance(embedding, torch.Tensor):
                 embedding_numpy = embedding.cpu().numpy()
             else:
@@ -768,9 +778,7 @@ class QAService:
                 embedding_numpy = embedding
 
             await self.cache_service.set_embedding(
-                cache_key,
-                embedding_numpy,
-                ttl=self.settings.cache_ttl_qa_embedding
+                cache_key, embedding_numpy, ttl=self.settings.cache_ttl_qa_embedding
             )
             logger.info(f"Cached embedding for hash: {question_hash}")
 

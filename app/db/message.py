@@ -3,6 +3,7 @@ Message repository for database operations with custom exception handling.
 """
 
 import json
+import logging
 from typing import Optional, List, Dict, Any
 import asyncpg
 
@@ -12,6 +13,8 @@ from app.exceptions import (
     DatabaseException,
     DatabaseConstraintException,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class MessageRepository(BaseRepository):
@@ -43,40 +46,78 @@ class MessageRepository(BaseRepository):
                 )
             return result
         except asyncpg.ForeignKeyViolationError as e:
-            if "conversation_id" in str(e):
+            # Extract SQLSTATE and constraint details for diagnostics
+            sqlstate = getattr(e, "sqlstate", "UNKNOWN")
+            constraint_msg = str(e)
+
+            # Log full error details for debugging
+            logger.error(
+                f"ForeignKeyViolationError in create_message: {constraint_msg}",
+                extra={
+                    "error_type": "foreign_key_violation",
+                    "sqlstate": sqlstate,
+                    "conversation_id": data["conversation_id"],
+                    "user_id": data["user_id"],
+                    "constraint": constraint_msg[:200],  # Truncate long messages
+                },
+            )
+
+            # Determine which FK constraint failed
+            if "conversations" in constraint_msg or "conversation_id" in constraint_msg:
                 raise ResourceNotFoundException(
                     message="Conversation not found for message creation",
                     details={
                         "conversation_id": data["conversation_id"],
                         "user_id": data["user_id"],
-                        "constraint": str(e),
+                        "sqlstate": sqlstate,
+                        "constraint": constraint_msg[:200],
                     },
                 )
-            elif "user_id" in str(e):
+            elif "users" in constraint_msg or "user_id" in constraint_msg:
                 raise ResourceNotFoundException(
                     message="User not found for message creation",
                     details={
                         "conversation_id": data["conversation_id"],
                         "user_id": data["user_id"],
-                        "constraint": str(e),
+                        "sqlstate": sqlstate,
+                        "constraint": constraint_msg[:200],
                     },
                 )
             else:
+                # Unknown FK constraint
                 raise DatabaseException(
-                    message="Foreign key violation while creating message",
+                    message="Foreign key constraint violation during message creation",
                     details={
                         "conversation_id": data["conversation_id"],
                         "user_id": data["user_id"],
-                        "constraint": str(e),
+                        "constraint": constraint_msg[:200],
+                        "sqlstate": sqlstate,
                     },
                 )
         except asyncpg.PostgresError as e:
+            # Extract SQLSTATE for diagnostics
+            sqlstate = getattr(e, "sqlstate", "UNKNOWN")
+            error_msg = str(e)
+
+            # Log database error with full context
+            logger.error(
+                f"PostgresError in create_message: {error_msg}",
+                extra={
+                    "error_type": "postgres_error",
+                    "sqlstate": sqlstate,
+                    "conversation_id": data["conversation_id"],
+                    "user_id": data["user_id"],
+                    "error_message": error_msg[:200],
+                },
+            )
+
             raise DatabaseException(
                 message="Database error while creating message",
                 details={
                     "conversation_id": data["conversation_id"],
                     "user_id": data["user_id"],
-                    "error": str(e),
+                    "sqlstate": sqlstate,
+                    "error": error_msg[:200],
                 },
             )
 

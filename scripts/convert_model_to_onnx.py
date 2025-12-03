@@ -54,7 +54,7 @@ def convert_to_onnx(model_path: str, output_path: str) -> None:
             model_path,
             export=True,
             provider="CPUExecutionProvider",
-            cache_dir=temp_dir  # Use persistent temp dir
+            cache_dir=temp_dir,  # Use persistent temp dir
         )
 
         # Save ONNX model to final location
@@ -183,9 +183,7 @@ def main():
 
         success = benchmark_accuracy(args.model_path, output, test_questions)
         if not success:
-            print(
-                f"\n⚠️  Accuracy test failed. Review embeddings before deployment."
-            )
+            print(f"\n⚠️  Accuracy test failed. Review embeddings before deployment.")
             exit(1)
 
         print(f"\n✅ All tests passed!")

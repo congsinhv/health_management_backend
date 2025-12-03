@@ -77,10 +77,9 @@ async def test_ensure_model_loaded_once():
     mock_settings.qa_max_per_field = 3
     mock_settings.openai_api_key = "test-key"
 
-    with patch.object(QAService, "_load_vocab") as mock_vocab, \
-         patch.object(QAService, "_load_model") as mock_model, \
-         patch.object(QAService, "_load_data") as mock_data:
-
+    with patch.object(QAService, "_load_vocab") as mock_vocab, patch.object(
+        QAService, "_load_model"
+    ) as mock_model, patch.object(QAService, "_load_data") as mock_data:
         mock_vocab.return_value = set()
         mock_model.return_value = MagicMock()
         mock_data.return_value = (MagicMock(), MagicMock())
@@ -118,10 +117,9 @@ async def test_concurrent_lazy_load():
         time.sleep(0.1)  # Simulate slow load
         return MagicMock()
 
-    with patch.object(QAService, "_load_vocab", return_value=set()), \
-         patch.object(QAService, "_load_model", side_effect=mock_load_model), \
-         patch.object(QAService, "_load_data", return_value=(MagicMock(), MagicMock())):
-
+    with patch.object(QAService, "_load_vocab", return_value=set()), patch.object(
+        QAService, "_load_model", side_effect=mock_load_model
+    ), patch.object(QAService, "_load_data", return_value=(MagicMock(), MagicMock())):
         qa_service = QAService(mock_settings)
 
         # Simulate 5 concurrent requests
@@ -173,10 +171,9 @@ async def test_property_accessors_after_load():
     mock_df = MagicMock()
     mock_embeddings = MagicMock()
 
-    with patch.object(QAService, "_load_vocab", return_value=mock_vocab), \
-         patch.object(QAService, "_load_model", return_value=mock_model), \
-         patch.object(QAService, "_load_data", return_value=(mock_df, mock_embeddings)):
-
+    with patch.object(QAService, "_load_vocab", return_value=mock_vocab), patch.object(
+        QAService, "_load_model", return_value=mock_model
+    ), patch.object(QAService, "_load_data", return_value=(mock_df, mock_embeddings)):
         qa_service = QAService(mock_settings)
         await qa_service._ensure_model_loaded()
 

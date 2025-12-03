@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     database_pool_min_size: int = 1
     database_pool_max_size: int = 20
     database_pool_timeout: float = 30.0
+    database_query_timeout: float = Field(
+        default=30.0, description="Query execution timeout in seconds (default: 30.0)"
+    )
+    database_connection_timeout: float = Field(
+        default=10.0,
+        description="Connection acquisition timeout in seconds (default: 10.0)",
+    )
 
     # Security settings
     secret_key: str = Field(..., description="Secret key for JWT token signing")
@@ -248,12 +255,11 @@ class Settings(BaseSettings):
 
     # Cache warming settings (Phase 3)
     qa_cache_warmup_enabled: bool = Field(
-        default=True,
-        description="Pre-warm embedding cache at startup"
+        default=True, description="Pre-warm embedding cache at startup"
     )
     qa_cache_warmup_questions_file: str = Field(
         default="data/top_questions.txt",
-        description="File with top questions for cache warming"
+        description="File with top questions for cache warming",
     )
 
     @property

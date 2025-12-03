@@ -3,6 +3,8 @@ FastAPI application entrypoint for Health Management API.
 """
 
 import logging
+import psutil
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -64,9 +66,7 @@ async def warm_cache_background(qa_service: QAService):
         logger.info("Starting background cache warming...")
 
         # Load questions
-        questions = await load_top_questions(
-            settings.qa_cache_warmup_questions_file
-        )
+        questions = await load_top_questions(settings.qa_cache_warmup_questions_file)
 
         if not questions:
             logger.warning("No questions to warm, skipping")
@@ -86,6 +86,20 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
     # Startup
     logger.info("Starting up Health Management API")
+
+    # Log initial memory usage
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    memory_mb = memory_info.rss / 1024 / 1024  # Convert to MB
+    logger.info(
+        f"Startup memory usage: {memory_mb:.2f} MB (RSS)",
+        extra={
+            "memory_rss_mb": memory_mb,
+            "memory_vms_mb": memory_info.vms / 1024 / 1024,
+            "startup_phase": "initial",
+        },
+    )
+
     await database.connect()
 
     # Initialize rate limiter
@@ -199,9 +213,25 @@ async def lifespan(app: FastAPI):
         and app.state.cache_service.enabled
     ):
         import asyncio
+
         asyncio.create_task(warm_cache_background(app.state.qa_service))
     else:
-        logger.info("Cache warming skipped (QA disabled, cache disabled, or warmup disabled)")
+        logger.info(
+            "Cache warming skipped (QA disabled, cache disabled, or warmup disabled)"
+        )
+
+    # Log final startup memory usage
+    memory_info_final = process.memory_info()
+    memory_mb_final = memory_info_final.rss / 1024 / 1024
+    logger.info(
+        f"Startup complete - Memory usage: {memory_mb_final:.2f} MB (RSS)",
+        extra={
+            "memory_rss_mb": memory_mb_final,
+            "memory_vms_mb": memory_info_final.vms / 1024 / 1024,
+            "memory_increase_mb": memory_mb_final - memory_mb,
+            "startup_phase": "complete",
+        },
+    )
 
     yield
 

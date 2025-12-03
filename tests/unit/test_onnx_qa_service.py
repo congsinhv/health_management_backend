@@ -35,7 +35,7 @@ def mock_settings():
 @pytest.mark.asyncio
 @pytest.mark.skipif(
     not pytest.importorskip("optimum", reason="optimum not installed"),
-    reason="ONNX support not available"
+    reason="ONNX support not available",
 )
 async def test_onnx_vs_pytorch_embeddings(mock_settings):
     """
@@ -77,7 +77,7 @@ async def test_onnx_vs_pytorch_embeddings(mock_settings):
 @pytest.mark.asyncio
 @pytest.mark.skipif(
     not pytest.importorskip("optimum", reason="optimum not installed"),
-    reason="ONNX support not available"
+    reason="ONNX support not available",
 )
 async def test_onnx_model_format_detection(mock_settings):
     """Test model format detection logic."""
@@ -104,7 +104,7 @@ async def test_onnx_model_format_detection(mock_settings):
 @pytest.mark.asyncio
 @pytest.mark.skipif(
     not pytest.importorskip("optimum", reason="optimum not installed"),
-    reason="ONNX support not available"
+    reason="ONNX support not available",
 )
 async def test_onnx_fallback_to_pytorch(mock_settings):
     """
@@ -157,16 +157,14 @@ async def test_onnx_interface_compatibility(mock_settings):
     assert embeddings_batch.shape[0] == len(VIETNAMESE_QUESTIONS)
 
     # Test convert_to_tensor parameter
-    embeddings_tensor = qa_service.model.encode(
-        single_text, convert_to_tensor=True
-    )
+    embeddings_tensor = qa_service.model.encode(single_text, convert_to_tensor=True)
     assert isinstance(embeddings_tensor, torch.Tensor)
 
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(
     not pytest.importorskip("optimum", reason="optimum not installed"),
-    reason="ONNX support not available"
+    reason="ONNX support not available",
 )
 async def test_onnx_search_accuracy(mock_settings):
     """

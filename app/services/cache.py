@@ -362,11 +362,15 @@ class CacheService:
 
         except (ConnectionError, TimeoutError, RedisError) as e:
             self.stats.errors += 1
-            logger.warning(f"Embedding cache get error for {key}: {type(e).__name__}: {e}")
+            logger.warning(
+                f"Embedding cache get error for {key}: {type(e).__name__}: {e}"
+            )
             return None
         except Exception as e:
             self.stats.errors += 1
-            logger.warning(f"Embedding deserialization error for {key}: {type(e).__name__}: {e}")
+            logger.warning(
+                f"Embedding deserialization error for {key}: {type(e).__name__}: {e}"
+            )
             return None
         finally:
             self.stats.total_requests += 1
@@ -398,16 +402,22 @@ class CacheService:
 
             # Store in Redis
             result = await self.redis_client.setex(key, ttl, serialized)
-            logger.debug(f"Embedding cached: {key} ({len(serialized)} bytes, TTL: {ttl}s)")
+            logger.debug(
+                f"Embedding cached: {key} ({len(serialized)} bytes, TTL: {ttl}s)"
+            )
             return bool(result)
 
         except (ConnectionError, TimeoutError, RedisError) as e:
             self.stats.errors += 1
-            logger.warning(f"Embedding cache set error for {key}: {type(e).__name__}: {e}")
+            logger.warning(
+                f"Embedding cache set error for {key}: {type(e).__name__}: {e}"
+            )
             return False
         except Exception as e:
             self.stats.errors += 1
-            logger.warning(f"Embedding serialization error for {key}: {type(e).__name__}: {e}")
+            logger.warning(
+                f"Embedding serialization error for {key}: {type(e).__name__}: {e}"
+            )
             return False
 
 

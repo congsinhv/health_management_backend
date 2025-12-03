@@ -69,7 +69,9 @@ def convert_to_onnx_simple(model_path: str, output_path: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert model to ONNX (simple method)")
+    parser = argparse.ArgumentParser(
+        description="Convert model to ONNX (simple method)"
+    )
     parser.add_argument("--model-path", required=True, help="Path to source model")
     parser.add_argument("--output-path", required=True, help="Path to save ONNX model")
     args = parser.parse_args()
@@ -83,10 +85,13 @@ def main():
         print(f"\n✅ Conversion successful!")
         print(f"\nNext steps:")
         print(f"1. Test the model: python scripts/benchmark_onnx.py")
-        print(f"2. Upload to GCS: gsutil -m cp -r {args.output_path}/* gs://bucket/path/")
+        print(
+            f"2. Upload to GCS: gsutil -m cp -r {args.output_path}/* gs://bucket/path/"
+        )
     except Exception as e:
         print(f"\n❌ Conversion failed: {e}")
         import traceback
+
         traceback.print_exc()
         exit(1)
 

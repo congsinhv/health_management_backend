@@ -42,7 +42,9 @@ class TestEmbeddingSerialization:
         cache_service = CacheService(mock_redis)
 
         # Cache embedding
-        success = await cache_service.set_embedding("test:embedding", original_embedding)
+        success = await cache_service.set_embedding(
+            "test:embedding", original_embedding
+        )
         assert success is True
 
         # Retrieve embedding
@@ -67,8 +69,12 @@ class TestEmbeddingSerialization:
         serialized = msgpack.packb(embedding, default=m.encode)
 
         # Verify size is reasonable (should be ~6KB for float32)
-        assert len(serialized) < 10_000, f"Serialized size too large: {len(serialized)} bytes"
-        assert len(serialized) > 3_000, f"Serialized size too small: {len(serialized)} bytes"
+        assert (
+            len(serialized) < 10_000
+        ), f"Serialized size too large: {len(serialized)} bytes"
+        assert (
+            len(serialized) > 3_000
+        ), f"Serialized size too small: {len(serialized)} bytes"
 
 
 class TestEmbeddingCacheIntegration:
@@ -136,7 +142,9 @@ class TestEmbeddingCacheIntegration:
 
         # Second call: cache hit
         emb2 = await mock_get_question_embedding(test_question)
-        assert len(inference_calls) == 1, "Second call should NOT trigger inference (cache hit)"
+        assert (
+            len(inference_calls) == 1
+        ), "Second call should NOT trigger inference (cache hit)"
 
         # Embeddings should match
         assert torch.allclose(emb1, emb2, atol=1e-5)
@@ -185,7 +193,8 @@ class TestCacheWarming:
 
         # Create temp file
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
             f.write("Question 1\n")
             f.write("Question 2\n")
             f.write("\n")  # Empty line
@@ -227,6 +236,7 @@ class TestCacheWarming:
             embedding = np.random.rand(768).astype(np.float32)
             # Actually cache it
             from app.services.qa_service import _hash_question
+
             cache_key = f"qa:embedding:{_hash_question(question)}"
             await cache_service.set_embedding(cache_key, embedding)
             return embedding
@@ -247,6 +257,7 @@ class TestCacheWarming:
 
         # Verify embeddings are actually cached
         from app.services.qa_service import _hash_question
+
         for q in test_questions:
             cache_key = f"qa:embedding:{_hash_question(q)}"
             cached = await cache_service.get_embedding(cache_key)
@@ -276,6 +287,4 @@ class TestCacheFallback:
 # Pytest configuration
 def pytest_configure(config):
     """Configure pytest markers."""
-    config.addinivalue_line(
-        "markers", "asyncio: mark test as async"
-    )
+    config.addinivalue_line("markers", "asyncio: mark test as async")

@@ -55,7 +55,9 @@ def benchmark_inference(
     qa_service.model.encode(questions[0])
 
     # Benchmark inference
-    print(f"Running benchmark ({iterations} iterations x {len(questions)} questions)...")
+    print(
+        f"Running benchmark ({iterations} iterations x {len(questions)} questions)..."
+    )
     start = time.time()
     for _ in range(iterations):
         for q in questions:
@@ -109,7 +111,9 @@ def print_comparison(pytorch_results: Dict, onnx_results: Dict) -> None:
     print(f"\nLoad Time:")
     print(f"  PyTorch: {pytorch_results['load_time_s']}s")
     print(f"  ONNX: {onnx_results['load_time_s']}s")
-    print(f"  Difference: {pytorch_results['load_time_s'] - onnx_results['load_time_s']:.2f}s")
+    print(
+        f"  Difference: {pytorch_results['load_time_s'] - onnx_results['load_time_s']:.2f}s"
+    )
 
     # Success criteria check
     print(f"\nSuccess Criteria Check:")

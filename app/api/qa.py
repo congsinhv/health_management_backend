@@ -269,7 +269,9 @@ async def qa_health_check(request: Request):
             streaming_enabled=hasattr(qa_service, "stream_ask_question"),
             openai_configured=hasattr(qa_service, "openai_client")
             and qa_service.openai_client is not None,
-            message="Q&A service is operational (model loaded)" if model_loaded else "Q&A service is operational (lazy loading - model will load on first request)",
+            message="Q&A service is operational (model loaded)"
+            if model_loaded
+            else "Q&A service is operational (lazy loading - model will load on first request)",
         )
 
 
@@ -295,10 +297,7 @@ async def cache_stats(
         cache_service = request.app.state.cache_service
 
         if not cache_service or not cache_service.enabled:
-            return {
-                "enabled": False,
-                "message": "Cache service is not enabled"
-            }
+            return {"enabled": False, "message": "Cache service is not enabled"}
 
         try:
             # Get Redis info
@@ -311,14 +310,14 @@ async def cache_stats(
 
             return {
                 "enabled": True,
-                "hit_rate": round(
-                    (keyspace_hits / max(total_requests, 1)) * 100, 2
-                ),
+                "hit_rate": round((keyspace_hits / max(total_requests, 1)) * 100, 2),
                 "keyspace_hits": keyspace_hits,
                 "keyspace_misses": keyspace_misses,
                 "total_requests": total_requests,
                 "used_memory_human": memory_info.get("used_memory_human", "N/A"),
-                "used_memory_peak_human": memory_info.get("used_memory_peak_human", "N/A"),
+                "used_memory_peak_human": memory_info.get(
+                    "used_memory_peak_human", "N/A"
+                ),
                 "connected_clients": info.get("connected_clients", 0),
                 "total_commands_processed": info.get("total_commands_processed", 0),
             }
@@ -326,6 +325,5 @@ async def cache_stats(
         except Exception as e:
             logger.error(f"Error getting cache stats: {e}")
             raise ServiceUnavailableException(
-                message="Failed to retrieve cache statistics",
-                details={"error": str(e)}
+                message="Failed to retrieve cache statistics", details={"error": str(e)}
             )

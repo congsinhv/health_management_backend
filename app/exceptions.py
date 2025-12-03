@@ -55,12 +55,17 @@ class VHealthException(Exception):
 
     def log(self, level: str = "error", extra: Optional[Dict[str, Any]] = None):
         """Log exception with context."""
+        from app.core.error_context import ErrorContext
+
+        # Merge exception details with ErrorContext and extra data
         log_data = {
             "error_code": self.error_code,
+            "error_type": self.__class__.__name__,
             "details": self.details,
+            **ErrorContext.get_all(),  # Include request context
             **(extra or {}),
         }
-        getattr(logger, level)(self.message, extra=log_data)
+        getattr(logger, level)(self.message, extra=log_data, exc_info=True)
 
 
 # Resource Errors (HTTP 404)

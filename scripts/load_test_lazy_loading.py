@@ -15,7 +15,9 @@ from typing import Dict, List
 import httpx
 
 
-async def send_request(client: httpx.AsyncClient, question: str, delay: float = 0) -> Dict:
+async def send_request(
+    client: httpx.AsyncClient, question: str, delay: float = 0
+) -> Dict:
     """
     Send single Q&A request.
 
@@ -106,9 +108,7 @@ async def load_test(url: str, concurrent_requests: int = 10):
         # Send concurrent requests (staggered by 100ms)
         print(f"2️⃣  Sending {concurrent_requests} concurrent requests...")
         tasks = [
-            send_request(
-                client, questions[i % len(questions)], delay=i * 0.1
-            )
+            send_request(client, questions[i % len(questions)], delay=i * 0.1)
             for i in range(concurrent_requests)
         ]
 
@@ -140,21 +140,31 @@ async def load_test(url: str, concurrent_requests: int = 10):
             print("4️⃣  First Request Analysis (Lazy Load):")
             print(f"   Request 1: {results[0]['latency_ms']:.2f}ms (expected: ~5000ms)")
             if len(results) > 1:
-                print(f"   Request 2: {results[1]['latency_ms']:.2f}ms (expected: <100ms)")
+                print(
+                    f"   Request 2: {results[1]['latency_ms']:.2f}ms (expected: <100ms)"
+                )
             if len(results) > 2:
-                print(f"   Request 3: {results[2]['latency_ms']:.2f}ms (expected: <100ms)")
+                print(
+                    f"   Request 3: {results[2]['latency_ms']:.2f}ms (expected: <100ms)"
+                )
 
             # Check if first request shows lazy loading pattern
             first_latency = results[0]["latency_ms"]
             if first_latency > 3000:
-                print(f"\n   ✅ Lazy loading detected (first request: {first_latency:.2f}ms)")
+                print(
+                    f"\n   ✅ Lazy loading detected (first request: {first_latency:.2f}ms)"
+                )
             else:
-                print(f"\n   ⚠️  Model may already be loaded (first request: {first_latency:.2f}ms)")
+                print(
+                    f"\n   ⚠️  Model may already be loaded (first request: {first_latency:.2f}ms)"
+                )
 
         if failures:
             print("\n❌ Failures:")
             for i, failure in enumerate(failures[:5], 1):  # Show first 5
-                print(f"   {i}. Status: {failure['status']}, Error: {failure.get('error', 'N/A')}")
+                print(
+                    f"   {i}. Status: {failure['status']}, Error: {failure.get('error', 'N/A')}"
+                )
 
         # Check health after testing
         print("\n5️⃣  Checking service health after load test...")
@@ -166,8 +176,12 @@ async def load_test(url: str, concurrent_requests: int = 10):
         # Summary
         print("\n📈 Summary:")
         print(f"   Total requests: {concurrent_requests}")
-        print(f"   Successful: {len(successes)} ({len(successes)/concurrent_requests*100:.1f}%)")
-        print(f"   Failed: {len(failures)} ({len(failures)/concurrent_requests*100:.1f}%)")
+        print(
+            f"   Successful: {len(successes)} ({len(successes)/concurrent_requests*100:.1f}%)"
+        )
+        print(
+            f"   Failed: {len(failures)} ({len(failures)/concurrent_requests*100:.1f}%)"
+        )
         if latencies:
             print(f"   Avg latency: {sum(latencies)/len(latencies):.2f}ms")
             print(f"   Total time: {total_time:.2f}s")
