@@ -41,6 +41,7 @@ from app.services.qa_service import QAService
 from app.services.cache import create_cache_service
 from app.services.cache_invalidation import get_cache_invalidator
 from app.api import predict
+from app.api import dashboard
 
 # Configure logging
 logging.basicConfig(
@@ -218,6 +219,9 @@ app.include_router(
 )
 app.include_router(
     messages_router, prefix=f"{settings.api_v1_prefix}/messages", tags=["messages"]
+)
+app.include_router(
+    dashboard.router, prefix=f"{settings.api_v1_prefix}/dashboard", tags=["dashboard"]
 )
 
 
