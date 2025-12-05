@@ -6,6 +6,10 @@ from app.schemas.user_profile import UserProfileResponse
 from app.exceptions import ResourceNotFoundException, DatabaseException
 from typing import Dict, Any, List
 import logging
+from app.schemas.dashboard import (
+    HealthOverviewResponse,
+    
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -141,6 +145,44 @@ async def generate_personal_health_summary(
         )
     except Exception as e:
         logger.error(f"Error generating health summary: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+    
+    
+# Endpoint tổng quan
+@router.get(
+    "/overview/{user_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=HealthOverviewResponse,
+    summary="Tổng quan sức khỏe",
+    description="Lấy thông tin tổng quan về sức khỏe người dùng"
+)
+async def get_health_overview(
+    user_id: int,
+    service: DashboardService = Depends(get_dashboard_service),
+):
+    """
+    Get comprehensive health overview for dashboard
+    """
+    try:
+        overview = await service.get_health_overview(user_id)
+        return overview
+        
+    except ResourceNotFoundException as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e.message) if hasattr(e, 'message') else "User profile not found"
+        )
+    except DatabaseException as e:
+        logger.error(f"Database error getting health overview: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error getting health overview"
+        )
+    except Exception as e:
+        logger.error(f"Error getting health overview: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
