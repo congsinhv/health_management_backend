@@ -18,5 +18,34 @@ async def get_dashboard_profile(
     service: DashboardService = Depends(get_dashboard_service),
 ):
     return await service.get_user_profile(user_id)
+# Bieu do hoat dong hang ngay
+@router.get(
+    "/daily-activity/{user_id}",
+    status_code=status.HTTP_200_OK,
+)
+async def get_daily_activity(
+    user_id: int,
+    service: DashboardService = Depends(get_dashboard_service),
+):
+    return await service.get_daily_activity(user_id)
 
+# Bieu do hoat dong hang tuan
+@router.get(
+    "/weekly-activity/{user_id}",
+    status_code=status.HTTP_200_OK,
+)
+async def get_weekly_activity(
+    user_id: int,
+    service: DashboardService = Depends(get_dashboard_service),
+):
+    return await service.get_weekly_activity(user_id)
 
+@router.get(
+    "/monthly-activity/{user_id}",
+    status_code=status.HTTP_200_OK,
+)
+async def get_monthly_activity(
+    user_id: int,
+    service: DashboardService = Depends(get_dashboard_service),
+):
+    return await service.get_monthly_activity(user_id)
