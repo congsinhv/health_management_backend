@@ -186,8 +186,8 @@ class Settings(BaseSettings):
         default=600, description="Timeout for model download from GCS (seconds)"
     )
     gcp_public_bucket: Optional[str] = Field(
-        default="vhealth-dev-public",
-        description="GCS bucket name for public file uploads (e.g., vhealth-dev-public)",
+        default="vhealth-test-public",
+        description="GCS bucket name for public file uploads (e.g., vhealth-test-public)",
     )
 
     # Q&A behavior settings

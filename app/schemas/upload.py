@@ -18,7 +18,7 @@ class UploadImageResponse(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "url": "https://storage.googleapis.com/vhealth-dev-public/avatars/abc123.jpg",
+                "url": "https://storage.googleapis.com/vhealth-test-public/avatars/abc123.jpg",
                 "filename": "abc123.jpg",
                 "folder": "avatars",
             }
