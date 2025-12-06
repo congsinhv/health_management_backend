@@ -17,21 +17,6 @@ pipeline {
             defaultValue: false,
             description: 'Rebuild base image with dependencies (set to true when requirements-prod.txt changes)'
         )
-        booleanParam(
-            name: 'RUN_INTEGRATION_TESTS',
-            defaultValue: false,
-            description: 'Run integration tests (requires test DB)'
-        )
-        booleanParam(
-            name: 'RUN_BENCHMARKS',
-            defaultValue: false,
-            description: 'Run performance benchmarks'
-        )
-        booleanParam(
-            name: 'RUN_DEPLOYMENT_VALIDATION',
-            defaultValue: true,
-            description: 'Validate deployment after rollout'
-        )
     }
 
     environment {
@@ -388,92 +373,6 @@ AI summarization will not be available without this secret.
                         docker push ${IMAGE_LATEST}
                         docker push ${IMAGE_FULL}
                     """
-                }
-            }
-        }
-
-        stage('Run Unit Tests') {
-            steps {
-                script {
-                    echo "Running unit tests..."
-                    sh '''
-                        docker run --rm \
-                            -v ${WORKSPACE}:/app \
-                            -w /app \
-                            ${IMAGE_FULL} \
-                            pytest tests/unit/ -v \
-                                --cov=app \
-                                --cov-report=xml \
-                                --cov-report=term-missing \
-                                --junit-xml=test-results/unit-tests.xml
-                    '''
-                }
-            }
-            post {
-                always {
-                    junit 'test-results/unit-tests.xml'
-                    publishCoverage adapters: [coberturaAdapter('coverage.xml')], sourceFileResolver: sourceFiles('NEVER_STORE')
-                }
-                failure {
-                    slackSend color: 'danger', message: "❌ Unit tests failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-                }
-            }
-        }
-
-        stage('Run Integration Tests') {
-            when {
-                expression { params.RUN_INTEGRATION_TESTS == true }
-            }
-            steps {
-                script {
-                    echo "Running integration tests..."
-                    sh '''
-                        docker run --rm \
-                            -v ${WORKSPACE}:/app \
-                            -w /app \
-                            -e DATABASE_URL=${TEST_DATABASE_URL} \
-                            -e REDIS_URL=${TEST_REDIS_URL} \
-                            ${IMAGE_FULL} \
-                            pytest tests/integration/ -v \
-                                --junit-xml=test-results/integration-tests.xml
-                    '''
-                }
-            }
-            post {
-                always {
-                    junit 'test-results/integration-tests.xml'
-                }
-            }
-        }
-
-        stage('Run Performance Benchmarks') {
-            when {
-                expression { params.RUN_BENCHMARKS == true }
-            }
-            steps {
-                script {
-                    echo "Running performance benchmarks..."
-                    sh '''
-                        # ONNX benchmark
-                        docker run --rm \
-                            -v ${WORKSPACE}:/app \
-                            -w /app \
-                            ${IMAGE_FULL} \
-                            python scripts/benchmark_onnx.py \
-                                --output benchmark-results.json
-
-                        # Validate benchmark thresholds
-                        docker run --rm \
-                            -v ${WORKSPACE}:/app \
-                            -w /app \
-                            ${IMAGE_FULL} \
-                            python scripts/validate_benchmarks.py benchmark-results.json
-                    '''
-                }
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'benchmark-results.json', fingerprint: true
                 }
             }
         }

@@ -9,16 +9,6 @@ from unittest.mock import AsyncMock, MagicMock
 from datetime import datetime, timezone
 from app.main import app
 
-# Import optimization fixtures
-from tests.fixtures.optimization_fixtures import (
-    sample_vietnamese_questions,
-    baseline_performance_metrics,
-    mock_qa_service_onnx,
-    mock_cache_service_with_embeddings,
-    sample_embedding,
-    load_test_config,
-)
-
 
 @pytest.fixture
 def mock_connection():
