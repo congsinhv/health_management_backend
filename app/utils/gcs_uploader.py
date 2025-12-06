@@ -106,9 +106,14 @@ class GCSUploader:
                 content_type=content_type,
             )
 
-            public_url = blob.public_url
-
-            logger.info(f"Successfully uploaded file to {blob_path}, URL: {public_url}")
+            # Make the blob publicly accessible if requested
+            if make_public:
+                blob.make_public()
+                public_url = blob.public_url
+                logger.info(f"Successfully uploaded file to {blob_path} (public), URL: {public_url}")
+            else:
+                public_url = f"gs://{self.bucket_name}/{blob_path}"
+                logger.info(f"Successfully uploaded file to {blob_path} (private), URL: {public_url}")
             return public_url
 
         except GoogleAPIError as e:
