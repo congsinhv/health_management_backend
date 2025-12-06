@@ -64,4 +64,5 @@ redis>=5.0.0
 msgpack-numpy==0.4.8  # Efficient numpy serialization for embedding cache
 
 # PDF Generation
-weasyprint==62.3
+weasyprint>=63.0
+pydyf>=0.11.0
