@@ -33,7 +33,24 @@ class UserProfileBase(BaseSchema):
     family_medical_history: Optional[str] = Field(
         None, description="Family medical history"
     )
-    goal: Optional[str] = Field(None, max_length=255, description="User health goal")
+    goal: Optional[str] = Field(None, max_length=255, description="User health goal"
+    )
+    heart_rate: Optional[int] = Field(
+    None, ge=0, le=300, description="User heart rate"
+    )
+    exercise_minutes: Optional[int] = Field(
+        None, ge=0, le=1440, description="Daily exercise minutes"
+    )
+    age: Optional[int] = Field(
+        None, ge=0, le=150, description="User age"
+    )
+    sleep_hours: Optional[float] = Field(
+        None, ge=0, le=24, description="Daily sleep hours"
+    )
+    water_intake: Optional[float] = Field(
+        None, ge=0, le=10, description="Daily water intake (liters)"
+    )
+
 
 
 class UserProfileCreate(UserProfileBase):
@@ -54,7 +71,11 @@ class UserProfileUpdate(BaseSchema):
     date_of_birth: Optional[date] = None
     family_medical_history: Optional[str] = None
     goal: Optional[str] = Field(None, max_length=255)
-
+    heart_rate: Optional[int] = Field(None, ge=0, le=300)
+    exercise_minutes: Optional[int] = Field(None, ge=0, le=1440)
+    age: Optional[int] = Field(None, ge=0, le=150)
+    sleep_hours: Optional[float] = Field(None, ge=0, le=24)
+    water_intake: Optional[float] = Field(None, ge=0, le=10)
 
 class UserProfileResponse(UserProfileBase, IDMixin, TimestampMixin):
     """Schema for user profile response."""
