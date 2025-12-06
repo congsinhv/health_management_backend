@@ -180,11 +180,19 @@ async def lifespan(app: FastAPI):
 
                 if qa_service:
                     app.state.qa_service = qa_service
-                    cache_status = "with caching" if cache_service and cache_service.enabled else "without caching"
+                    cache_status = (
+                        "with caching"
+                        if cache_service and cache_service.enabled
+                        else "without caching"
+                    )
                     logger.info(f"Q&A Service initialized successfully {cache_status}")
 
                     # Start cache warming if enabled (after QA service is ready)
-                    if settings.qa_cache_warmup_enabled and cache_service and cache_service.enabled:
+                    if (
+                        settings.qa_cache_warmup_enabled
+                        and cache_service
+                        and cache_service.enabled
+                    ):
                         logger.info("Starting cache warming in background...")
                         asyncio.create_task(warm_cache_background(qa_service))
                 else:
@@ -194,6 +202,7 @@ async def lifespan(app: FastAPI):
 
         # Start background initialization (fire and forget)
         import asyncio
+
         asyncio.create_task(init_qa_service_async())
     else:
         logger.info("Q&A Service is disabled in settings")

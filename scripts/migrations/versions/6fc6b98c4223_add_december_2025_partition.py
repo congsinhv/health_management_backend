@@ -8,8 +8,8 @@ Create Date: 2025-12-03 11:05:09.528276
 from migrations.utils import database_connect
 
 # revision identifiers, used by Alembic.
-revision = '6fc6b98c4223'
-down_revision = 'd17fc2fd9c9d'
+revision = "6fc6b98c4223"
+down_revision = "d17fc2fd9c9d"
 branch_labels = None
 depends_on = None
 

@@ -267,10 +267,10 @@ class ObesityPredictorComplete:
                 paragraphs=ai_response.get("healthAnalysis", [])
             ),
             dietPlan=DietPlan(
-                weeklyPlans=ai_response.get("dietPlan", {}).get("weeklyPlans", [])
+                **self._sanitize_diet_plan(ai_response.get("dietPlan", {}))
             ),
             workoutPlan=WorkoutPlan(
-                weeklyPlans=ai_response.get("workoutPlan", {}).get("weeklyPlans", [])
+                **self._sanitize_workout_plan(ai_response.get("workoutPlan", {}))
             ),
         )
 
@@ -295,6 +295,44 @@ class ObesityPredictorComplete:
                 # Don't fail the request if save fails - graceful degradation
 
         return prediction_response
+
+    def _sanitize_diet_plan(self, diet_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Sanitize AI-generated diet plan to ensure all required fields exist.
+        This handles cases where AI returns incomplete data.
+        """
+        weekly_plans = diet_plan.get("weeklyPlans", [])
+        sanitized_plans = []
+
+        for plan in weekly_plans:
+            sanitized_plan = {
+                "day": plan.get("day", 0),
+                "breakfast": plan.get("breakfast", []),
+                "lunch": plan.get("lunch", []),
+                "dinner": plan.get("dinner", []),
+                "recommendedFoods": plan.get("recommendedFoods", ""),
+                "foodsToLimit": plan.get("foodsToLimit", ""),
+            }
+            sanitized_plans.append(sanitized_plan)
+
+        return {"weeklyPlans": sanitized_plans}
+
+    def _sanitize_workout_plan(self, workout_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Sanitize AI-generated workout plan to ensure all required fields exist.
+        """
+        weekly_plans = workout_plan.get("weeklyPlans", [])
+        sanitized_plans = []
+
+        for plan in weekly_plans:
+            sanitized_plan = {
+                "name": plan.get("name", ""),
+                "day": plan.get("day", 0),
+                "exercises": plan.get("exercises", []),
+            }
+            sanitized_plans.append(sanitized_plan)
+
+        return {"weeklyPlans": sanitized_plans}
 
     async def _generate_ai_advice(
         self, data: UserInput, level: str, bmi: float

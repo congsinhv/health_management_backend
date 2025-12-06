@@ -200,9 +200,9 @@ Examples:
         print(f"Total partitions:    {result['total']}")
         print()
 
-        if result['created']:
+        if result["created"]:
             print("Newly created partitions:")
-            for partition in result['created_partitions']:
+            for partition in result["created_partitions"]:
                 print(f"  ✓ {partition}")
 
         print()
