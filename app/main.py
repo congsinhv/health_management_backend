@@ -3,6 +3,8 @@ FastAPI application entrypoint for Health Management API.
 """
 
 import logging
+import psutil
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -50,11 +52,54 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def warm_cache_background(qa_service: QAService):
+    """
+    Run cache warming in background (Phase 3).
+
+    Pre-computes embeddings for top questions to reduce first-request latency.
+    Runs non-blocking, errors are logged but don't crash startup.
+    """
+    try:
+        from pathlib import Path
+        from scripts.cache_warmer import load_top_questions, warm_cache
+
+        logger.info("Starting background cache warming...")
+
+        # Load questions
+        questions = await load_top_questions(settings.qa_cache_warmup_questions_file)
+
+        if not questions:
+            logger.warning("No questions to warm, skipping")
+            return
+
+        # Warm cache (top 50)
+        await warm_cache(qa_service, questions[:50])
+        logger.info("Background cache warming completed successfully")
+
+    except Exception as e:
+        logger.warning(f"Cache warming failed (non-critical): {e}")
+        # Don't crash startup if warming fails
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
     # Startup
     logger.info("Starting up Health Management API")
+
+    # Log initial memory usage
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    memory_mb = memory_info.rss / 1024 / 1024  # Convert to MB
+    logger.info(
+        f"Startup memory usage: {memory_mb:.2f} MB (RSS)",
+        extra={
+            "memory_rss_mb": memory_mb,
+            "memory_vms_mb": memory_info.vms / 1024 / 1024,
+            "startup_phase": "initial",
+        },
+    )
+
     await database.connect()
 
     # Initialize rate limiter
@@ -107,57 +152,77 @@ async def lifespan(app: FastAPI):
             "Cache Service and Invalidator created in fallback mode (no Redis)"
         )
 
-    # Initialize Q&A Service if enabled
+    # Initialize Q&A Service if enabled (completely non-blocking)
     if settings.qa_enabled:
-        try:
-            logger.info("Initializing Q&A Service...")
-            # Get cache service from app state (initialized above)
-            cache_service = getattr(app.state, "cache_service", None)
+        logger.info("Q&A Service will initialize in background (non-blocking)")
+        app.state.qa_service = None  # Will be set by background task
 
-            # Initialize QA Service in background to avoid blocking startup
-            import asyncio
-            from concurrent.futures import ThreadPoolExecutor
+        async def init_qa_service_async():
+            """Initialize QA service in background without blocking startup."""
+            try:
+                cache_service = getattr(app.state, "cache_service", None)
+                logger.info("Starting Q&A Service initialization in background...")
 
-            def init_qa_service():
-                try:
-                    return QAService(settings, cache_service=cache_service)
-                except Exception as e:
-                    logger.error(f"Failed to initialize Q&A Service: {e}")
-                    return None
+                # Run in thread to avoid blocking event loop
+                import asyncio
+                from concurrent.futures import ThreadPoolExecutor
 
-            # Initialize QA Service with timeout to prevent Cloud Run startup timeout
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(init_qa_service)
-                try:
-                    # Wait up to 30 seconds for QA Service initialization
-                    qa_service = future.result(timeout=30)
-                    if qa_service:
-                        app.state.qa_service = qa_service
-                        cache_status = (
-                            "with caching"
-                            if cache_service and cache_service.enabled
-                            else "without caching"
-                        )
-                        logger.info(
-                            f"Q&A Service initialized successfully {cache_status}"
-                        )
-                    else:
-                        logger.warning("Q&A Service initialization returned None")
-                        app.state.qa_service = None
-                except Exception as e:
-                    logger.error(f"Q&A Service initialization timed out or failed: {e}")
-                    logger.warning(
-                        "Q&A Service will not be available - continuing startup"
+                def _init():
+                    try:
+                        return QAService(settings, cache_service=cache_service)
+                    except Exception as e:
+                        logger.error(f"Q&A Service initialization error: {e}")
+                        return None
+
+                loop = asyncio.get_event_loop()
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    qa_service = await loop.run_in_executor(executor, _init)
+
+                if qa_service:
+                    app.state.qa_service = qa_service
+                    cache_status = (
+                        "with caching"
+                        if cache_service and cache_service.enabled
+                        else "without caching"
                     )
-                    app.state.qa_service = None
+                    logger.info(f"Q&A Service initialized successfully {cache_status}")
 
-        except Exception as e:
-            logger.error(f"Failed to start Q&A Service initialization: {e}")
-            logger.warning("Q&A Service will not be available")
-            app.state.qa_service = None
+                    # Start cache warming if enabled (after QA service is ready)
+                    if (
+                        settings.qa_cache_warmup_enabled
+                        and cache_service
+                        and cache_service.enabled
+                    ):
+                        logger.info("Starting cache warming in background...")
+                        asyncio.create_task(warm_cache_background(qa_service))
+                else:
+                    logger.warning("Q&A Service initialization failed")
+            except Exception as e:
+                logger.error(f"Q&A Service background init failed: {e}")
+
+        # Start background initialization (fire and forget)
+        import asyncio
+
+        asyncio.create_task(init_qa_service_async())
     else:
         logger.info("Q&A Service is disabled in settings")
         app.state.qa_service = None
+
+    # Cache warming is now integrated into QA service background initialization
+    # (see init_qa_service_async above)
+
+    # Log final startup memory usage
+    memory_info_final = process.memory_info()
+    memory_mb_final = memory_info_final.rss / 1024 / 1024
+    logger.info(
+        f"Startup complete - Memory usage: {memory_mb_final:.2f} MB (RSS)",
+        extra={
+            "memory_rss_mb": memory_mb_final,
+            "memory_vms_mb": memory_info_final.vms / 1024 / 1024,
+            "memory_increase_mb": memory_mb_final - memory_mb,
+            "startup_phase": "complete",
+        },
+    )
 
     yield
 

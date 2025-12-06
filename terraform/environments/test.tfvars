@@ -24,15 +24,15 @@ cloud_sql_backup_start_time   = "20:00"
 cloud_sql_database_name       = "health_management"
 cloud_sql_deletion_protection = false # Allow deletion in test
 
-# Cloud Run (Minimal resources)
+# Cloud Run (Phase 4 Optimized - Dec 2025)
 cloud_run_service_name    = "vhealth-backend-test"
 cloud_run_image           = "asia-southeast1-docker.pkg.dev/vhealth-test/vhealth-backend-test/health-api:latest"
 cloud_run_cpu_limit       = "2000m" # Need 2 vCPU for model loading
-cloud_run_memory_limit    = "4Gi"   # Increased from 2Gi due to memory exceeded errors
-cloud_run_max_instances   = 3       # Low max for cost control
-cloud_run_min_instances   = 0       # Scale to zero when idle
+cloud_run_memory_limit    = "1.5Gi"   # Reduced from 4Gi (Phase 1 ONNX quantization enables 1Gi)
+cloud_run_max_instances   = 10      # Increased from 3 (auto-scale capacity)
+cloud_run_min_instances   = 1       # Changed from 0 (Phase 2 lazy loading eliminates cold-start cost)
 cloud_run_timeout_seconds = 300
-cloud_run_concurrency     = 15
+cloud_run_concurrency     = 20      # Increased from 15 (safe with Phase 3 caching)
 
 # Application Settings
 debug       = "true"

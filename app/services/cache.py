@@ -2,7 +2,7 @@
 Redis caching service for Health Management API.
 
 Provides high-performance caching with graceful fallback when Redis is unavailable.
-Implements cache-aside pattern with TTL support and JSON serialization.
+Implements cache-aside pattern with TTL support, JSON serialization, and numpy embedding cache.
 """
 
 import json
@@ -14,6 +14,9 @@ from dataclasses import dataclass
 import redis.asyncio as redis
 from redis.asyncio import Redis
 from redis.exceptions import ConnectionError, TimeoutError, RedisError
+import msgpack
+import msgpack_numpy as m
+import numpy as np
 
 from app.config import settings
 
@@ -326,6 +329,95 @@ class CacheService:
             return await self.set(key, json_value, ttl)
         except (TypeError, ValueError) as e:
             logger.warning(f"Failed to serialize JSON for key {key}: {e}")
+            return False
+
+    async def get_embedding(self, key: str) -> Optional[np.ndarray]:
+        """
+        Get cached embedding from Redis with msgpack deserialization.
+
+        Args:
+            key: Cache key
+
+        Returns:
+            Numpy array embedding or None if not found/error
+        """
+        if not self.enabled:
+            self.stats.misses += 1
+            self.stats.total_requests += 1
+            self.stats.calculate_rates()
+            return None
+
+        try:
+            cached = await self.redis_client.get(key)
+            if cached:
+                # Deserialize msgpack-encoded numpy array
+                embedding = msgpack.unpackb(cached, object_hook=m.decode)
+                self.stats.hits += 1
+                logger.debug(f"Embedding cache HIT: {key} ({len(cached)} bytes)")
+                return embedding
+            else:
+                self.stats.misses += 1
+                logger.debug(f"Embedding cache MISS: {key}")
+                return None
+
+        except (ConnectionError, TimeoutError, RedisError) as e:
+            self.stats.errors += 1
+            logger.warning(
+                f"Embedding cache get error for {key}: {type(e).__name__}: {e}"
+            )
+            return None
+        except Exception as e:
+            self.stats.errors += 1
+            logger.warning(
+                f"Embedding deserialization error for {key}: {type(e).__name__}: {e}"
+            )
+            return None
+        finally:
+            self.stats.total_requests += 1
+            self.stats.calculate_rates()
+
+    async def set_embedding(
+        self, key: str, embedding: np.ndarray, ttl: Optional[int] = None
+    ) -> bool:
+        """
+        Cache embedding in Redis with msgpack serialization.
+
+        Args:
+            key: Cache key
+            embedding: Numpy array (typically 768-dim SBERT vector)
+            ttl: Time to live in seconds (default: 86400 = 24h)
+
+        Returns:
+            True if cached successfully, False otherwise
+        """
+        if not self.enabled:
+            return True  # Pass-through mode, consider it successful
+
+        try:
+            if ttl is None:
+                ttl = settings.cache_ttl_qa_embedding
+
+            # Serialize numpy array with msgpack
+            serialized = msgpack.packb(embedding, default=m.encode)
+
+            # Store in Redis
+            result = await self.redis_client.setex(key, ttl, serialized)
+            logger.debug(
+                f"Embedding cached: {key} ({len(serialized)} bytes, TTL: {ttl}s)"
+            )
+            return bool(result)
+
+        except (ConnectionError, TimeoutError, RedisError) as e:
+            self.stats.errors += 1
+            logger.warning(
+                f"Embedding cache set error for {key}: {type(e).__name__}: {e}"
+            )
+            return False
+        except Exception as e:
+            self.stats.errors += 1
+            logger.warning(
+                f"Embedding serialization error for {key}: {type(e).__name__}: {e}"
+            )
             return False
 
 

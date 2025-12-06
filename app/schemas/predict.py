@@ -39,18 +39,18 @@ class HealthAnalysis(BaseModel):
 
 class FoodItem(BaseModel):
     name: str
-    calories: int
-    count: float
-    unit: str
+    calories: int = 0
+    count: float = 1.0
+    unit: str = ""
 
 
 class DailyDietPlan(BaseModel):
     day: int
-    breakfast: List[FoodItem]
-    lunch: List[FoodItem]
-    dinner: List[FoodItem]
-    recommendedFoods: str
-    foodsToLimit: str
+    breakfast: List[FoodItem] = []
+    lunch: List[FoodItem] = []
+    dinner: List[FoodItem] = []
+    recommendedFoods: str = ""
+    foodsToLimit: str = ""
 
 
 class DietPlan(BaseModel):

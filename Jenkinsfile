@@ -439,12 +439,13 @@ AI summarization will not be available without this secret.
                                 --set-secrets "MAIL_SERVER=vhealth-${params.ENVIRONMENT}-mail-server:latest" \
                                 --set-secrets "OPENAI_API_KEY=vhealth-${params.ENVIRONMENT}-openai-api-key:latest" \
                                 --set-env-vars "WEBUI_URL=https://${env.CUSTOM_DOMAIN}" \
+                                --set-env-vars "GCP_PUBLIC_BUCKET=vhealth-${params.ENVIRONMENT}-public" \
                                 --cpu 2 \
-                                --memory 2Gi \
-                                --min-instances 0 \
+                                --memory 1.5Gi \
+                                --min-instances 1 \
                                 --max-instances 10 \
                                 --timeout 300 \
-                                --concurrency 15 \
+                                --concurrency 20 \
                                 --allow-unauthenticated \
                                 --revision-suffix ${revisionSuffix} \
                                 ${noTrafficFlag} \

@@ -1,434 +1,378 @@
 # Health Management API
 
-A modern FastAPI application for health management with intelligent Q&A capabilities powered by Vietnamese sentence transformers (SBERT).
+A production-ready FastAPI system for health management with Vietnamese semantic search (SBERT), AI-powered Q&A, health predictions, and conversation management.
 
 **For Claude Code Users:** See [CLAUDE.md](./CLAUDE.md) for development commands, architecture patterns, and critical implementation details.
 
-## Overview
+---
 
-Health Management API provides accessible Vietnamese health information through semantic search and AI-powered summarization. The system supports conversation-based interactions, comprehensive user management, and real-time health question answering.
+## Quick Overview
 
-## Key Features
+VHealth Backend delivers intelligent Vietnamese health information through semantic search, AI summarization, and persistent conversation tracking.
 
-- **Intelligent Q&A System** - Vietnamese semantic search using SBERT with AI summarization
-- **Health Predictions** - AI-powered obesity risk assessment with personalized recommendations
-- **PDF Report Generation** - Professional health reports with Vietnamese font support
-- **Prediction Storage** - Persistent storage of health predictions with user management
-- **Real-Time Streaming** - Server-Sent Events for progressive AI response delivery
-- **Conversation Management** - History tracking, search, tagging, and pinning
-- **Message Versioning** - Track edit history and create message branches
-- **User Authentication** - JWT + OAuth (Google) with email verification
-- **File Storage** - Google Cloud Storage integration
-- **Performance Optimization** - High-performance Redis caching with 40-70% latency reduction
-- **Security Hardening** - Rate limiting, security headers, and comprehensive monitoring
-- **Comprehensive Testing** - 80%+ test coverage with pytest
-- **Production Ready** - Docker, Cloud Run, Terraform infrastructure
+**Key Capabilities**:
+- Semantic Q&A with SBERT + OpenAI streaming (SSE)
+- Health risk predictions with recommendations
+- Conversation management with full-text search
+- Message versioning and branching
+- JWT + Google OAuth authentication
+- Redis optional caching (40-70% latency reduction)
+- PDF report generation
+- Email notifications (verification, password reset)
+- Production deployment on Cloud Run (Terraform)
+
+---
 
 ## Technology Stack
 
-- **Backend**: FastAPI 0.115.0, Python 3.13
-- **Database**: PostgreSQL 15+ with asyncpg
-- **ML**: sentence-transformers 5.1.2 (Vietnamese SBERT)
-- **AI**: OpenAI API (GPT-4o-mini) with streaming support
-- **PDF Generation**: WeasyPrint with Vietnamese font support
-- **Streaming**: Server-Sent Events (SSE) for real-time responses
-- **Cloud**: Google Cloud Platform (Cloud Run, GCS, Secret Manager)
-- **Cache**: Redis (optional)
-- **Testing**: pytest with 80%+ coverage
-- **IaC**: Terraform for infrastructure
+| Layer | Technology |
+|-------|-----------|
+| Framework | FastAPI 0.115.0, Python 3.13 |
+| Database | PostgreSQL 15+, asyncpg |
+| Cache | Redis (optional) |
+| ML/NLP | SBERT 5.1.2 (Vietnamese) |
+| AI | OpenAI API (gpt-4o-mini) |
+| PDF | WeasyPrint + Vietnamese fonts |
+| Cloud | GCP (Cloud Run, SQL, GCS) |
+| Testing | pytest (80%+ coverage) |
+| IaC | Terraform |
+
+---
 
 ## Quick Start
 
-### Prerequisites
+### Local Development
 
-- Python 3.13+
-- PostgreSQL 15+
-- Docker & Docker Compose (optional)
-- Google Cloud account (for deployment)
-
-### Environment Variables
-
-Key configuration options (set via environment variables or `.env` file):
-
-**Model Storage**:
-- `OBESITY_MODEL_DIR` - Directory for obesity prediction models (default: `/tmp/models_obesity`). Must be writable in containerized environments.
-
-### Local Development Setup
-
-1. **Clone and setup environment**:
 ```bash
-git clone <repository-url>
-cd health_management
+# Setup environment
 python3.13 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
 
-2. **Configure environment**:
-```bash
+# Configure
 cp .env.example .env
-# Edit .env with your database credentials and settings
-```
+# Edit .env with your settings
 
-3. **Initialize database**:
-```bash
-# Create database
-createdb health_management
+# Initialize database
+cd scripts && alembic upgrade head && cd ..
 
-# Run migrations
-cd scripts
-alembic upgrade head
-```
-
-4. **Run application**:
-```bash
+# Run application
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
-```
 
-5. **Access API**:
-- API: http://localhost:8080
-- Docs: http://localhost:8080/docs
-- ReDoc: http://localhost:8080/redoc
+# Access at http://localhost:8080
+# Docs: http://localhost:8080/docs
+```
 
 ### Docker Development
 
-1. **Setup**:
 ```bash
-cp .env.example .env
-# Edit .env with database connection
-```
-
-2. **Start services**:
-```bash
-# Development mode with hot reload
+# Development with hot reload
 docker-compose -f docker-compose.dev.yml up
 
-# Production mode
+# Production
 docker-compose up -d
-```
 
-3. **View logs**:
-```bash
+# View logs
 docker-compose logs -f app
 ```
 
-## Redis Caching
-
-The application includes a comprehensive Redis caching system that provides 40-70% latency reduction for Q&A and conversation operations.
-
-### Performance Improvements
-
-- **Q&A Operations**: 2-5s → <50ms (95% reduction)
-- **Conversation Operations**: 100-200ms → <50ms (50-75% reduction)
-- **User Operations**: 50-100ms → <20ms (60-80% reduction)
-
-### Quick Setup
-
-1. **Start Redis locally**:
-```bash
-docker run -d --name redis -p 6379:6379 redis:7-alpine
-```
-
-2. **Enable caching in .env**:
-```bash
-ENABLE_REDIS_CACHE=true
-REDIS_URL=redis://localhost:6379/0
-```
-
-3. **Restart application**:
-```bash
-uvicorn app.main:app --reload
-```
-
-### Cache Monitoring
-
-```bash
-# Health check
-curl http://localhost:8080/api/v1/cache/health
-
-# Statistics (admin only)
-curl -H "Authorization: Bearer $ADMIN_TOKEN" \
-     http://localhost:8080/api/v1/cache/stats
-```
-
-### Documentation
-
-- [Full Implementation Guide](./docs/redis-caching-implementation.md)
-- [Developer Handoff Guide](./docs/cache-handoff-guide.md)
-
-## Project Structure
-
-```
-health_management/
-├── app/                     # Application code
-│   ├── api/                 # FastAPI routers (endpoints)
-│   ├── services/            # Business logic layer
-│   ├── db/                  # Database repositories
-│   ├── schemas/             # Pydantic models
-│   ├── auth/                # Authentication
-│   ├── utils/               # Utilities (GCS, etc.)
-│   ├── main.py              # App entry point
-│   └── config.py            # Settings
-├── tests/                   # Test suite (integration, unit, repository)
-├── scripts/                 # Migrations and utilities
-├── terraform/               # Infrastructure as code
-├── docs/                    # Detailed documentation
-├── docker-compose.yml       # Production setup
-├── Dockerfile               # Container image
-└── requirements.txt         # Python dependencies
-```
-
-## API Endpoints
-
-### Authentication
-- `POST /api/v1/users/login` - User login
-- `POST /api/v1/users/` - User registration
-- `POST /api/v1/auth/verify-email` - Email verification
-- `POST /api/v1/auth/reset-password` - Password reset
-- `GET /api/v1/auth/google` - Google OAuth
-- `POST /api/v1/auth/google/callback` - OAuth callback
-
-### Predictions
-- `POST /api/v1/predict/` - Generate health prediction (requires auth)
-- `GET /api/v1/predict/{prediction_id}` - Get prediction details with PDF URL (requires auth)
-- `POST /api/v1/predict/{prediction_id}/pdf` - Generate PDF report for prediction (requires auth)
-
-### Q&A
-- `POST /api/v1/qa/ask` - Ask health question (requires auth)
-- `POST /api/v1/qa/ask-stream` - Ask health question with streaming response (SSE)
-- `GET /api/v1/qa/health` - Q&A service health check
-
-### Conversations
-- `GET /api/v1/conversations/` - List conversations
-- `POST /api/v1/conversations/` - Create conversation
-- `GET /api/v1/conversations/{id}` - Get conversation
-- `PATCH /api/v1/conversations/{id}` - Update conversation
-- `DELETE /api/v1/conversations/{id}` - Delete conversation
-- `GET /api/v1/conversations/search` - Search conversations
-- `POST /api/v1/conversations/{id}/pin` - Pin/unpin conversation
-
-### Messages
-- `GET /api/v1/conversations/{id}/messages` - List messages
-- `POST /api/v1/conversations/{id}/messages` - Create message
-- `PUT /api/v1/conversations/{id}/messages/{msg_id}` - Update message
-- `DELETE /api/v1/conversations/{id}/messages/{msg_id}` - Delete message
-
-### Versions
-- `GET /api/v1/conversations/{id}/messages/{msg_id}/versions` - List versions
-- `GET /api/v1/conversations/{id}/messages/{msg_id}/versions/{version_id}` - Get version
-- `POST /api/v1/conversations/{id}/messages/{msg_id}/versions/{version_id}/restore` - Restore version
-
-### Users
-- `GET /api/v1/users/` - List users (admin)
-- `GET /api/v1/users/{id}` - Get user
-- `PUT /api/v1/users/{id}` - Update user
-- `DELETE /api/v1/users/{id}` - Delete user
-
-### File Upload
-- `POST /api/v1/upload` - Upload file to GCS
-
-### Health & Performance
-- `GET /health` - Application health check
-- `GET /api/v1/performance/cache` - Cache statistics
-- `GET /api/v1/performance/database` - Database statistics
+---
 
 ## Testing
 
-Run the test suite:
-
 ```bash
-# All tests
+# Run all tests
 pytest
 
-# With coverage report
+# With coverage
 pytest --cov=app --cov-report=html
 
 # Specific test types
-pytest tests/integration/    # Integration tests
-pytest tests/unit/           # Unit tests
-pytest tests/repository/     # Repository tests
+pytest tests/integration/     # API endpoint tests
+pytest tests/unit/            # Service logic tests
+pytest tests/repository/      # Database tests
 
-# Specific test file
-pytest tests/integration/test_qa_api.py -v
+# Current coverage: 80%+
 ```
 
-Current coverage: **80%+**
+---
 
 ## Configuration
 
-Key environment variables (see `.env.example` for complete list):
+**Key Environment Variables**:
 
 ```bash
-# Application
-APP_NAME=Health Management API
-DEBUG=false
-LOG_LEVEL=INFO
-
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/health_management
 
 # Security
 SECRET_KEY=your-secret-key-change-in-production
-ACCESS_TOKEN_EXPIRE_MINUTES=30
 
 # Q&A Service
 QA_ENABLED=true
-QA_MODEL_PATH=./models/vietnamese-sbert
 QA_THRESHOLD=0.55
 
-# OpenAI AI
-openai_api_key=your-api-key
-OPENAI_MODEL=gpt-4o-mini
+# OpenAI
+OPENAI_API_KEY=your-api-key
+
+# Redis (optional)
+ENABLE_REDIS_CACHE=true
+REDIS_URL=redis://localhost:6379/0
 
 # Google Cloud
 GCP_PROJECT_ID=your-project-id
 GCP_MODEL_BUCKET=your-models-bucket
-GCP_PUBLIC_BUCKET=your-public-bucket
 
-# OAuth (Optional)
+# OAuth (optional)
 GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-client-secret
 
-# Email (Optional)
+# Email (optional)
 MAIL_SERVER=smtp.gmail.com
 MAIL_USERNAME=your-email@gmail.com
 MAIL_PASSWORD=your-app-password
-
-# Redis Cache (Optional)
-ENABLE_REDIS_CACHE=false
-REDIS_URL=redis://localhost:6379/0
 ```
+
+See `.env.example` for complete list.
+
+---
+
+## API Endpoints
+
+### Authentication (8 endpoints)
+- `POST /api/v1/users/` - Register
+- `POST /api/v1/users/login` - Login
+- `POST /api/v1/auth/verify-email` - Verify email
+- `POST /api/v1/auth/reset-password` - Reset password
+- `GET /api/v1/auth/google` - Google OAuth
+- `POST /api/v1/auth/google/callback` - OAuth callback
+
+### Q&A (3 endpoints)
+- `POST /api/v1/qa/ask` - Ask question (JSON)
+- `POST /api/v1/qa/ask-stream` - Ask question (SSE stream)
+- `GET /api/v1/qa/health` - Q&A service health
+
+### Conversations (7 endpoints)
+- `GET /api/v1/conversations/` - List
+- `POST /api/v1/conversations/` - Create
+- `GET /api/v1/conversations/{id}` - Get
+- `PATCH /api/v1/conversations/{id}` - Update
+- `DELETE /api/v1/conversations/{id}` - Delete
+- `GET /api/v1/conversations/search` - Search
+- `POST /api/v1/conversations/{id}/pin` - Pin/unpin
+
+### Messages (6 endpoints)
+- `GET /api/v1/conversations/{id}/messages` - List
+- `POST /api/v1/conversations/{id}/messages` - Create
+- `PUT /api/v1/conversations/{id}/messages/{msg_id}` - Update
+- `DELETE /api/v1/conversations/{id}/messages/{msg_id}` - Delete
+- `GET /api/v1/conversations/{id}/messages/{msg_id}/versions` - Version history
+- `POST /api/v1/conversations/{id}/messages/{msg_id}/versions/{version_id}/restore` - Restore version
+
+### Predictions (3 endpoints)
+- `POST /api/v1/predict/` - Create prediction
+- `GET /api/v1/predict/{id}` - Get prediction
+- `POST /api/v1/predict/{id}/pdf` - Generate PDF
+
+### Users (4 endpoints)
+- `GET /api/v1/users/` - List (admin)
+- `GET /api/v1/users/{id}` - Get
+- `PUT /api/v1/users/{id}` - Update
+- `DELETE /api/v1/users/{id}` - Delete
+
+### Health & Performance
+- `GET /health` - Overall health
+- `GET /api/v1/cache/health` - Cache health
+- `GET /api/v1/performance/cache` - Cache stats
+- `GET /api/v1/performance/database` - DB pool stats
+
+See `/docs` for auto-generated interactive API documentation.
+
+---
+
+## Architecture
+
+```
+API Layer (app/api/)
+    ↓ Request validation & response serialization
+Service Layer (app/services/)
+    ↓ Business logic, external integrations, caching
+Repository Layer (app/db/)
+    ↓ Raw SQL with asyncpg (parameterized queries)
+PostgreSQL Database
+```
+
+**Key Components**:
+- **Q&A Service**: SBERT semantic search + OpenAI summarization
+- **Conversation Service**: CRUD with full-text search (tsvector)
+- **Message Service**: Versioning and branching support
+- **Cache Service**: Redis with graceful fallback
+- **Predict Service**: Scikit-learn ML models
+- **PDF Service**: WeasyPrint HTML to PDF
+- **Email Service**: SMTP + Jinja2 templates
+- **Auth**: JWT tokens, OAuth 2.0
+
+---
+
+## Performance
+
+### Caching Impact (Redis Enabled)
+- Q&A responses: 2-5s → <50ms (95% reduction)
+- Conversation operations: 100-200ms → <50ms (50-75% reduction)
+- User data: 50-100ms → <20ms (60-80% reduction)
+
+### Performance Targets
+- API p95 latency: <200ms
+- Cache hit rate: >60%
+- Model loading: <30s (non-blocking)
+- Database queries: <50ms
+
+---
+
+## Database
+
+**Core Tables**:
+- `users` - User accounts with soft deletes
+- `conversations` - Chat history with full-text search (tsvector)
+- `messages` - Messages (partitioned by date)
+- `message_versions` - Version history
+- `predictions` - Health predictions
+- `auth_logs` - Authentication events
+
+**Features**:
+- JSONB for flexible metadata
+- tsvector for full-text search
+- Message table partitioning (monthly)
+- Soft deletes (deleted_at column)
+- Parameterized queries (SQL injection prevention)
+
+---
+
+## Security
+
+- **Authentication**: JWT tokens (30min) + refresh tokens (30days)
+- **Password**: Bcrypt hashing (cost factor 12)
+- **Queries**: Parameterized only ($1, $2) - no SQL injection
+- **Headers**: HSTS, CSP, X-Frame-Options
+- **OAuth**: Google social login
+- **Rate Limiting**: 3 concurrent SSE, 60 req/min per user
+- **Audit**: Auth event logging
+- **Secrets**: Environment variables + GCP Secret Manager
+
+---
 
 ## Deployment
 
-### Production Checklist
+### Prerequisites
+- Terraform >= 1.5
+- Google Cloud account
+- gcloud CLI configured
 
-1. **Environment Variables**:
-   - Set `DEBUG=false`
-   - Use strong `SECRET_KEY`
-   - Configure production `DATABASE_URL`
-   - Set `LOG_LEVEL=INFO`
-
-2. **Database**:
-   - Run migrations: `alembic upgrade head`
-   - Enable SSL connections
-   - Set up automated backups
-   - Configure connection pooling
-
-3. **Security**:
-   - Enable HTTPS
-   - Configure CORS origins
-   - Rotate secrets regularly
-   - Enable rate limiting (if available)
-
-4. **Performance**:
-   - Enable Redis caching
-   - Refresh materialized views
-   - Monitor query performance
-   - Set appropriate connection pool sizes
-
-### Deploy to Google Cloud Run
-
-Using Terraform:
+### Deploy to Cloud Run
 
 ```bash
 cd terraform
-terraform init
-terraform plan -var-file=environments/prod/terraform.tfvars
-terraform apply -var-file=environments/prod/terraform.tfvars
-```
 
-Manual deployment:
+# Test environment
+terraform init -backend-config=backend-config.test
+terraform plan -var-file=environments/test.tfvars -out=tfplan
+terraform apply tfplan
 
-```bash
-# Build and push image
-docker build -t gcr.io/PROJECT_ID/health-api .
-docker push gcr.io/PROJECT_ID/health-api
-
-# Deploy to Cloud Run
-gcloud run deploy health-api \
-  --image gcr.io/PROJECT_ID/health-api \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated
+# Production
+terraform init -backend-config=backend-config.prod
+terraform plan -var-file=environments/prod.tfvars -out=tfplan
+terraform apply tfplan
 ```
 
 ### CI/CD
+- Jenkins pipeline with automated testing
+- Docker multi-stage build
+- Artifact Registry integration
+- Automated smoke tests
+- Cloud Run deployment
 
-The project includes Jenkinsfile for automated deployments:
-- Build and test on commit
-- Deploy to Cloud Run on merge to main
-- Run database migrations separately
-- Smoke tests after deployment
+See `docs/deployment-guide.md` for detailed instructions.
 
-## Database Management
+---
 
-### Migrations
+## Database Migrations
 
 ```bash
 cd scripts
 
-# Create new migration
-alembic revision --autogenerate -m "Description of changes"
+# Create migration
+alembic revision --autogenerate -m "Description"
 
-# Run migrations
+# Apply migration
 alembic upgrade head
 
-# Rollback last migration
+# Rollback
 alembic downgrade -1
 
-# Check current version
-alembic current
-
-# View migration history
+# View history
 alembic history
 ```
 
-### Search Index Maintenance
+---
 
-```bash
-# Refresh materialized view for search
-python scripts/maintain_search_index.py
+## Project Structure
+
+```
+app/                    # Application code (5,350 LOC)
+├── api/               # FastAPI routers (8 modules)
+├── services/          # Business logic (13+ modules)
+├── db/               # Data access (9 repositories)
+├── schemas/          # Pydantic models (8 files)
+├── auth/             # JWT & dependencies
+├── core/             # Centralized utilities
+├── middleware/       # Security headers, rate limiting
+├── utils/            # GCS, metrics, helpers
+├── templates/        # Email & PDF templates
+├── main.py          # FastAPI app entry point
+├── config.py        # Settings
+├── exceptions.py    # Error hierarchy
+└── constants.py     # Enums
+
+tests/                  # Test suite (80%+ coverage)
+├── integration/       # API endpoint tests
+├── unit/             # Service logic tests
+├── repository/       # Database tests
+└── conftest.py      # Fixtures
+
+scripts/               # Database & utilities
+├── migrations/       # Alembic migration files
+└── maintain_search_index.py
+
+terraform/            # Infrastructure as Code
+├── main.tf           # Core orchestration
+├── modules/          # GCP modules
+└── environments/     # Test/prod configs
+
+docs/                 # Comprehensive documentation
+├── project-overview-pdr.md
+├── codebase-summary.md
+├── code-standards.md
+├── system-architecture.md
+├── deployment-guide.md
+└── project-roadmap.md
 ```
 
-## Architecture
-
-The application follows clean architecture with clear separation of concerns:
-
-**API Layer** (`app/api/`) → HTTP endpoints and request/response handling
-
-**Service Layer** (`app/services/`) → Business logic and orchestration
-
-**Repository Layer** (`app/db/`) → Database operations with raw SQL
-
-**Schema Layer** (`app/schemas/`) → Data validation and serialization
-
-See [`docs/system-architecture.md`](docs/system-architecture.md) for detailed architecture documentation.
+---
 
 ## Documentation
 
-Comprehensive technical documentation is available in the `docs/` directory:
+**Comprehensive documentation in `docs/` directory**:
 
-### For Developers
+- **[Project Overview & PDR](docs/project-overview-pdr.md)** - Vision, requirements, features, roadmap
+- **[Codebase Summary](docs/codebase-summary.md)** - Directory structure, modules, patterns
+- **[Code Standards](docs/code-standards.md)** - Conventions, best practices, Git workflow
+- **[System Architecture](docs/system-architecture.md)** - Design, components, data flows
+- **[Deployment Guide](docs/deployment-guide.md)** - GCP, Docker, CI/CD, troubleshooting
+- **[Project Roadmap](docs/project-roadmap.md)** - Phase status, planned features, metrics
 
-- **[CLAUDE.md](./CLAUDE.md)** - Claude Code instance guide with development commands, architecture patterns, and critical gotchas
-- **[Code Standards](docs/code-standards.md)** - Coding conventions, naming standards, testing guidelines, best practices, and Git workflow
-- **[Deployment Guide](docs/deployment-guide.md)** - Comprehensive deployment instructions, Jenkins pipeline, Docker builds, and troubleshooting
+---
 
-### Core Documentation
-
-- **[Project Overview & PDR](docs/project-overview-pdr.md)** - Vision, goals, features, functional/non-functional requirements, target users, business context, and roadmap
-- **[System Architecture](docs/system-architecture.md)** - High-level architecture, component design, data flows, infrastructure, security, performance, and deployment
-- **[Codebase Summary](docs/codebase-summary.md)** - Complete directory structure, key modules, dependencies, code organization patterns, and development workflow
-- **[Project Roadmap](docs/project-roadmap.md)** - Development status, completed features, planned enhancements, and technical debt
-
-### Additional Resources
-
-- **[Redis Caching Guide](docs/redis-caching-implementation.md)** - Cache implementation, performance optimization, and monitoring
-- **[Cache Developer Guide](docs/cache-handoff-guide.md)** - Developer-focused caching guide with examples
-- **[Terraform Infrastructure](terraform/README.md)** - Infrastructure as Code documentation for GCP deployment
-
-## Development Guidelines
+## Development
 
 ### Code Quality
 
@@ -446,86 +390,74 @@ mypy app/
 flake8 app/ tests/
 ```
 
-### Contributing
+### Git Workflow
 
-1. Create feature branch: `git checkout -b feature/feature-name`
-2. Make changes and add tests
-3. Ensure tests pass: `pytest`
-4. Check code quality: `black`, `isort`, `flake8`
-5. Commit with clear message
-6. Push and create pull request
+```bash
+# Create feature branch
+git checkout -b feature/feature-name
 
-### Code Review Checklist
+# Make changes, commit with clear message
+git commit -m "feat: Add new feature description"
 
-- [ ] Code follows style guide (PEP 8)
-- [ ] All functions have type hints
-- [ ] Tests included and passing (>80% coverage)
-- [ ] No security vulnerabilities
+# Push and create pull request
+git push origin feature/feature-name
+
+# On approval: merge to develop
+```
+
+---
+
+## Contributing
+
+1. Fork repository
+2. Create feature branch: `git checkout -b feature/name`
+3. Commit changes: `git commit -m "feat: Description"`
+4. Push to branch: `git push origin feature/name`
+5. Create pull request
+
+**PR Checklist**:
+- [ ] Code follows PEP 8
+- [ ] Full type hints
+- [ ] Tests pass (80%+ coverage)
+- [ ] No security issues
 - [ ] Documentation updated
 - [ ] Database migrations included (if needed)
 
-## Performance Considerations
+---
 
-- **Database**: Connection pooling, indexes, materialized views
-- **Caching**: Optional Redis for conversation lists and search results
-- **Async**: Full async/await for non-blocking I/O
-- **Model Loading**: SBERT model loaded once at startup
-- **Search**: In-memory embeddings for fast similarity search
+## Known Issues
 
-## Security Features
-
-- **Authentication**: JWT tokens with expiration
-- **Password**: Bcrypt hashing (cost factor 12)
-- **OAuth**: Google social login
-- **SQL Injection**: Parameterized queries only
-- **CORS**: Configurable allowed origins
-- **Audit**: Authentication event logging
-- **Secrets**: Environment variables and Secret Manager
-
-## Monitoring & Logging
-
-- **Structured Logging**: JSON format with levels (DEBUG, INFO, WARNING, ERROR)
-- **Health Checks**: `/health` endpoint for service monitoring
-- **Performance Metrics**: Cache and database statistics endpoints
-- **Cloud Logging**: Integrated with GCP Cloud Logging
-- **Alerts**: Configure GCP monitoring alerts
-
-## Known Limitations
-
-- Vietnamese language only (Q&A service)
-- OpenAI API dependency for AI summarization
+- Vietnamese Q&A only (single-language support)
+- OpenAI API dependency (no fallback)
 - PostgreSQL-specific features (JSONB, tsvector)
-- Single language model (no multi-language support)
 - Synchronous model loading at startup
+- Font dependencies for PDF generation
+
+---
 
 ## Troubleshooting
 
-### Database Connection Issues
+**Q&A service not responding**:
+- Check `QA_ENABLED=true` in `.env`
+- Verify model files exist
+- Check logs: `docker-compose logs -f app`
 
-```bash
-# Check PostgreSQL is running
-pg_isready -h localhost -p 5432
+**Database connection timeout**:
+- Verify PostgreSQL is running
+- Check `DATABASE_URL` is correct
+- Test connection: `psql $DATABASE_URL`
 
-# Test connection
-psql -h localhost -U postgres -d health_management
+**Redis cache not working**:
+- Check Redis is running: `redis-cli ping`
+- Verify `ENABLE_REDIS_CACHE=true`
+- Check `REDIS_URL` is correct
 
-# Check pool status
-curl http://localhost:8080/api/v1/performance/database
-```
+**Memory/performance issues**:
+- Check API latency: `curl -w "@curl-format.txt" -o /dev/null -s https://api.example.com/health`
+- Monitor cache hit rate: `curl http://localhost:8080/api/v1/performance/cache`
+- Review slow queries: `gcloud sql operations list --instance=health-db`
 
-### Q&A Service Not Available
-
-1. Check `QA_ENABLED=true` in `.env`
-2. Verify model files exist in `./models/vietnamese-sbert/`
-3. Check GCS credentials if auto-download enabled
-4. View logs: `docker-compose logs -f app`
-
-### Redis Cache Issues
-
-1. Check Redis is running: `redis-cli ping`
-2. Verify `ENABLE_REDIS_CACHE=true` in `.env`
-3. Check `REDIS_URL` configuration
-4. View cache stats: `curl http://localhost:8080/api/v1/performance/cache`
+---
 
 ## License
 
@@ -534,10 +466,15 @@ curl http://localhost:8080/api/v1/performance/database
 ## Support
 
 For issues, questions, or contributions:
-- Create an issue in the repository
+- Create GitHub issue
 - Review documentation in `docs/` directory
-- Check API documentation at `/docs` endpoint
+- Check API docs at `/docs` endpoint
+- See CLAUDE.md for development guidance
+
+---
 
 ## Acknowledgments
 
-Built with FastAPI, PostgreSQL, and Vietnamese SBERT for semantic search.
+Built with FastAPI, PostgreSQL, SBERT, and WeasyPrint.
+Deployed on Google Cloud Platform with Terraform.
+

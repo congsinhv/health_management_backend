@@ -62,6 +62,7 @@ async def create_message(
     request: Request,
     message_service: MessageService = Depends(create_message_service),
     ai_chat_service: AIChatService = Depends(create_ai_chat_service),
+    db_pool: asyncpg.Pool = Depends(get_database_pool),
 ):
     """Create a new message."""
     # Set error context for request correlation
@@ -71,6 +72,16 @@ async def create_message(
     ErrorContext.add_context("operation", "message_creation")
     ErrorContext.add_context("conversation_id", message_data.conversation_id)
     ErrorContext.add_context("content_type", message_data.content_type)
+
+    # Log database pool stats for diagnostics
+    from app.db.database import database
+
+    pool_stats = database.get_pool_stats()
+    ErrorContext.add_context("pool_stats", pool_stats)
+    logger.debug(
+        f"DB pool stats before message creation: {pool_stats}",
+        extra={"pool_stats": pool_stats, "user_id": current_user.id},
+    )
 
     with ErrorContext(
         "create_message",

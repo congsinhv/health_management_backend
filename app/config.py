@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     database_pool_min_size: int = 1
     database_pool_max_size: int = 20
     database_pool_timeout: float = 30.0
+    database_query_timeout: float = Field(
+        default=30.0, description="Query execution timeout in seconds (default: 30.0)"
+    )
+    database_connection_timeout: float = Field(
+        default=10.0,
+        description="Connection acquisition timeout in seconds (default: 10.0)",
+    )
 
     # Security settings
     secret_key: str = Field(..., description="Secret key for JWT token signing")
@@ -135,6 +142,22 @@ class Settings(BaseSettings):
         default="tuvung.txt", description="Path to Vietnamese vocabulary file"
     )
 
+    # ONNX optimization settings
+    qa_model_format: str = Field(
+        default="auto",
+        description="Model format: auto (detect), pytorch, onnx",
+    )
+    qa_onnx_provider: str = Field(
+        default="CPUExecutionProvider",
+        description="ONNX execution provider (CPUExecutionProvider, CUDAExecutionProvider)",
+    )
+
+    # Lazy loading settings (Phase 2)
+    qa_lazy_loading: bool = Field(
+        default=True,
+        description="Lazy load Q&A model on first request (faster startup)",
+    )
+
     # Obesity Prediction Model settings
     obesity_model_dir: str = Field(
         default="/tmp/models_obesity",
@@ -163,8 +186,8 @@ class Settings(BaseSettings):
         default=600, description="Timeout for model download from GCS (seconds)"
     )
     gcp_public_bucket: Optional[str] = Field(
-        default="vhealth-dev-public",
-        description="GCS bucket name for public file uploads (e.g., vhealth-dev-public)",
+        default="vhealth-test-public",
+        description="GCS bucket name for public file uploads (e.g., vhealth-test-public)",
     )
 
     # Q&A behavior settings
@@ -214,6 +237,9 @@ class Settings(BaseSettings):
     cache_ttl_qa_summary: int = Field(
         default=1800, description="TTL for Q&A AI summaries (30 minutes)"
     )
+    cache_ttl_qa_embedding: int = Field(
+        default=86400, description="TTL for Q&A embeddings (24 hours)"
+    )
     cache_ttl_conversation_list: int = Field(
         default=300, description="TTL for conversation list (5 minutes)"
     )
@@ -225,6 +251,15 @@ class Settings(BaseSettings):
     )
     cache_ttl_message_list: int = Field(
         default=180, description="TTL for message list (3 minutes)"
+    )
+
+    # Cache warming settings (Phase 3)
+    qa_cache_warmup_enabled: bool = Field(
+        default=True, description="Pre-warm embedding cache at startup"
+    )
+    qa_cache_warmup_questions_file: str = Field(
+        default="data/top_questions.txt",
+        description="File with top questions for cache warming",
     )
 
     @property

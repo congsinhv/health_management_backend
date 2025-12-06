@@ -2,6 +2,7 @@
 Q&A Service using SBERT and OpenAI API.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -117,21 +118,31 @@ class QAService:
     ]
 
     def __init__(self, settings, cache_service=None):
-        """Initialize Q&A service with model, data, and optional cache service."""
+        """
+        Initialize Q&A service with lazy loading support.
+
+        Model and data are loaded on first request if lazy_loading=True.
+        """
         self.settings = settings
         self.model_path = settings.qa_model_path
         self.data_path = settings.qa_data_path
         self.vocab_path = settings.qa_vocab_path
         self.cache_service = cache_service
 
-        # Ensure models are available (download from GCS if needed)
-        if settings.model_auto_download:
-            self._ensure_model_and_data_exist()
+        # Lazy loading state
+        self._model = None
+        self._df = None
+        self._question_embeddings = None
+        self._vocab = None
+        self._model_loaded = False
+        self._loading_lock = asyncio.Lock()  # Prevent concurrent loads
 
-        # Load components
-        self.vocab = self._load_vocab()
-        self.model = self._load_model()
-        self.df, self.question_embeddings = self._load_data()
+        # Eager loading (backward compatibility)
+        if not settings.qa_lazy_loading:
+            logger.info("Eager loading enabled, loading model at startup...")
+            self._load_all_sync()
+        else:
+            logger.info("Lazy loading enabled, model will load on first request")
 
         # Q&A behavior settings
         self.max_per_field = settings.qa_max_per_field
@@ -142,6 +153,91 @@ class QAService:
             logger.info("QAService initialized with caching enabled")
         else:
             logger.info("QAService initialized without caching")
+
+    def _load_all_sync(self):
+        """Synchronous eager loading for backward compatibility."""
+        if self.settings.model_auto_download:
+            self._ensure_model_and_data_exist()
+
+        self._vocab = self._load_vocab()
+        self._model = self._load_model()
+        self._df, self._question_embeddings = self._load_data()
+        self._model_loaded = True
+        logger.info("Model and data loaded successfully (eager mode)")
+
+    async def _ensure_model_loaded(self):
+        """
+        Ensure model is loaded before processing requests.
+        Thread-safe lazy loading with asyncio.Lock.
+        """
+        if self._model_loaded:
+            return  # Already loaded
+
+        async with self._loading_lock:
+            # Double-check after acquiring lock
+            if self._model_loaded:
+                return
+
+            logger.info("Lazy loading model and data...")
+            start_time = time.time()
+
+            try:
+                # Download from GCS if needed
+                if self.settings.model_auto_download:
+                    self._ensure_model_and_data_exist()
+
+                # Load components (run in thread pool to avoid blocking)
+                loop = asyncio.get_event_loop()
+                self._vocab = await loop.run_in_executor(None, self._load_vocab)
+                self._model = await loop.run_in_executor(None, self._load_model)
+                self._df, self._question_embeddings = await loop.run_in_executor(
+                    None, self._load_data
+                )
+
+                self._model_loaded = True
+                elapsed = time.time() - start_time
+                logger.info(f"Model and data loaded successfully in {elapsed:.2f}s")
+
+            except Exception as e:
+                logger.error(f"Failed to load model: {e}")
+                raise RuntimeError(f"Q&A service unavailable: {e}") from e
+
+    # Property accessors (for backward compatibility)
+    @property
+    def model(self):
+        """Get model (throws error if not loaded)."""
+        if not self._model_loaded:
+            raise RuntimeError(
+                "Model not loaded. Call await _ensure_model_loaded() first."
+            )
+        return self._model
+
+    @property
+    def vocab(self):
+        """Get vocabulary."""
+        if not self._model_loaded:
+            raise RuntimeError(
+                "Vocab not loaded. Call await _ensure_model_loaded() first."
+            )
+        return self._vocab
+
+    @property
+    def df(self):
+        """Get dataset DataFrame."""
+        if not self._model_loaded:
+            raise RuntimeError(
+                "Data not loaded. Call await _ensure_model_loaded() first."
+            )
+        return self._df
+
+    @property
+    def question_embeddings(self):
+        """Get pre-computed question embeddings."""
+        if not self._model_loaded:
+            raise RuntimeError(
+                "Embeddings not loaded. Call await _ensure_model_loaded() first."
+            )
+        return self._question_embeddings
 
     def _ensure_model_and_data_exist(self) -> None:
         """
@@ -303,16 +399,147 @@ class QAService:
 
     def _load_model(self) -> SentenceTransformer:
         """
-        Load or download SBERT model.
+        Load SBERT model with ONNX optimization if available.
 
-        First attempts to load from local path. If not found and GCS download
-        failed, falls back to Hugging Face download.
+        Detects available model format (ONNX or PyTorch) and loads accordingly.
+        Falls back to PyTorch if ONNX unavailable or disabled.
+
+        Returns:
+            Loaded SentenceTransformer model (or ONNX-compatible wrapper)
+
+        Raises:
+            Exception: If model cannot be loaded from any source
+        """
+        model_format = self._detect_model_format()
+
+        if model_format == "onnx" and self.settings.qa_model_format != "pytorch":
+            try:
+                logger.info("Loading ONNX model for optimized inference...")
+                return self._load_onnx_model()
+            except Exception as e:
+                logger.warning(f"ONNX loading failed: {e}, falling back to PyTorch")
+                return self._load_pytorch_model()
+        else:
+            logger.info("Loading PyTorch model (ONNX not available or disabled)")
+            return self._load_pytorch_model()
+
+    def _detect_model_format(self) -> str:
+        """
+        Detect available model format in model directory.
+
+        Returns:
+            "onnx" if ONNX files found, "pytorch" if PyTorch files found,
+            "unknown" otherwise
+        """
+        # Auto-detect disabled - force PyTorch
+        if self.settings.qa_model_format == "pytorch":
+            return "pytorch"
+
+        # Auto-detect disabled - force ONNX
+        if self.settings.qa_model_format == "onnx":
+            return "onnx"
+
+        # Auto mode - detect from files
+        model_dir = Path(self.model_path)
+
+        # Check for ONNX files (quantized preferred)
+        if (model_dir / "model_quantized.onnx").exists():
+            return "onnx"
+        elif (model_dir / "model.onnx").exists():
+            return "onnx"
+
+        # Check for PyTorch files
+        if (model_dir / "pytorch_model.bin").exists() or (
+            model_dir / "model.safetensors"
+        ).exists():
+            return "pytorch"
+
+        return "unknown"
+
+    def _load_onnx_model(self):
+        """
+        Load ONNX-optimized model using Optimum.
+
+        Returns:
+            ONNX model wrapped with SentenceTransformer-compatible interface
+
+        Raises:
+            ImportError: If optimum/transformers not installed
+            Exception: If ONNX model loading fails
+        """
+        try:
+            from optimum.onnxruntime import ORTModelForFeatureExtraction
+            from transformers import AutoTokenizer
+        except ImportError as e:
+            raise ImportError(
+                "optimum[onnxruntime] required for ONNX support. "
+                "Install: pip install optimum[onnxruntime]"
+            ) from e
+
+        # Load ONNX model
+        onnx_model = ORTModelForFeatureExtraction.from_pretrained(
+            self.model_path, provider=self.settings.qa_onnx_provider
+        )
+        tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+
+        # Wrap in SentenceTransformer-compatible interface
+        class ONNXSentenceTransformer:
+            """SentenceTransformer-compatible wrapper for ONNX models."""
+
+            def __init__(self, model, tokenizer):
+                self.model = model
+                self.tokenizer = tokenizer
+
+            def encode(self, texts, convert_to_tensor=False, show_progress_bar=False):
+                """
+                Encode texts to embeddings using ONNX model.
+
+                Compatible with SentenceTransformer.encode() interface.
+
+                Args:
+                    texts: Single text or list of texts
+                    convert_to_tensor: Return torch.Tensor (default: numpy)
+                    show_progress_bar: Unused (for compatibility)
+
+                Returns:
+                    Embeddings as torch.Tensor or numpy array
+                """
+                import torch
+
+                if isinstance(texts, str):
+                    texts = [texts]
+
+                # Tokenize
+                inputs = self.tokenizer(
+                    texts,
+                    return_tensors="pt",
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                )
+
+                # Inference
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+
+                # Mean pooling
+                embeddings = outputs.last_hidden_state.mean(dim=1)
+
+                if convert_to_tensor:
+                    return embeddings
+                return embeddings.cpu().numpy()
+
+        return ONNXSentenceTransformer(onnx_model, tokenizer)
+
+    def _load_pytorch_model(self) -> SentenceTransformer:
+        """
+        Load standard PyTorch SentenceTransformer model.
 
         Returns:
             Loaded SentenceTransformer model
 
         Raises:
-            Exception: If model cannot be loaded from any source
+            Exception: If model cannot be loaded
         """
         try:
             if os.path.exists(self.model_path) and self._is_model_complete():
@@ -373,7 +600,8 @@ class QAService:
             )
 
             logger.info(f"Creating embeddings for {len(df)} questions...")
-            question_embeddings = self.model.encode(
+            # Use _model directly (safe in loading context)
+            question_embeddings = self._model.encode(
                 df[QAColumns.QUESTION_CLEAN].tolist(),
                 convert_to_tensor=True,
                 show_progress_bar=True,
@@ -402,8 +630,8 @@ class QAService:
         words = text.split()
 
         # Filter by vocabulary if available
-        if self.vocab:
-            words = [w for w in words if w in self.vocab]
+        if self._vocab:
+            words = [w for w in words if w in self._vocab]
 
         return " ".join(words)
 
@@ -496,6 +724,66 @@ class QAService:
             logger.error(f"Error calling OpenAI API: {e}")
             return QAMessages.SUMMARIZE_ERROR.format(error=str(e))
 
+    async def _get_question_embedding(self, question: str) -> Any:
+        """
+        Get question embedding with caching (Phase 3).
+
+        This method implements embedding-level caching to avoid redundant SBERT
+        inference. Cache hit returns embedding in <5ms vs 20ms inference.
+
+        Args:
+            question: User question
+
+        Returns:
+            Embedding tensor (compatible with util.cos_sim)
+        """
+        # Preprocess question
+        cleaned_question = self.preprocess_text(question)
+        if not cleaned_question:
+            cleaned_question = question.lower()
+
+        # Check embedding cache if available
+        if self.cache_service and self.cache_service.enabled:
+            question_hash = _hash_question(question)
+            cache_key = f"qa:embedding:{question_hash}"
+
+            cached_embedding = await self.cache_service.get_embedding(cache_key)
+            if cached_embedding is not None:
+                logger.info(f"Embedding cache HIT for hash: {question_hash}")
+                # Convert numpy to tensor
+                import torch
+
+                return torch.from_numpy(cached_embedding)
+
+            logger.info(f"Embedding cache MISS for hash: {question_hash}")
+
+        # Compute embedding (cache miss or cache disabled)
+        start = time.time()
+        embedding = self.model.encode(cleaned_question, convert_to_tensor=True)
+        inference_time = (time.time() - start) * 1000  # ms
+        logger.info(f"Embedding inference: {inference_time:.2f}ms")
+
+        # Cache embedding if available
+        if self.cache_service and self.cache_service.enabled:
+            question_hash = _hash_question(question)
+            cache_key = f"qa:embedding:{question_hash}"
+
+            # Convert tensor to numpy for serialization
+            import torch
+
+            if isinstance(embedding, torch.Tensor):
+                embedding_numpy = embedding.cpu().numpy()
+            else:
+                # Already numpy array
+                embedding_numpy = embedding
+
+            await self.cache_service.set_embedding(
+                cache_key, embedding_numpy, ttl=self.settings.cache_ttl_qa_embedding
+            )
+            logger.info(f"Cached embedding for hash: {question_hash}")
+
+        return embedding
+
     async def ask_question(
         self,
         user_question: str,
@@ -504,6 +792,7 @@ class QAService:
     ) -> Dict[str, any]:
         """
         Process user question and return relevant answers.
+        Triggers lazy model loading on first call.
 
         Args:
             user_question: The question to answer
@@ -516,6 +805,9 @@ class QAService:
         Raises:
             ValueError: If question is empty
         """
+        # Ensure model is loaded
+        await self._ensure_model_loaded()
+
         if not user_question or not user_question.strip():
             raise ValueError(QAMessages.EMPTY_QUESTION)
 
@@ -525,7 +817,7 @@ class QAService:
         if top_k is None:
             top_k = self.settings.qa_top_k
 
-        # Check cache first if available
+        # Check cache first if available (full response cache - backward compat)
         if self.cache_service and self.cache_service.enabled:
             try:
                 question_hash = _hash_question(user_question)
@@ -533,22 +825,16 @@ class QAService:
 
                 cached_result = await self.cache_service.get(cache_key)
                 if cached_result:
-                    logger.info(f"Cache HIT for question hash: {question_hash}")
+                    logger.info(f"Full response cache HIT for hash: {question_hash}")
                     return json.loads(cached_result)
                 else:
-                    logger.info(f"Cache MISS for question hash: {question_hash}")
+                    logger.info(f"Full response cache MISS for hash: {question_hash}")
             except Exception as e:
                 logger.warning(f"Cache get error for question: {e}")
                 # Continue with normal flow if cache fails
 
-        # Preprocess question
-        cleaned_question = self.preprocess_text(user_question)
-        if not cleaned_question:
-            # If preprocessing removes everything, use original lowercased
-            cleaned_question = user_question.lower()
-
-        # Generate embedding and compute similarity
-        user_emb = self.model.encode(cleaned_question, convert_to_tensor=True)
+        # Get embedding with caching (Phase 3)
+        user_emb = await self._get_question_embedding(user_question)
         cos_scores = util.cos_sim(user_emb, self.question_embeddings)[0]
 
         # Get top scoring results
@@ -626,7 +912,12 @@ class QAService:
         threshold: float = None,
         top_k: int = None,
     ) -> AsyncGenerator[str, None]:
-        """Stream complete Q&A response with progressive events."""
+        """
+        Stream complete Q&A response with progressive events.
+        Triggers lazy model loading on first call.
+        """
+        # Ensure model is loaded
+        await self._ensure_model_loaded()
 
         start_time = time.time()
         threshold = threshold or 0.55  # Default threshold
@@ -637,11 +928,8 @@ class QAService:
         yield f"event: {event.event_type}\ndata: {event.model_dump_json()}\n\n"
 
         try:
-            # Phase 1: Semantic search (existing logic, async-safe)
-            question_normalized = self.preprocess_text(question)
-            question_embedding = self.model.encode(
-                question_normalized, convert_to_tensor=True
-            )
+            # Phase 1: Semantic search with embedding cache (Phase 3)
+            question_embedding = await self._get_question_embedding(question)
             similarities = util.cos_sim(question_embedding, self.question_embeddings)[0]
 
             # Get top results

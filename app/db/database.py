@@ -45,6 +45,27 @@ class Database:
             raise RuntimeError("Database pool is not initialized")
         return self.pool
 
+    def get_pool_stats(self) -> dict:
+        """Get current database connection pool statistics."""
+        if not self.pool:
+            return {
+                "status": "not_initialized",
+                "size": 0,
+                "free": 0,
+                "in_use": 0,
+                "min_size": 0,
+                "max_size": 0,
+            }
+
+        return {
+            "status": "initialized",
+            "size": self.pool.get_size(),
+            "free": self.pool.get_idle_size(),
+            "in_use": self.pool.get_size() - self.pool.get_idle_size(),
+            "min_size": self.pool.get_min_size(),
+            "max_size": self.pool.get_max_size(),
+        }
+
 
 # Global database instance
 database = Database()
