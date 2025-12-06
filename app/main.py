@@ -32,6 +32,7 @@ from app.api.user import router as user_router
 from app.api.upload import router as upload_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
+from app.api.practice import router as practice_router
 from app.api import predict
 from app.config import settings
 from app.db.database import database
@@ -218,6 +219,9 @@ app.include_router(
 )
 app.include_router(
     messages_router, prefix=f"{settings.api_v1_prefix}/messages", tags=["messages"]
+)
+app.include_router(
+    practice_router, prefix=f"{settings.api_v1_prefix}/practice", tags=["practice"]
 )
 
 
