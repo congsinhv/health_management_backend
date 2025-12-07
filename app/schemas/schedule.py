@@ -103,7 +103,13 @@ class ScheduleResponse(BaseModel):
 
 class DeviceRegisterRequest(BaseModel):
     """FCM device registration."""
-    fcm_token: str = Field(..., min_length=10)
+    fcm_token: str = Field(
+        ...,
+        min_length=100,
+        max_length=500,
+        pattern=r"^[A-Za-z0-9_:/-]+$",
+        description="FCM registration token (typically 150-165 chars)"
+    )
     device_type: Optional[str] = Field(None, pattern=r"^(ios|android|web)$")
     device_name: Optional[str] = Field(None, max_length=100)
 

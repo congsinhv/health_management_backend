@@ -34,6 +34,9 @@ from app.api.user import router as user_router
 from app.api.upload import router as upload_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
+from app.api.schedules import router as schedules_router
+from app.api.devices import router as devices_router
+from app.api.notifications import router as notifications_router
 from app.api import predict
 from app.config import settings
 from app.db.database import database
@@ -297,6 +300,21 @@ app.include_router(
 )
 app.include_router(
     messages_router, prefix=f"{settings.api_v1_prefix}/messages", tags=["messages"]
+)
+app.include_router(
+    schedules_router,
+    prefix=f"{settings.api_v1_prefix}/schedules",
+    tags=["schedules"],
+)
+app.include_router(
+    devices_router,
+    prefix=f"{settings.api_v1_prefix}/devices",
+    tags=["devices"],
+)
+app.include_router(
+    notifications_router,
+    prefix=f"{settings.api_v1_prefix}/notifications",
+    tags=["notifications"],
 )
 
 
