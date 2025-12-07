@@ -4,7 +4,7 @@ Schedule-related Pydantic schemas.
 
 from datetime import time, date, datetime
 from typing import Optional, Dict, List, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from enum import Enum
 
 
@@ -50,12 +50,14 @@ class ScheduleConfig(BaseModel):
     fixed_period: Optional[TimePeriod] = None
     flexible_periods: Optional[Dict[DayOfWeek, List[TimePeriod]]] = None
 
-    @field_validator("flexible_periods")
-    @classmethod
-    def validate_flexible_periods(cls, v, info):
-        if info.data.get("mode") == ScheduleMode.FLEXIBLE and not v:
+    @model_validator(mode="after")
+    def validate_periods(self):
+        """Validate period configuration matches mode."""
+        if self.mode == ScheduleMode.FIXED and not self.fixed_period:
+            raise ValueError("fixed_period required for fixed mode")
+        if self.mode == ScheduleMode.FLEXIBLE and not self.flexible_periods:
             raise ValueError("flexible_periods required for flexible mode")
-        return v
+        return self
 
 
 class SportsPreferences(BaseModel):

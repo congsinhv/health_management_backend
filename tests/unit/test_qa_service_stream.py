@@ -5,6 +5,7 @@ Unit tests for Q&A service streaming methods.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import pandas as pd
+import torch
 
 from app.services.qa_service import QAService
 from app.config import Settings
@@ -23,6 +24,7 @@ async def test_stream_summarize_with_ai_token_accumulation():
         QAService, "_load_model", return_value=MagicMock()
     ), patch.object(QAService, "_load_data", return_value=(pd.DataFrame(), [])):
         qa_service = QAService(settings)
+        qa_service._model_loaded = True
 
     # Mock OpenAI streaming response
     mock_chunks = []
@@ -66,12 +68,17 @@ async def test_stream_ask_question_event_sequence():
     # Setup with mocked SBERT and data
     settings = Settings(qa_enabled=True, model_auto_download=False)
 
-    with patch.object(QAService, "_load_vocab", return_value=set()), patch.object(
-        QAService, "_load_model", return_value=MagicMock()
-    ), patch.object(QAService, "_load_data", return_value=(pd.DataFrame(), [])):
+    with patch.object(QAService, "_load_vocab", return_value=set()), \
+         patch.object(QAService, "_load_model", return_value=MagicMock()), \
+         patch.object(QAService, "_load_data", return_value=(pd.DataFrame(), [])), \
+         patch("app.services.qa_service.util.cos_sim") as mock_cos_sim:
+
+        mock_cos_sim.return_value = torch.tensor([[0.9, 0.8]])  # Mock high similarity
+
         qa_service = QAService(settings)
-        qa_service.model = MagicMock()
-        qa_service.model.encode.return_value = [0.1, 0.2, 0.3]
+        qa_service._model_loaded = True
+        qa_service._model = MagicMock()
+        qa_service._model.encode.return_value = torch.tensor([0.1, 0.2, 0.3])
 
         # Mock data and embeddings
         mock_df = pd.DataFrame(
@@ -81,8 +88,9 @@ async def test_stream_ask_question_event_sequence():
                 "Lĩnh vực": ["Health", "Nutrition"],
             }
         )
-        qa_service.df = mock_df
-        qa_service.question_embeddings = [[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]]
+        qa_service._df = mock_df
+        qa_service._question_embeddings = torch.tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]])
+        qa_service._model_loaded = True  # Prevent overwriting by _ensure_model_loaded
 
         # Mock OpenAI streaming
         mock_chunks = []
@@ -133,10 +141,11 @@ async def test_stream_ask_question_error_event_emission():
         QAService, "_load_model", return_value=MagicMock()
     ), patch.object(QAService, "_load_data", return_value=(pd.DataFrame(), [])):
         qa_service = QAService(settings)
+        qa_service._model_loaded = True
 
         # Mock model to raise exception
-        qa_service.model = MagicMock()
-        qa_service.model.encode.side_effect = Exception("Model error")
+        qa_service._model = MagicMock()
+        qa_service._model.encode.side_effect = Exception("Model error")
 
         # Execute
         events = []
@@ -160,6 +169,7 @@ async def test_stream_summarize_with_ai_openai_error():
         QAService, "_load_model", return_value=MagicMock()
     ), patch.object(QAService, "_load_data", return_value=(pd.DataFrame(), [])):
         qa_service = QAService(settings)
+        qa_service._model_loaded = True
 
         # Mock OpenAI to raise exception
         with patch.object(
@@ -190,6 +200,7 @@ def test_build_summary_prompt_helper():
         QAService, "_load_model", return_value=MagicMock()
     ), patch.object(QAService, "_load_data", return_value=(pd.DataFrame(), [])):
         qa_service = QAService(settings)
+        qa_service._model_loaded = True
 
         question = "How to stay healthy?"
         grouped_answers = {
@@ -219,14 +230,15 @@ async def test_stream_ask_question_no_results_found():
         QAService, "_load_model", return_value=MagicMock()
     ), patch.object(QAService, "_load_data", return_value=(pd.DataFrame(), [])):
         qa_service = QAService(settings)
+        qa_service._model_loaded = True
 
         # Mock model to return low similarities
-        qa_service.model = MagicMock()
-        qa_service.model.encode.return_value = [0.1, 0.2, 0.3]
+        qa_service._model = MagicMock()
+        qa_service._model.encode.return_value = torch.tensor([0.1, 0.2, 0.3])
 
         # Mock empty dataframe
-        qa_service.df = pd.DataFrame()
-        qa_service.question_embeddings = []
+        qa_service._df = pd.DataFrame()
+        qa_service._question_embeddings = []
 
         # Mock data with proper structure
         mock_df = pd.DataFrame(
@@ -236,9 +248,9 @@ async def test_stream_ask_question_no_results_found():
                 "Lĩnh vực": ["Health"],
             }
         )
-        qa_service.df = mock_df
+        qa_service._df = mock_df
         # Set embeddings to empty - this triggers no results
-        qa_service.question_embeddings = []
+        qa_service._question_embeddings = []
 
         # Execute
         events = []

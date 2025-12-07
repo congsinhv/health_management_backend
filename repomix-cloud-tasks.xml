@@ -1,0 +1,1563 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: app/services/cloud_tasks.py, app/api/notifications.py, app/db/notification.py, app/config.py, scripts/setup_cloud_tasks.py, scripts/setup_scheduler.py, requirements.txt
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+app/
+  api/
+    notifications.py
+  db/
+    notification.py
+  services/
+    cloud_tasks.py
+  config.py
+scripts/
+  setup_cloud_tasks.py
+  setup_scheduler.py
+requirements.txt
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="app/services/cloud_tasks.py">
+"""
+Cloud Tasks service for scheduling notifications.
+"""
+
+import json
+import logging
+from datetime import datetime
+from typing import Optional
+
+from google.cloud import tasks_v2
+from google.protobuf import timestamp_pb2
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class CloudTasksService:
+    """Cloud Tasks service for creating and managing notification tasks."""
+
+    def __init__(
+        self,
+        project_id: Optional[str] = None,
+        location: Optional[str] = None,
+        queue: Optional[str] = None,
+        service_account: Optional[str] = None,
+    ):
+        """Initialize Cloud Tasks service.
+
+        Args:
+            project_id: GCP project ID (defaults to settings)
+            location: Cloud Tasks location (defaults to settings)
+            queue: Queue name (defaults to settings)
+            service_account: Service account for OIDC (defaults to settings)
+        """
+        self.project_id = project_id or settings.gcp_project_id
+        self.location = location or settings.cloud_tasks_location
+        self.queue = queue or settings.cloud_tasks_queue
+        self.service_account = service_account or settings.cloud_tasks_service_account
+        self.backend_url = settings.backend_url
+
+        if not self.project_id:
+            raise ValueError("GCP project ID is required for Cloud Tasks")
+
+        self.parent = (
+            f"projects/{self.project_id}/locations/{self.location}/queues/{self.queue}"
+        )
+
+        # Initialize client (lazy - only when needed)
+        self._client: Optional[tasks_v2.CloudTasksClient] = None
+
+    @property
+    def client(self) -> tasks_v2.CloudTasksClient:
+        """Get or create Cloud Tasks client."""
+        if self._client is None:
+            self._client = tasks_v2.CloudTasksClient()
+        return self._client
+
+    async def create_notification_task(
+        self, notification_id: int, scheduled_at: datetime
+    ) -> str:
+        """Create a Cloud Task to send a notification.
+
+        Args:
+            notification_id: ID of the notification to send
+            scheduled_at: When to send the notification (UTC)
+
+        Returns:
+            Task name (full resource path)
+        """
+        if not self.backend_url:
+            raise ValueError("Backend URL is required for Cloud Tasks")
+
+        # Build HTTP request
+        url = f"{self.backend_url}/api/v1/notifications/send"
+        payload = json.dumps({"notification_id": notification_id}).encode()
+
+        http_request = {
+            "http_method": tasks_v2.HttpMethod.POST,
+            "url": url,
+            "headers": {"Content-Type": "application/json"},
+            "body": payload,
+        }
+
+        # Add OIDC token if service account is configured
+        if self.service_account:
+            http_request["oidc_token"] = {
+                "service_account_email": self.service_account,
+                "audience": self.backend_url,
+            }
+
+        # Build task with schedule time
+        task = {
+            "http_request": http_request,
+            "name": f"{self.parent}/tasks/notif-{notification_id}",
+        }
+
+        # Set schedule time if in the future
+        from datetime import timezone
+        if scheduled_at > datetime.now(timezone.utc).replace(tzinfo=None):
+            timestamp = timestamp_pb2.Timestamp()
+            timestamp.FromDatetime(scheduled_at)
+            task["schedule_time"] = timestamp
+
+        try:
+            response = self.client.create_task(
+                request={"parent": self.parent, "task": task}
+            )
+            logger.info(
+                f"Created Cloud Task: {response.name} for notification {notification_id}"
+            )
+            return response.name
+
+        except Exception as e:
+            # Handle duplicate task (already exists)
+            if "ALREADY_EXISTS" in str(e):
+                logger.warning(
+                    f"Task already exists for notification {notification_id}"
+                )
+                return task["name"]
+            raise
+
+    async def delete_task(self, task_name: str) -> bool:
+        """Delete a Cloud Task.
+
+        Args:
+            task_name: Full task resource name
+
+        Returns:
+            True if deleted, False if not found
+        """
+        try:
+            self.client.delete_task(request={"name": task_name})
+            logger.info(f"Deleted Cloud Task: {task_name}")
+            return True
+
+        except Exception as e:
+            if "NOT_FOUND" in str(e):
+                logger.warning(f"Task not found: {task_name}")
+                return False
+            logger.error(f"Failed to delete task {task_name}: {e}")
+            raise
+
+    async def get_queue_stats(self) -> dict:
+        """Get queue statistics for monitoring.
+
+        Returns:
+            Queue stats including state, rate limits, retry config
+        """
+        try:
+            queue = self.client.get_queue(request={"name": self.parent})
+
+            return {
+                "name": queue.name,
+                "state": queue.state.name,
+                "rate_limits": {
+                    "max_dispatches_per_second": queue.rate_limits.max_dispatches_per_second,
+                    "max_burst_size": queue.rate_limits.max_burst_size,
+                    "max_concurrent_dispatches": queue.rate_limits.max_concurrent_dispatches,
+                },
+                "retry_config": {
+                    "max_attempts": queue.retry_config.max_attempts,
+                    "max_retry_duration": (
+                        str(queue.retry_config.max_retry_duration)
+                        if queue.retry_config.max_retry_duration
+                        else None
+                    ),
+                    "min_backoff": (
+                        str(queue.retry_config.min_backoff)
+                        if queue.retry_config.min_backoff
+                        else None
+                    ),
+                    "max_backoff": (
+                        str(queue.retry_config.max_backoff)
+                        if queue.retry_config.max_backoff
+                        else None
+                    ),
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get queue stats: {e}")
+            return {"error": str(e)}
+
+    async def pause_queue(self) -> bool:
+        """Pause the queue (stop dispatching tasks)."""
+        try:
+            self.client.pause_queue(request={"name": self.parent})
+            logger.info(f"Paused queue: {self.parent}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to pause queue: {e}")
+            return False
+
+    async def resume_queue(self) -> bool:
+        """Resume the queue (start dispatching tasks)."""
+        try:
+            self.client.resume_queue(request={"name": self.parent})
+            logger.info(f"Resumed queue: {self.parent}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to resume queue: {e}")
+            return False
+</file>
+
+<file path="scripts/setup_cloud_tasks.py">
+#!/usr/bin/env python3
+"""
+Setup Cloud Tasks queue for workout notifications.
+
+Usage:
+    python scripts/setup_cloud_tasks.py --project=vhealth-dev --location=asia-southeast1 --queue=workout-notifications
+
+Requirements:
+    - gcloud CLI authenticated
+    - google-cloud-tasks>=2.15.0
+"""
+
+import argparse
+import sys
+
+from google.cloud import tasks_v2
+from google.api_core import exceptions
+
+
+def create_queue(
+    project_id: str,
+    location: str,
+    queue_name: str,
+    max_dispatches_per_second: float = 500,
+    max_burst_size: int = 100,
+    max_concurrent_dispatches: int = 1000,
+    max_attempts: int = 3,
+) -> None:
+    """Create or update Cloud Tasks queue.
+
+    Args:
+        project_id: GCP project ID
+        location: Queue location (e.g., asia-southeast1)
+        queue_name: Queue name (e.g., workout-notifications)
+        max_dispatches_per_second: Max tasks dispatched per second
+        max_burst_size: Max tasks dispatched in a single burst
+        max_concurrent_dispatches: Max concurrent task executions
+        max_attempts: Max retry attempts
+    """
+    client = tasks_v2.CloudTasksClient()
+
+    parent = f"projects/{project_id}/locations/{location}"
+    queue_path = f"{parent}/queues/{queue_name}"
+
+    queue = {
+        "name": queue_path,
+        "rate_limits": {
+            "max_dispatches_per_second": max_dispatches_per_second,
+            "max_burst_size": max_burst_size,
+            "max_concurrent_dispatches": max_concurrent_dispatches,
+        },
+        "retry_config": {
+            "max_attempts": max_attempts,
+            "min_backoff": {"seconds": 1},
+            "max_backoff": {"seconds": 3600},
+            "max_doublings": 16,
+        },
+    }
+
+    try:
+        # Try to create the queue
+        response = client.create_queue(
+            request={"parent": parent, "queue": queue}
+        )
+        print(f"Created queue: {response.name}")
+
+    except exceptions.AlreadyExists:
+        # Queue exists, update it
+        print(f"Queue {queue_name} already exists, updating...")
+
+        response = client.update_queue(request={"queue": queue})
+        print(f"Updated queue: {response.name}")
+
+    # Print queue details
+    print("\nQueue configuration:")
+    print(f"  Rate limits:")
+    print(f"    max_dispatches_per_second: {max_dispatches_per_second}")
+    print(f"    max_burst_size: {max_burst_size}")
+    print(f"    max_concurrent_dispatches: {max_concurrent_dispatches}")
+    print(f"  Retry config:")
+    print(f"    max_attempts: {max_attempts}")
+    print(f"    min_backoff: 1s")
+    print(f"    max_backoff: 3600s")
+    print(f"    max_doublings: 16")
+
+
+def create_service_account(project_id: str) -> None:
+    """Print instructions for creating service account.
+
+    Args:
+        project_id: GCP project ID
+    """
+    print("\n" + "=" * 60)
+    print("Service Account Setup")
+    print("=" * 60)
+    print(f"""
+To create a dedicated service account for Cloud Tasks, run:
+
+# Create service account
+gcloud iam service-accounts create cloudtasks-invoker \\
+    --display-name="Cloud Tasks Invoker" \\
+    --project={project_id}
+
+# Grant Cloud Tasks taskRunner role
+gcloud projects add-iam-policy-binding {project_id} \\
+    --member="serviceAccount:cloudtasks-invoker@{project_id}.iam.gserviceaccount.com" \\
+    --role="roles/cloudtasks.taskRunner"
+
+# Grant Cloud Run invoker role (for OIDC)
+gcloud projects add-iam-policy-binding {project_id} \\
+    --member="serviceAccount:cloudtasks-invoker@{project_id}.iam.gserviceaccount.com" \\
+    --role="roles/run.invoker"
+
+Then set CLOUD_TASKS_SERVICE_ACCOUNT environment variable:
+CLOUD_TASKS_SERVICE_ACCOUNT=cloudtasks-invoker@{project_id}.iam.gserviceaccount.com
+""")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Setup Cloud Tasks queue for workout notifications"
+    )
+    parser.add_argument(
+        "--project",
+        required=True,
+        help="GCP project ID",
+    )
+    parser.add_argument(
+        "--location",
+        default="asia-southeast1",
+        help="Queue location (default: asia-southeast1)",
+    )
+    parser.add_argument(
+        "--queue",
+        default="workout-notifications",
+        help="Queue name (default: workout-notifications)",
+    )
+    parser.add_argument(
+        "--max-dispatches",
+        type=float,
+        default=500,
+        help="Max dispatches per second (default: 500)",
+    )
+    parser.add_argument(
+        "--max-concurrent",
+        type=int,
+        default=1000,
+        help="Max concurrent dispatches (default: 1000)",
+    )
+    parser.add_argument(
+        "--max-attempts",
+        type=int,
+        default=3,
+        help="Max retry attempts (default: 3)",
+    )
+    parser.add_argument(
+        "--show-sa-setup",
+        action="store_true",
+        help="Show service account setup instructions",
+    )
+
+    args = parser.parse_args()
+
+    try:
+        create_queue(
+            project_id=args.project,
+            location=args.location,
+            queue_name=args.queue,
+            max_dispatches_per_second=args.max_dispatches,
+            max_concurrent_dispatches=args.max_concurrent,
+            max_attempts=args.max_attempts,
+        )
+
+        if args.show_sa_setup:
+            create_service_account(args.project)
+
+        print("\nQueue setup complete!")
+        print(f"\nEnvironment variables to set:")
+        print(f"  GCP_PROJECT_ID={args.project}")
+        print(f"  CLOUD_TASKS_LOCATION={args.location}")
+        print(f"  CLOUD_TASKS_QUEUE={args.queue}")
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path="scripts/setup_scheduler.py">
+#!/usr/bin/env python3
+"""
+Setup Cloud Scheduler job for batch notification processing.
+
+Usage:
+    python scripts/setup_scheduler.py --project=vhealth-dev --backend-url=https://api.vhealth.io.vn
+
+Requirements:
+    - gcloud CLI authenticated
+    - Cloud Scheduler API enabled
+    - Service account with appropriate permissions
+"""
+
+import argparse
+import sys
+
+from google.cloud import scheduler_v1
+from google.api_core import exceptions
+
+
+def create_scheduler_job(
+    project_id: str,
+    location: str,
+    backend_url: str,
+    service_account: str,
+    schedule: str = "*/5 * * * *",
+    job_name: str = "process-pending-notifications",
+) -> None:
+    """Create or update Cloud Scheduler job.
+
+    Args:
+        project_id: GCP project ID
+        location: Scheduler location (e.g., asia-southeast1)
+        backend_url: Backend URL for API calls
+        service_account: Service account for OIDC authentication
+        schedule: Cron schedule (default: every 5 minutes)
+        job_name: Job name
+    """
+    client = scheduler_v1.CloudSchedulerClient()
+
+    parent = f"projects/{project_id}/locations/{location}"
+    job_path = f"{parent}/jobs/{job_name}"
+
+    job = {
+        "name": job_path,
+        "description": "Process pending workout notifications every 5 minutes",
+        "schedule": schedule,
+        "time_zone": "UTC",
+        "http_target": {
+            "uri": f"{backend_url}/api/v1/notifications/process-batch",
+            "http_method": scheduler_v1.HttpMethod.POST,
+            "headers": {
+                "Content-Type": "application/json",
+            },
+            "oidc_token": {
+                "service_account_email": service_account,
+                "audience": backend_url,
+            },
+        },
+        "retry_config": {
+            "retry_count": 3,
+            "min_backoff_duration": {"seconds": 5},
+            "max_backoff_duration": {"seconds": 300},
+            "max_doublings": 5,
+        },
+    }
+
+    try:
+        # Try to create the job
+        response = client.create_job(request={"parent": parent, "job": job})
+        print(f"Created scheduler job: {response.name}")
+
+    except exceptions.AlreadyExists:
+        # Job exists, update it
+        print(f"Job {job_name} already exists, updating...")
+
+        response = client.update_job(request={"job": job})
+        print(f"Updated scheduler job: {response.name}")
+
+    # Print job details
+    print("\nScheduler job configuration:")
+    print(f"  Schedule: {schedule} (every 5 minutes)")
+    print(f"  Time zone: UTC")
+    print(f"  Target URL: {backend_url}/api/v1/notifications/process-batch")
+    print(f"  Service account: {service_account}")
+    print(f"  Retry config:")
+    print(f"    retry_count: 3")
+    print(f"    min_backoff: 5s")
+    print(f"    max_backoff: 300s")
+
+
+def delete_scheduler_job(project_id: str, location: str, job_name: str) -> None:
+    """Delete Cloud Scheduler job.
+
+    Args:
+        project_id: GCP project ID
+        location: Scheduler location
+        job_name: Job name to delete
+    """
+    client = scheduler_v1.CloudSchedulerClient()
+    job_path = f"projects/{project_id}/locations/{location}/jobs/{job_name}"
+
+    try:
+        client.delete_job(request={"name": job_path})
+        print(f"Deleted scheduler job: {job_path}")
+    except exceptions.NotFound:
+        print(f"Job not found: {job_path}")
+
+
+def pause_scheduler_job(project_id: str, location: str, job_name: str) -> None:
+    """Pause Cloud Scheduler job.
+
+    Args:
+        project_id: GCP project ID
+        location: Scheduler location
+        job_name: Job name to pause
+    """
+    client = scheduler_v1.CloudSchedulerClient()
+    job_path = f"projects/{project_id}/locations/{location}/jobs/{job_name}"
+
+    response = client.pause_job(request={"name": job_path})
+    print(f"Paused scheduler job: {response.name}")
+
+
+def resume_scheduler_job(project_id: str, location: str, job_name: str) -> None:
+    """Resume Cloud Scheduler job.
+
+    Args:
+        project_id: GCP project ID
+        location: Scheduler location
+        job_name: Job name to resume
+    """
+    client = scheduler_v1.CloudSchedulerClient()
+    job_path = f"projects/{project_id}/locations/{location}/jobs/{job_name}"
+
+    response = client.resume_job(request={"name": job_path})
+    print(f"Resumed scheduler job: {response.name}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Setup Cloud Scheduler job for notification processing"
+    )
+    parser.add_argument(
+        "--project",
+        required=True,
+        help="GCP project ID",
+    )
+    parser.add_argument(
+        "--location",
+        default="asia-southeast1",
+        help="Scheduler location (default: asia-southeast1)",
+    )
+    parser.add_argument(
+        "--backend-url",
+        required=True,
+        help="Backend URL (e.g., https://api.vhealth.io.vn)",
+    )
+    parser.add_argument(
+        "--service-account",
+        help="Service account email for OIDC (default: cloud-scheduler@PROJECT.iam.gserviceaccount.com)",
+    )
+    parser.add_argument(
+        "--schedule",
+        default="*/5 * * * *",
+        help="Cron schedule (default: */5 * * * * - every 5 minutes)",
+    )
+    parser.add_argument(
+        "--job-name",
+        default="process-pending-notifications",
+        help="Job name (default: process-pending-notifications)",
+    )
+    parser.add_argument(
+        "--delete",
+        action="store_true",
+        help="Delete the scheduler job instead of creating",
+    )
+    parser.add_argument(
+        "--pause",
+        action="store_true",
+        help="Pause the scheduler job",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the scheduler job",
+    )
+
+    args = parser.parse_args()
+
+    # Default service account
+    service_account = args.service_account or f"cloud-scheduler@{args.project}.iam.gserviceaccount.com"
+
+    try:
+        if args.delete:
+            delete_scheduler_job(args.project, args.location, args.job_name)
+        elif args.pause:
+            pause_scheduler_job(args.project, args.location, args.job_name)
+        elif args.resume:
+            resume_scheduler_job(args.project, args.location, args.job_name)
+        else:
+            create_scheduler_job(
+                project_id=args.project,
+                location=args.location,
+                backend_url=args.backend_url,
+                service_account=service_account,
+                schedule=args.schedule,
+                job_name=args.job_name,
+            )
+
+            print("\n" + "=" * 60)
+            print("Service Account Setup")
+            print("=" * 60)
+            print(f"""
+If you haven't created the service account yet, run:
+
+# Create service account
+gcloud iam service-accounts create cloud-scheduler \\
+    --display-name="Cloud Scheduler" \\
+    --project={args.project}
+
+# Grant Cloud Run invoker role
+gcloud projects add-iam-policy-binding {args.project} \\
+    --member="serviceAccount:cloud-scheduler@{args.project}.iam.gserviceaccount.com" \\
+    --role="roles/run.invoker"
+""")
+
+        print("\nSetup complete!")
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path="app/api/notifications.py">
+"""
+Internal notification endpoints for Cloud Tasks integration.
+"""
+
+import asyncpg
+import json
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from typing import Optional
+from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Request, Header, HTTPException
+
+from app.config import settings
+from app.db.database import get_database_pool
+from app.db.notification import NotificationRepository
+from app.db.device import DeviceRepository
+from app.services.fcm import FCMService
+from app.services.cloud_tasks import CloudTasksService
+from app.services.schedule.service import ScheduleService
+from app.core.error_context import ErrorContext
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+class ProcessBatchRequest(BaseModel):
+    """Batch processing request (empty - uses current time)."""
+    pass
+
+
+class SendNotificationRequest(BaseModel):
+    """Single notification send request."""
+    notification_id: int
+
+
+async def verify_cloud_tasks_auth(
+    x_cloudtasks_queuename: Optional[str] = Header(None),
+    x_cloudtasks_taskname: Optional[str] = Header(None),
+):
+    """Verify request is from Cloud Tasks.
+
+    Cloud Tasks adds specific headers. In development (debug=True),
+    requests without headers are allowed for testing.
+    In production, only Cloud Tasks requests are accepted.
+    """
+    # Check for Cloud Tasks headers (production-safe)
+    if x_cloudtasks_queuename and x_cloudtasks_taskname:
+        logger.debug(f"Cloud Tasks request: queue={x_cloudtasks_queuename}, task={x_cloudtasks_taskname}")
+        return True
+
+    # In production, reject requests without Cloud Tasks headers
+    if not settings.debug:
+        raise HTTPException(status_code=401, detail="Unauthorized - Cloud Tasks headers required")
+
+    # Allow in development mode for testing
+    logger.warning("Cloud Tasks auth bypassed in debug mode")
+    return True
+
+
+async def get_fcm_service(request: Request) -> FCMService:
+    """Get FCM service from app state."""
+    fcm = getattr(request.app.state, "fcm_service", None)
+    if not fcm:
+        raise HTTPException(status_code=503, detail="FCM service not available")
+    return fcm
+
+
+async def get_cloud_tasks_service(request: Request) -> Optional[CloudTasksService]:
+    """Get Cloud Tasks service from app state."""
+    return getattr(request.app.state, "cloud_tasks_service", None)
+
+
+async def get_schedule_service(
+    request: Request,
+    db_pool: asyncpg.Pool = Depends(get_database_pool),
+) -> ScheduleService:
+    """Get schedule service."""
+    cache_service = getattr(request.app.state, "cache_service", None)
+    return ScheduleService(db_pool, cache_service=cache_service)
+
+
+@router.post("/process-batch")
+async def process_notification_batch(
+    request: Request,
+    db_pool: asyncpg.Pool = Depends(get_database_pool),
+    cloud_tasks_service: Optional[CloudTasksService] = Depends(get_cloud_tasks_service),
+    _auth: bool = Depends(verify_cloud_tasks_auth),
+):
+    """Process pending notifications for the next window.
+
+    Called by Cloud Scheduler every 5 minutes.
+    Finds pending notifications and creates Cloud Tasks for sending.
+    """
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "process_notification_batch")
+
+    notification_repo = NotificationRepository(db_pool)
+
+    now = datetime.now(ZoneInfo("UTC"))
+    window_end = now + timedelta(minutes=5)
+
+    with ErrorContext("process_batch", {"window_end": window_end.isoformat()}):
+        # Get pending notifications in window
+        notifications = await notification_repo.get_pending_in_window(now, window_end)
+
+        if not notifications:
+            return {"processed": 0, "message": "No pending notifications"}
+
+        # Check Cloud Tasks service availability
+        if not cloud_tasks_service:
+            logger.warning("Cloud Tasks service not available")
+            return {
+                "processed": len(notifications),
+                "queued": 0,
+                "message": "Cloud Tasks service not configured",
+            }
+
+        queued_count = 0
+        errors = []
+
+        for notif in notifications:
+            try:
+                # Create Cloud Task for each notification
+                task_name = await cloud_tasks_service.create_notification_task(
+                    notification_id=notif["id"],
+                    scheduled_at=notif["scheduled_at"],
+                )
+
+                # Update status to queued
+                await notification_repo.update_status(
+                    notification_id=notif["id"],
+                    status="queued",
+                    cloud_task_name=task_name,
+                )
+                queued_count += 1
+
+            except Exception as e:
+                logger.error(f"Failed to queue notification {notif['id']}: {e}")
+                errors.append({"id": notif["id"], "error": str(e)})
+
+        return {
+            "processed": len(notifications),
+            "queued": queued_count,
+            "errors": errors if errors else None,
+        }
+
+
+@router.post("/send")
+async def send_notification(
+    request_data: SendNotificationRequest,
+    request: Request,
+    db_pool: asyncpg.Pool = Depends(get_database_pool),
+    fcm_service: FCMService = Depends(get_fcm_service),
+    schedule_service: ScheduleService = Depends(get_schedule_service),
+    _auth: bool = Depends(verify_cloud_tasks_auth),
+):
+    """Send a single notification via FCM.
+
+    Called by Cloud Tasks when notification is due.
+    """
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "send_notification")
+    ErrorContext.add_context("notification_id", request_data.notification_id)
+
+    notification_repo = NotificationRepository(db_pool)
+    device_repo = DeviceRepository(db_pool)
+
+    with ErrorContext("send_notification", {"notification_id": request_data.notification_id}):
+        # Get notification
+        notif = await notification_repo.get_by_id(request_data.notification_id)
+        if not notif:
+            return {"success": False, "error": "Notification not found"}
+
+        if notif["status"] == "sent":
+            return {"success": True, "message": "Already sent"}
+
+        # Get user devices
+        devices = await device_repo.get_active_by_user(notif["user_id"])
+        if not devices:
+            await notification_repo.update_status(
+                notification_id=notif["id"],
+                status="failed",
+                error_message="No active devices",
+            )
+            return {"success": False, "error": "No active devices"}
+
+        tokens = [d["fcm_token"] for d in devices]
+
+        # Send via FCM
+        data = json.loads(notif["data"]) if notif["data"] else None
+
+        result = await fcm_service.send_notification(
+            tokens=tokens,
+            title=notif["title"],
+            body=notif["body"],
+            data=data,
+        )
+
+        # Handle invalid tokens
+        if result.get("invalid_tokens"):
+            for invalid_token in result["invalid_tokens"]:
+                await device_repo.deactivate_token(invalid_token)
+
+        # Update notification status
+        if result.get("success_count", 0) > 0:
+            await notification_repo.update_status(
+                notification_id=notif["id"],
+                status="sent",
+            )
+
+            # Log exercise from notification
+            await schedule_service.log_exercise_from_notification(notif["id"])
+
+            return {"success": True, "delivered_to": result["success_count"]}
+        else:
+            await notification_repo.update_status(
+                notification_id=notif["id"],
+                status="failed",
+                error_message=result.get("error", "All deliveries failed"),
+            )
+            return {"success": False, "error": result.get("error")}
+
+
+@router.get("/stats")
+async def get_notification_stats(
+    request: Request,
+    db_pool: asyncpg.Pool = Depends(get_database_pool),
+    cloud_tasks_service: Optional[CloudTasksService] = Depends(get_cloud_tasks_service),
+    _auth: bool = Depends(verify_cloud_tasks_auth),
+):
+    """Get notification processing statistics.
+
+    Returns pending count, queue stats, and last processed time.
+    """
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "get_notification_stats")
+
+    notification_repo = NotificationRepository(db_pool)
+    cache_service = getattr(request.app.state, "cache_service", None)
+
+    with ErrorContext("get_stats"):
+        # Get pending notifications count
+        pending_count = await notification_repo.count_pending()
+
+        # Get queue stats if Cloud Tasks available
+        queue_stats = None
+        if cloud_tasks_service:
+            queue_stats = await cloud_tasks_service.get_queue_stats()
+
+        # Get last processed from cache
+        last_processed = None
+        if cache_service and cache_service.enabled:
+            last_processed = await cache_service.get("last_notification_batch")
+
+        return {
+            "pending_notifications": pending_count,
+            "queue_status": queue_stats,
+            "last_processed": last_processed,
+            "cloud_tasks_enabled": cloud_tasks_service is not None,
+        }
+</file>
+
+<file path="app/db/notification.py">
+"""
+Notification repository for database operations.
+"""
+
+import json
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
+import asyncpg
+
+from app.config import logger
+from app.db.database import BaseRepository
+from app.exceptions import (
+    ResourceNotFoundException,
+    DatabaseException,
+)
+
+
+class NotificationRepository(BaseRepository):
+    """Repository for scheduled notification database operations."""
+
+    async def create(self, data: Dict[str, Any]) -> asyncpg.Record:
+        """Create scheduled notification."""
+        query = """
+            INSERT INTO scheduled_notifications (
+                schedule_plan_id, user_id, scheduled_at,
+                workout_date, workout_day, workout_start_time, workout_end_time,
+                title, body, data, status
+            ) VALUES (
+                $1, $2, $3,
+                $4, $5, $6, $7,
+                $8, $9, $10, 'pending'
+            )
+            RETURNING *
+        """
+        try:
+            return await self.fetch_one(
+                query,
+                data.get("schedule_plan_id"),
+                data.get("user_id"),
+                data.get("scheduled_at"),
+                data.get("workout_date"),
+                data.get("workout_day"),
+                data.get("workout_start_time"),
+                data.get("workout_end_time"),
+                data.get("title"),
+                data.get("body"),
+                json.dumps(data.get("data")) if data.get("data") else None,
+            )
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error creating notification",
+                details={"error": str(e)},
+            )
+
+    async def create_batch(self, notifications: List[Dict[str, Any]]) -> int:
+        """Create multiple notifications in batch."""
+        if not notifications:
+            return 0
+
+        values = []
+        params = []
+        param_idx = 1
+        for n in notifications:
+            values.append(f"(${param_idx}, ${param_idx+1}, ${param_idx+2}, "
+                         f"${param_idx+3}, ${param_idx+4}, ${param_idx+5}, ${param_idx+6}, "
+                         f"${param_idx+7}, ${param_idx+8}, ${param_idx+9}, 'pending')")
+            params.extend([
+                n.get("schedule_plan_id"),
+                n.get("user_id"),
+                n.get("scheduled_at"),
+                n.get("workout_date"),
+                n.get("workout_day"),
+                n.get("workout_start_time"),
+                n.get("workout_end_time"),
+                n.get("title"),
+                n.get("body"),
+                json.dumps(n.get("data")) if n.get("data") else None,
+            ])
+            param_idx += 10
+
+        query = f"""
+            INSERT INTO scheduled_notifications (
+                schedule_plan_id, user_id, scheduled_at,
+                workout_date, workout_day, workout_start_time, workout_end_time,
+                title, body, data, status
+            ) VALUES {', '.join(values)}
+        """
+        try:
+            result = await self.execute(query, *params)
+            return int(result.split()[-1]) if result else 0
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error creating batch notifications",
+                details={"count": len(notifications), "error": str(e)},
+            )
+
+    async def get_pending_in_window(
+        self, window_start: datetime, window_end: datetime
+    ) -> List[asyncpg.Record]:
+        """Get pending notifications within time window."""
+        query = """
+            SELECT n.*, sp.timezone
+            FROM scheduled_notifications n
+            JOIN schedule_plans sp ON sp.id = n.schedule_plan_id
+            WHERE n.status = 'pending'
+              AND n.scheduled_at >= $1
+              AND n.scheduled_at <= $2
+            ORDER BY n.scheduled_at
+        """
+        try:
+            return await self.fetch_many(query, window_start, window_end)
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error fetching pending notifications",
+                details={"error": str(e)},
+            )
+
+    async def update_status(
+        self,
+        notification_id: int,
+        status: str,
+        cloud_task_name: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> asyncpg.Record:
+        """Update notification status."""
+        query = """
+            UPDATE scheduled_notifications
+            SET status = $1,
+            cloud_task_name = COALESCE($2, cloud_task_name),
+            error_message = $3,
+            sent_at = CASE WHEN $1 = 'sent' THEN NOW() ELSE sent_at END,
+            retry_count = CASE WHEN $1 = 'failed' THEN retry_count + 1 ELSE retry_count END,
+            updated_at = NOW()
+            WHERE id = $4
+            RETURNING *
+        """
+        try:
+            result = await self.fetch_one(query, status, cloud_task_name, error_message, notification_id)
+            if not result:
+                raise ResourceNotFoundException(
+                    message="Notification not found",
+                    details={"notification_id": notification_id},
+                )
+            return result
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error updating notification",
+                details={"notification_id": notification_id, "error": str(e)},
+            )
+
+    async def get_by_id(self, notification_id: int) -> Optional[asyncpg.Record]:
+        """Get notification by ID."""
+        query = "SELECT * FROM scheduled_notifications WHERE id = $1"
+        try:
+            return await self.fetch_one(query, notification_id)
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error fetching notification",
+                details={"notification_id": notification_id, "error": str(e)},
+            )
+
+    async def delete_by_plan(self, schedule_plan_id: int) -> int:
+        """Delete all notifications for a plan."""
+        query = """
+            DELETE FROM scheduled_notifications
+            WHERE schedule_plan_id = $1 AND status = 'pending'
+        """
+        try:
+            result = await self.execute(query, schedule_plan_id)
+            return int(result.split()[-1]) if result else 0
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error deleting notifications",
+                details={"schedule_plan_id": schedule_plan_id, "error": str(e)},
+            )
+
+    async def get_upcoming_by_user(
+        self, user_id: int, limit: int = 10
+    ) -> List[asyncpg.Record]:
+        """Get upcoming notifications for user."""
+        query = """
+            SELECT * FROM scheduled_notifications
+            WHERE user_id = $1 AND status = 'pending' AND scheduled_at > NOW()
+            ORDER BY scheduled_at
+            LIMIT $2
+        """
+        try:
+            return await self.fetch_many(query, user_id, limit)
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error fetching upcoming notifications",
+                details={"user_id": user_id, "error": str(e)},
+            )
+
+    async def count_pending(self) -> int:
+        """Count pending notifications."""
+        query = "SELECT COUNT(*) FROM scheduled_notifications WHERE status = 'pending'"
+        try:
+            result = await self.fetch_one(query)
+            return result["count"] if result else 0
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error counting pending notifications",
+                details={"error": str(e)},
+            )
+</file>
+
+<file path="requirements.txt">
+# FastAPI and ASGI server
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+
+# Database
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Configuration and environment
+pydantic[email]==2.10.0
+pydantic-settings==2.6.0
+python-dotenv==1.0.0
+
+# Authentication and security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.12
+
+# OAuth and Social Authentication
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+authlib==1.3.0
+
+# Email functionality
+fastapi-mail==1.4.1
+jinja2==3.1.2
+
+# PDF Generation
+weasyprint>=63.0
+pydyf>=0.11.0
+
+# Utilities
+python-dateutil==2.8.2
+typing_extensions>=4.0.0
+
+# Monitoring and diagnostics
+psutil==7.1.3  # Memory and system monitoring for Phase 1 OOM diagnostics
+
+# HTTP client for health checks
+requests==2.32.3
+
+# Google Cloud dependencies for Cloud Run
+google-cloud-secret-manager==2.20.2
+google-cloud-storage>=2.10.0
+google-cloud-tasks>=2.15.0
+google-cloud-scheduler>=2.13.0
+
+# Q&A Service dependencies
+sentence-transformers==5.1.2
+pandas==2.3.3
+openpyxl==3.1.5
+torch==2.5.1
+openai==2.8.0
+
+# SSE Streaming dependencies
+httpx-sse>=0.4.0
+
+# Production security and monitoring dependencies
+prometheus-client>=0.20.0
+
+# Redis caching
+redis>=5.0.0
+</file>
+
+<file path="app/config.py">
+"""
+Configuration settings for the Health Management application.
+"""
+
+from typing import Optional, List
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    # Application settings
+    app_name: str = "Health Management API"
+    app_version: str = "1.0.0"
+    debug: bool = False
+
+    # Database settings
+    database_url: str = Field(..., description="PostgreSQL database URL")
+    database_pool_min_size: int = 1
+    database_pool_max_size: int = 20
+    database_pool_timeout: float = 30.0
+    database_query_timeout: float = Field(
+        default=30.0, description="Query execution timeout in seconds (default: 30.0)"
+    )
+    database_connection_timeout: float = Field(
+        default=10.0,
+        description="Connection acquisition timeout in seconds (default: 10.0)",
+    )
+
+    # Security settings
+    secret_key: str = Field(..., description="Secret key for JWT token signing")
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 30
+
+    # Email verification and password reset
+    email_verification_expire_minutes: int = 60
+    password_reset_expire_minutes: int = 30
+
+    # OAuth settings
+    google_client_id: Optional[str] = Field(None, description="Google OAuth client ID")
+    google_client_secret: Optional[str] = Field(
+        None, description="Google OAuth client secret"
+    )
+    google_redirect_uri: Optional[str] = Field(
+        None, description="Google OAuth redirect URI"
+    )
+
+    # Email settings
+    mail_username: Optional[str] = Field(None, description="Email username")
+    mail_password: Optional[str] = Field(None, description="Email password")
+    mail_from: Optional[str] = Field(None, description="From email address")
+    mail_port: int = 587
+    mail_server: Optional[str] = Field(None, description="SMTP server")
+    mail_tls: bool = True
+    mail_ssl: bool = False
+    use_credentials: bool = True
+    validate_certs: bool = True
+    webui_url: Optional[str] = Field(None, description="WebUI URL")
+
+    # API settings
+    api_v1_prefix: str = "/api/v1"
+    allowed_hosts: List[str] = ["*"]
+
+    custom_domain: Optional[str] = Field(None, description="Custom domain")
+
+    # CORS settings - stored as comma-separated string in env var
+    # Using str type to prevent pydantic-settings from trying to parse as JSON
+    cors_origins_str: str = Field(
+        default="http://localhost:3000,http://localhost:3001,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:8080,http://192.168.1.3:3000,http://192.168.1.3:3001,http://192.168.1.3:8080",
+        alias="CORS_ORIGINS",
+    )
+
+    @property
+    def cors_origins(self) -> List[str]:
+        """Parse CORS origins from comma-separated string."""
+        if not self.cors_origins_str:
+            return []
+        # Try JSON first (for backward compatibility), then comma-separated
+        if self.cors_origins_str.startswith("["):
+            import json
+
+            try:
+                return json.loads(self.cors_origins_str)
+            except json.JSONDecodeError:
+                pass
+        # Handle comma-separated string from environment variable
+        return [
+            origin.strip()
+            for origin in self.cors_origins_str.split(",")
+            if origin.strip()
+        ]
+
+    @model_validator(mode="after")
+    def add_custom_domain_to_cors(self):
+        """Add custom domain to CORS origins if provided."""
+        if self.custom_domain:
+            origin = f"https://{self.custom_domain}"
+            # Check if origin is already in the string
+            if origin not in self.cors_origins_str:
+                self.cors_origins_str = f"{self.cors_origins_str},{origin}"
+        return self
+
+    cors_allow_credentials: bool = True
+    cors_allow_methods: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+    cors_allow_headers: List[str] = [
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "Origin",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers",
+        "Cookie",
+        "Set-Cookie",
+    ]
+
+    # Logging
+    log_level: str = "INFO"
+
+    # Documentation settings
+    docs_enabled: bool = True
+    # Q&A Service settings
+    # ========================================
+    qa_enabled: bool = Field(default=True, description="Enable/disable Q&A service")
+
+    # Local paths (used as cache directory when downloading from GCS)
+    qa_model_path: str = Field(
+        default="./models/vietnamese-sbert",
+        description="Path to SBERT model directory (local cache)",
+    )
+    qa_data_path: str = Field(
+        default="data.xlsx", description="Path to Q&A dataset Excel file"
+    )
+    qa_vocab_path: str = Field(
+        default="tuvung.txt", description="Path to Vietnamese vocabulary file"
+    )
+
+    # ONNX optimization settings
+    qa_model_format: str = Field(
+        default="auto",
+        description="Model format: auto (detect), pytorch, onnx",
+    )
+    qa_onnx_provider: str = Field(
+        default="CPUExecutionProvider",
+        description="ONNX execution provider (CPUExecutionProvider, CUDAExecutionProvider)",
+    )
+
+    # Lazy loading settings (Phase 2)
+    qa_lazy_loading: bool = Field(
+        default=True,
+        description="Lazy load Q&A model on first request (faster startup)",
+    )
+
+    # Obesity Prediction Model settings
+    obesity_model_dir: str = Field(
+        default="/tmp/models_obesity",
+        description="Path to obesity prediction models directory (writable cache)",
+    )
+
+    # GCS Storage settings
+    gcp_project_id: Optional[str] = Field(
+        default=None, description="GCP project ID for GCS access"
+    )
+    gcp_model_bucket: Optional[str] = Field(
+        default=None,
+        description="GCS bucket name for models (e.g., vhealth-dev-models)",
+    )
+    gcp_model_blob_path: str = Field(
+        default="models/vietnamese-sbert/",
+        description="Path to model files within GCS bucket",
+    )
+    gcp_data_blob_path: str = Field(
+        default="data/", description="Path to data files within GCS bucket"
+    )
+    model_auto_download: bool = Field(
+        default=True, description="Automatically download models from GCS if not local"
+    )
+    model_download_timeout: int = Field(
+        default=600, description="Timeout for model download from GCS (seconds)"
+    )
+    gcp_public_bucket: Optional[str] = Field(
+        default="vhealth-test-public",
+        description="GCS bucket name for public file uploads (e.g., vhealth-test-public)",
+    )
+
+    # Q&A behavior settings
+    openai_api_key: str = Field(
+        default="openai_api_key", description="OpenAI API key for AI summarization"
+    )
+    qa_threshold: float = Field(
+        default=0.55,
+        ge=0.0,
+        le=1.0,
+        description="Minimum similarity threshold for answers",
+    )
+    qa_top_k: int = Field(
+        default=7, ge=1, le=20, description="Maximum number of top results to return"
+    )
+    qa_max_per_field: int = Field(
+        default=5, ge=1, le=10, description="Maximum answers per field category"
+    )
+
+    # Redis Cache settings
+    # ========================================
+    enable_redis_cache: bool = Field(
+        default=False, description="Enable Redis caching for performance optimization"
+    )
+    redis_host: Optional[str] = Field(
+        None, description="Redis host (from GCP Memorystore)"
+    )
+    redis_port: int = Field(default=6379, description="Redis port")
+    redis_password: Optional[str] = Field(
+        None, description="Redis password (from Secret Manager)"
+    )
+    redis_db: int = Field(default=0, description="Redis database number")
+    redis_ssl: bool = Field(
+        default=True, description="Use SSL/TLS for Redis connection"
+    )
+    redis_max_connections: int = Field(
+        default=20, description="Maximum Redis connection pool size"
+    )
+    redis_connection_timeout: int = Field(
+        default=5, description="Redis connection timeout in seconds"
+    )
+
+    # TTL settings for different cache types (in seconds)
+    cache_ttl_qa_answer: int = Field(
+        default=1800, description="TTL for Q&A answers (30 minutes)"
+    )
+    cache_ttl_qa_summary: int = Field(
+        default=1800, description="TTL for Q&A AI summaries (30 minutes)"
+    )
+    cache_ttl_qa_embedding: int = Field(
+        default=86400, description="TTL for Q&A embeddings (24 hours)"
+    )
+    cache_ttl_conversation_list: int = Field(
+        default=300, description="TTL for conversation list (5 minutes)"
+    )
+    cache_ttl_conversation_detail: int = Field(
+        default=600, description="TTL for conversation detail (10 minutes)"
+    )
+    cache_ttl_user_profile: int = Field(
+        default=600, description="TTL for user profile (10 minutes)"
+    )
+    cache_ttl_message_list: int = Field(
+        default=180, description="TTL for message list (3 minutes)"
+    )
+
+    # Cache warming settings (Phase 3)
+    qa_cache_warmup_enabled: bool = Field(
+        default=True, description="Pre-warm embedding cache at startup"
+    )
+    qa_cache_warmup_questions_file: str = Field(
+        default="data/top_questions.txt",
+        description="File with top questions for cache warming",
+    )
+
+    # FCM Settings (Phase 3)
+    fcm_credentials_json: Optional[str] = Field(
+        None, description="Firebase credentials JSON (from Secret Manager)"
+    )
+    fcm_enabled: bool = Field(default=True, description="Enable FCM notifications")
+
+    # Cloud Tasks Settings (Phase 5)
+    cloud_tasks_enabled: bool = Field(
+        default=True, description="Enable Cloud Tasks for notification scheduling"
+    )
+    cloud_tasks_queue: str = Field(
+        default="workout-notifications", description="Cloud Tasks queue name"
+    )
+    cloud_tasks_location: str = Field(
+        default="asia-southeast1", description="Cloud Tasks queue location"
+    )
+    cloud_tasks_service_account: Optional[str] = Field(
+        None, description="Service account email for Cloud Tasks OIDC"
+    )
+
+    # Backend URL for Cloud Tasks callbacks
+    backend_url: Optional[str] = Field(
+        None, description="Backend URL for Cloud Tasks callbacks (e.g., https://api.vhealth.io.vn)"
+    )
+
+    @property
+    def redis_url(self) -> Optional[str]:
+        """Construct Redis URL from configuration."""
+        if not self.enable_redis_cache or not self.redis_host:
+            return None
+
+        # Build authentication part
+        auth_part = ""
+        if self.redis_password:
+            auth_part = f":{self.redis_password}@"
+
+        # Build URL with SSL requirement
+        url = f"redis://{auth_part}{self.redis_host}:{self.redis_port}/{self.redis_db}"
+
+        if self.redis_ssl:
+            url += "?ssl_cert_reqs=required"
+
+        return url
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        # Avoid Pydantic protected namespace warning for model_* fields
+        protected_namespaces=(),
+        # Don't try to parse env vars as JSON for complex types
+        # This allows our field_validator to handle the parsing
+        env_parse_none_str="None",
+    )
+
+
+# Global settings instance
+settings = Settings()
+</file>
+
+</files>
