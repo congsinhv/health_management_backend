@@ -97,9 +97,19 @@ class CloudTasksService:
 
         # Set schedule time if in the future
         from datetime import timezone
-        if scheduled_at > datetime.now(timezone.utc).replace(tzinfo=None):
+        now_utc = datetime.now(timezone.utc)
+        
+        # Ensure scheduled_at is timezone-aware for comparison
+        if scheduled_at.tzinfo is None:
+            # Assume naive datetimes are UTC
+            scheduled_at_aware = scheduled_at.replace(tzinfo=timezone.utc)
+        else:
+            scheduled_at_aware = scheduled_at
+        
+        if scheduled_at_aware > now_utc:
             timestamp = timestamp_pb2.Timestamp()
-            timestamp.FromDatetime(scheduled_at)
+            # FromDatetime requires a naive UTC datetime
+            timestamp.FromDatetime(scheduled_at_aware.replace(tzinfo=None))
             task["schedule_time"] = timestamp
 
         try:
