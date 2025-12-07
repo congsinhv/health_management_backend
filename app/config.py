@@ -268,6 +268,25 @@ class Settings(BaseSettings):
     )
     fcm_enabled: bool = Field(default=True, description="Enable FCM notifications")
 
+    # Cloud Tasks Settings (Phase 5)
+    cloud_tasks_enabled: bool = Field(
+        default=True, description="Enable Cloud Tasks for notification scheduling"
+    )
+    cloud_tasks_queue: str = Field(
+        default="workout-notifications", description="Cloud Tasks queue name"
+    )
+    cloud_tasks_location: str = Field(
+        default="asia-southeast1", description="Cloud Tasks queue location"
+    )
+    cloud_tasks_service_account: Optional[str] = Field(
+        None, description="Service account email for Cloud Tasks OIDC"
+    )
+
+    # Backend URL for Cloud Tasks callbacks
+    backend_url: Optional[str] = Field(
+        None, description="Backend URL for Cloud Tasks callbacks (e.g., https://api.vhealth.io.vn)"
+    )
+
     @property
     def redis_url(self) -> Optional[str]:
         """Construct Redis URL from configuration."""

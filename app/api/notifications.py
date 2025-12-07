@@ -10,13 +10,18 @@ from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Request, Header, HTTPException
 
-from app.config import settings, logger
+from app.config import settings
 from app.db.database import get_database_pool
 from app.db.notification import NotificationRepository
 from app.db.device import DeviceRepository
 from app.services.fcm import FCMService
+from app.services.cloud_tasks import CloudTasksService
 from app.services.schedule.service import ScheduleService
 from app.core.error_context import ErrorContext
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -63,6 +68,11 @@ async def get_fcm_service(request: Request) -> FCMService:
     return fcm
 
 
+async def get_cloud_tasks_service(request: Request) -> Optional[CloudTasksService]:
+    """Get Cloud Tasks service from app state."""
+    return getattr(request.app.state, "cloud_tasks_service", None)
+
+
 async def get_schedule_service(
     request: Request,
     db_pool: asyncpg.Pool = Depends(get_database_pool),
@@ -76,6 +86,7 @@ async def get_schedule_service(
 async def process_notification_batch(
     request: Request,
     db_pool: asyncpg.Pool = Depends(get_database_pool),
+    cloud_tasks_service: Optional[CloudTasksService] = Depends(get_cloud_tasks_service),
     _auth: bool = Depends(verify_cloud_tasks_auth),
 ):
     """Process pending notifications for the next window.
@@ -98,17 +109,13 @@ async def process_notification_batch(
         if not notifications:
             return {"processed": 0, "message": "No pending notifications"}
 
-        # Import Cloud Tasks service (Phase 5)
-        try:
-            from app.services.cloud_tasks import CloudTasksService
-            tasks_service = CloudTasksService()
-        except ImportError:
-            # Cloud Tasks not implemented yet (Phase 5)
-            logger.warning("Cloud Tasks service not available yet")
+        # Check Cloud Tasks service availability
+        if not cloud_tasks_service:
+            logger.warning("Cloud Tasks service not available")
             return {
                 "processed": len(notifications),
                 "queued": 0,
-                "message": "Cloud Tasks service not implemented",
+                "message": "Cloud Tasks service not configured",
             }
 
         queued_count = 0
@@ -117,7 +124,7 @@ async def process_notification_batch(
         for notif in notifications:
             try:
                 # Create Cloud Task for each notification
-                task_name = await tasks_service.create_notification_task(
+                task_name = await cloud_tasks_service.create_notification_task(
                     notification_id=notif["id"],
                     scheduled_at=notif["scheduled_at"],
                 )
@@ -215,3 +222,42 @@ async def send_notification(
                 error_message=result.get("error", "All deliveries failed"),
             )
             return {"success": False, "error": result.get("error")}
+
+
+@router.get("/stats")
+async def get_notification_stats(
+    request: Request,
+    db_pool: asyncpg.Pool = Depends(get_database_pool),
+    cloud_tasks_service: Optional[CloudTasksService] = Depends(get_cloud_tasks_service),
+    _auth: bool = Depends(verify_cloud_tasks_auth),
+):
+    """Get notification processing statistics.
+
+    Returns pending count, queue stats, and last processed time.
+    """
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "get_notification_stats")
+
+    notification_repo = NotificationRepository(db_pool)
+    cache_service = getattr(request.app.state, "cache_service", None)
+
+    with ErrorContext("get_stats"):
+        # Get pending notifications count
+        pending_count = await notification_repo.count_pending()
+
+        # Get queue stats if Cloud Tasks available
+        queue_stats = None
+        if cloud_tasks_service:
+            queue_stats = await cloud_tasks_service.get_queue_stats()
+
+        # Get last processed from cache
+        last_processed = None
+        if cache_service and cache_service.enabled:
+            last_processed = await cache_service.get("last_notification_batch")
+
+        return {
+            "pending_notifications": pending_count,
+            "queue_status": queue_stats,
+            "last_processed": last_processed,
+            "cloud_tasks_enabled": cloud_tasks_service is not None,
+        }

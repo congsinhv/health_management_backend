@@ -169,6 +169,22 @@ async def lifespan(app: FastAPI):
     else:
         app.state.fcm_service = None
 
+    # Initialize Cloud Tasks Service (Phase 5)
+    if settings.cloud_tasks_enabled and settings.gcp_project_id:
+        try:
+            from app.services.cloud_tasks import CloudTasksService
+            app.state.cloud_tasks_service = CloudTasksService()
+            logger.info(
+                f"Cloud Tasks Service initialized (queue: {settings.cloud_tasks_queue})"
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize Cloud Tasks Service: {e}")
+            app.state.cloud_tasks_service = None
+    else:
+        app.state.cloud_tasks_service = None
+        if settings.cloud_tasks_enabled:
+            logger.warning("Cloud Tasks enabled but GCP project ID not set")
+
     # Initialize Q&A Service if enabled (completely non-blocking)
     if settings.qa_enabled:
         logger.info("Q&A Service will initialize in background (non-blocking)")

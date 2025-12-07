@@ -191,3 +191,15 @@ class NotificationRepository(BaseRepository):
                 message="Database error fetching upcoming notifications",
                 details={"user_id": user_id, "error": str(e)},
             )
+
+    async def count_pending(self) -> int:
+        """Count pending notifications."""
+        query = "SELECT COUNT(*) FROM scheduled_notifications WHERE status = 'pending'"
+        try:
+            result = await self.fetch_one(query)
+            return result["count"] if result else 0
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error counting pending notifications",
+                details={"error": str(e)},
+            )
