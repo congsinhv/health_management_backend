@@ -226,6 +226,20 @@ class ScheduleService:
         """Unregister FCM device token."""
         return await self.device_repo.deactivate(user_id, fcm_token)
 
+    async def get_user_devices(self, user_id: int) -> list[DeviceResponse]:
+        """Get all active devices for a user."""
+        records = await self.device_repo.get_active_by_user(user_id)
+        return [
+            DeviceResponse(
+                id=record["id"],
+                device_type=record["device_type"],
+                device_name=record["device_name"],
+                is_active=record["is_active"],
+                last_used_at=record["last_used_at"],
+            )
+            for record in records
+        ]
+
     def _to_response(self, record: asyncpg.Record) -> ScheduleResponse:
         """Convert DB record to response."""
         weekly_plan = record["weekly_plan"]

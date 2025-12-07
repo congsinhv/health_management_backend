@@ -27,6 +27,25 @@ async def get_schedule_service(
     return ScheduleService(db_pool, cache_service=cache_service)
 
 
+@router.get("/", response_model=list[DeviceResponse])
+async def get_user_devices(
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
+    request: Request,
+    service: ScheduleService = Depends(get_schedule_service),
+):
+    """Get all registered devices for the current user.
+
+    Returns a list of active devices registered for push notifications.
+    """
+    ErrorContext.set_request_id()
+    ErrorContext.set_user_id(current_user.id)
+    ErrorContext.add_context("endpoint", "get_user_devices")
+
+    with ErrorContext("get_user_devices", {"user_id": current_user.id}):
+        devices = await service.get_user_devices(current_user.id)
+        return devices
+
+
 @router.post("/", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
 async def register_device(
     request_data: DeviceRegisterRequest,
