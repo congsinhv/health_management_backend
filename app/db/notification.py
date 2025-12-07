@@ -144,7 +144,7 @@ class NotificationRepository(BaseRepository):
             return result
         except asyncpg.PostgresError as e:
             raise DatabaseException(
-                message="Database error updating notification",
+                message=f"Database error updating notification: {e}",
                 details={"notification_id": notification_id, "error": str(e)},
             )
 
