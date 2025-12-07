@@ -128,8 +128,8 @@ class NotificationRepository(BaseRepository):
             SET status = $1,
             cloud_task_name = COALESCE($2, cloud_task_name),
             error_message = $3,
-            sent_at = CASE WHEN $1 = 'sent' THEN NOW() ELSE sent_at END,
-            retry_count = CASE WHEN $1 = 'failed' THEN retry_count + 1 ELSE retry_count END,
+            sent_at = CASE WHEN $1 = 'sent'::VARCHAR THEN NOW() ELSE sent_at END,
+            retry_count = CASE WHEN $1 = 'failed'::VARCHAR THEN retry_count + 1 ELSE retry_count END,
             updated_at = NOW()
             WHERE id = $4
             RETURNING *
