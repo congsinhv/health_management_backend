@@ -123,13 +123,15 @@ class NotificationRepository(BaseRepository):
         error_message: Optional[str] = None,
     ) -> asyncpg.Record:
         """Update notification status."""
+        # Cast $1 to TEXT explicitly to avoid asyncpg type ambiguity
+        # when parameter is used in multiple contexts (SET and CASE WHEN)
         query = """
             UPDATE scheduled_notifications
-            SET status = $1,
+            SET status = $1::TEXT,
             cloud_task_name = COALESCE($2, cloud_task_name),
             error_message = $3,
-            sent_at = CASE WHEN $1 = 'sent'::VARCHAR THEN NOW() ELSE sent_at END,
-            retry_count = CASE WHEN $1 = 'failed'::VARCHAR THEN retry_count + 1 ELSE retry_count END,
+            sent_at = CASE WHEN $1::TEXT = 'sent' THEN NOW() ELSE sent_at END,
+            retry_count = CASE WHEN $1::TEXT = 'failed' THEN retry_count + 1 ELSE retry_count END,
             updated_at = NOW()
             WHERE id = $4
             RETURNING *
