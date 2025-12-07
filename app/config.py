@@ -124,6 +124,8 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # environment
+    environment: str = Field(default="test", description="Environment")
     # Documentation settings
     docs_enabled: bool = True
     # Q&A Service settings
