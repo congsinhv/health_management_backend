@@ -275,15 +275,17 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI application
 # Enable docs in test environment for easier API testing
-enable_docs = settings.debug or settings.environment == "test"
+def get_docs_urls():
+    """Determine if docs should be enabled based on environment."""
+    return settings.debug or getattr(settings, 'environment', None) == "test"
 
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     debug=settings.debug,
     lifespan=lifespan,
-    docs_url="/docs" if enable_docs else None,
-    redoc_url="/redoc" if enable_docs else None,
+    docs_url="/docs" if get_docs_urls() else None,
+    redoc_url="/redoc" if get_docs_urls() else None,
 )
 
 # Add CORS middleware
