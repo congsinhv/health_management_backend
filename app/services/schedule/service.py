@@ -63,10 +63,14 @@ class ScheduleService:
             "health_warnings": request.notes.health_warnings if request.notes else None,
         }
 
-        # Fixed mode times
+        # Fixed mode times - convert string to time objects
         if request.schedule.mode.value == "fixed" and request.schedule.fixed_period:
-            plan_data["fixed_start_time"] = request.schedule.fixed_period.start_time
-            plan_data["fixed_end_time"] = request.schedule.fixed_period.end_time
+            from datetime import datetime
+            # Parse time strings to time objects
+            start_time = datetime.strptime(request.schedule.fixed_period.start_time, "%H:%M:%S").time()
+            end_time = datetime.strptime(request.schedule.fixed_period.end_time, "%H:%M:%S").time()
+            plan_data["fixed_start_time"] = start_time
+            plan_data["fixed_end_time"] = end_time
 
         # Flexible mode periods
         if request.schedule.mode.value == "flexible" and request.schedule.flexible_periods:
