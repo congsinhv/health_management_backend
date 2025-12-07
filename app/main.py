@@ -152,6 +152,20 @@ async def lifespan(app: FastAPI):
             "Cache Service and Invalidator created in fallback mode (no Redis)"
         )
 
+    # Initialize FCM Service (Phase 3)
+    if settings.fcm_enabled and settings.fcm_credentials_json:
+        try:
+            import json
+            from app.services.fcm import FCMService
+            creds = json.loads(settings.fcm_credentials_json)
+            app.state.fcm_service = FCMService(creds)
+            logger.info("FCM Service initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize FCM Service: {e}")
+            app.state.fcm_service = None
+    else:
+        app.state.fcm_service = None
+
     # Initialize Q&A Service if enabled (completely non-blocking)
     if settings.qa_enabled:
         logger.info("Q&A Service will initialize in background (non-blocking)")

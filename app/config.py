@@ -262,6 +262,12 @@ class Settings(BaseSettings):
         description="File with top questions for cache warming",
     )
 
+    # FCM Settings (Phase 3)
+    fcm_credentials_json: Optional[str] = Field(
+        None, description="Firebase credentials JSON (from Secret Manager)"
+    )
+    fcm_enabled: bool = Field(default=True, description="Enable FCM notifications")
+
     @property
     def redis_url(self) -> Optional[str]:
         """Construct Redis URL from configuration."""
