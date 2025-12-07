@@ -327,3 +327,98 @@ variable "enable_redis_cache" {
   type        = bool
   default     = true
 }
+
+# ============================================================================
+# Cloud Tasks Variables - Notification Queue
+# ============================================================================
+variable "enable_cloud_tasks" {
+  description = "Enable Cloud Tasks queue for notifications"
+  type        = bool
+  default     = true
+}
+
+variable "cloud_tasks_queue_name" {
+  description = "Name of the Cloud Tasks queue for notifications"
+  type        = string
+  default     = "workout-notifications"
+}
+
+variable "cloud_tasks_max_dispatches_per_second" {
+  description = "Maximum tasks dispatched per second"
+  type        = number
+  default     = 500
+}
+
+variable "cloud_tasks_max_burst_size" {
+  description = "Maximum tasks dispatched in a single burst"
+  type        = number
+  default     = 100
+}
+
+variable "cloud_tasks_max_concurrent_dispatches" {
+  description = "Maximum concurrent task executions"
+  type        = number
+  default     = 1000
+}
+
+variable "cloud_tasks_max_attempts" {
+  description = "Maximum retry attempts for failed tasks"
+  type        = number
+  default     = 3
+}
+
+variable "cloud_tasks_min_backoff" {
+  description = "Minimum backoff duration between retries"
+  type        = string
+  default     = "1s"
+}
+
+variable "cloud_tasks_max_backoff" {
+  description = "Maximum backoff duration between retries"
+  type        = string
+  default     = "3600s"
+}
+
+variable "cloud_tasks_max_doublings" {
+  description = "Maximum number of times the backoff duration is doubled"
+  type        = number
+  default     = 16
+}
+
+variable "cloud_tasks_enable_logging" {
+  description = "Enable Stackdriver logging for Cloud Tasks"
+  type        = bool
+  default     = true
+}
+
+variable "cloud_tasks_logging_sampling_ratio" {
+  description = "Sampling ratio for Cloud Tasks logging (0.0 to 1.0)"
+  type        = number
+  default     = 1.0
+}
+
+# ============================================================================
+# Notification Scheduler Variables
+# ============================================================================
+variable "enable_notification_scheduler" {
+  description = "Enable Cloud Scheduler for notification batch processing"
+  type        = bool
+  default     = true
+}
+
+variable "notification_scheduler_interval_minutes" {
+  description = "Interval in minutes for notification batch processing (default: 5)"
+  type        = number
+  default     = 5
+}
+
+variable "notification_scheduler_paused" {
+  description = "Whether the notification scheduler should be paused"
+  type        = bool
+  default     = false
+}
+
+variable "backend_url" {
+  description = "Backend URL for Cloud Scheduler to invoke (e.g., https://api.vhealth.io.vn)"
+  type        = string
+}
