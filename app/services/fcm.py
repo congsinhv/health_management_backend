@@ -86,9 +86,6 @@ class FCMService:
                     renotify=True,                    # Re-alert even if tag matches
                     require_interaction=True,         # Don't auto-dismiss on iOS
                 ),
-                fcm_options=messaging.WebpushFCMOptions(
-                    link="/schedules",  # URL to open when notification is clicked
-                ),
             ),
         )
 
