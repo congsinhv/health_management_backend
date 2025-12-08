@@ -54,14 +54,10 @@ def schedule_notifications_for_week(
         # Combine date + time in user timezone
         local_workout_dt = datetime.combine(next_date, start_time, tzinfo=user_tz)
 
-        # Skip if workout already passed today
+        # If workout already passed today, schedule for next week
         if local_workout_dt < now:
             local_workout_dt += timedelta(days=7)
             next_date += timedelta(days=7)
-
-        # Notify 5 min before
-        local_notify_dt = local_workout_dt - timedelta(minutes=5)
-        utc_notify_dt = local_notify_dt.astimezone(utc_tz)
 
         # Get workout info from AI plan
         workout_info = weekly_plan.get(day_name, {}) if weekly_plan else {}
@@ -69,25 +65,46 @@ def schedule_notifications_for_week(
         duration = workout_info.get("duration_minutes", 60)
         calories = workout_info.get("estimated_calories", 300)
 
-        notifications.append(
-            {
-                "schedule_plan_id": plan_id,
-                "user_id": user_id,
-                "scheduled_at": utc_notify_dt,
-                "workout_date": next_date,
-                "workout_day": day_name,
-                "workout_start_time": start_time,
-                "workout_end_time": end_time,
-                "title": f"Sap den gio tap {exercise}!",
-                "body": f"{exercise} trong {duration} phut (~{calories} calo)",
-                "data": {
-                    "exercise": exercise,
-                    "duration_minutes": duration,
-                    "estimated_calories": calories,
-                    "workout_date": next_date.isoformat(),
-                },
-            }
-        )
+        # Generate 2 notifications: 5 min before and at start time
+        notification_times = [
+            (
+                local_workout_dt - timedelta(minutes=5),
+                f"5 phút trước khi bắt đầu {exercise}!",
+                "reminder",
+            ),
+            (local_workout_dt, f"Bắt đầu {exercise}!", "start"),
+        ]
+
+        for local_notify_dt, title, notif_type in notification_times:
+            # Skip if notification time is in the past
+            if local_notify_dt < now:
+                logger.debug(
+                    f"Skipping past notification for {day_name} at {local_notify_dt}"
+                )
+                continue
+
+            utc_notify_dt = local_notify_dt.astimezone(utc_tz)
+
+            notifications.append(
+                {
+                    "schedule_plan_id": plan_id,
+                    "user_id": user_id,
+                    "scheduled_at": utc_notify_dt,
+                    "workout_date": next_date,
+                    "workout_day": day_name,
+                    "workout_start_time": start_time,
+                    "workout_end_time": end_time,
+                    "title": "",
+                    "body": f"{title} \nThời gian: {duration} phút · Calories: ~{calories} calo",
+                    "data": {
+                        "exercise": exercise,
+                        "duration_minutes": duration,
+                        "estimated_calories": calories,
+                        "workout_date": next_date.isoformat(),
+                        "notification_type": notif_type,
+                    },
+                }
+            )
 
     logger.info(f"Scheduled {len(notifications)} notifications for plan {plan_id}")
     return notifications
