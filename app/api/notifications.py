@@ -105,7 +105,7 @@ async def process_notification_batch(
 
     notification_repo = NotificationRepository(db_pool)
 
-    now = datetime.now(ZoneInfo("UTC"))
+    now = datetime.now(ZoneInfo("UTC")).replace(second=0, microsecond=0)
     window_end = now + timedelta(minutes=5)
 
     with ErrorContext("process_batch", {"window_end": window_end.isoformat()}):
