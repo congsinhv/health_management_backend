@@ -39,21 +39,42 @@ class TimePeriod(BaseModel):
 class BasicInfo(BaseModel):
     """User basic info for plan generation."""
 
+    model_config = {"populate_by_name": True}
+
     height: Optional[float] = Field(
         None, ge=0.5, le=2.5, description="Height in meters"
     )
-    weight: Optional[float] = Field(None, ge=20, le=300, description="Weight in kg")
-    target_weight: Optional[float] = Field(None, ge=20, le=300)
+    weight: Optional[float] = Field(
+        None, ge=20, le=300, validation_alias="weight_kg", description="Weight in kg"
+    )
+    target_weight: Optional[float] = Field(
+        None, ge=20, le=300, validation_alias="target_weight_kg"
+    )
     goal: GoalType
+
+    @model_validator(mode="before")
+    @classmethod
+    def convert_height_cm_to_meters(cls, data):
+        """Convert height from cm to meters if height_cm is provided."""
+        if isinstance(data, dict):
+            if data.get("height") is None and data.get("height_cm") is not None:
+                data["height"] = data["height_cm"] / 100.0
+        return data
 
 
 class ScheduleConfig(BaseModel):
     """Schedule configuration."""
 
-    mode: ScheduleMode = ScheduleMode.FIXED
+    model_config = {"populate_by_name": True}
+
+    mode: ScheduleMode = Field(
+        default=ScheduleMode.FIXED, validation_alias="schedule_mode"
+    )
     selected_days: List[DayOfWeek] = Field(..., min_length=1, max_length=7)
     fixed_period: Optional[TimePeriod] = None
-    flexible_periods: Optional[Dict[DayOfWeek, List[TimePeriod]]] = None
+    flexible_periods: Optional[Dict[DayOfWeek, List[TimePeriod]]] = Field(
+        default=None, validation_alias="time_periods"
+    )
 
     @model_validator(mode="after")
     def validate_periods(self):
@@ -68,15 +89,25 @@ class ScheduleConfig(BaseModel):
 class SportsPreferences(BaseModel):
     """Sports preferences."""
 
-    predefined: List[str] = Field(default_factory=list)
-    custom: List[str] = Field(default_factory=list)
+    model_config = {"populate_by_name": True}
+
+    predefined: List[str] = Field(
+        default_factory=list, validation_alias="sports_predefined"
+    )
+    custom: List[str] = Field(default_factory=list, validation_alias="sports_custom")
 
 
 class ScheduleNotes(BaseModel):
     """User notes."""
 
-    personal: Optional[str] = Field(None, max_length=1000)
-    health_warnings: Optional[str] = Field(None, max_length=1000)
+    model_config = {"populate_by_name": True}
+
+    personal: Optional[str] = Field(
+        None, max_length=1000, validation_alias="notes_personal"
+    )
+    health_warnings: Optional[str] = Field(
+        None, max_length=1000, validation_alias="notes_health"
+    )
 
 
 class ScheduleCreateRequest(BaseModel):
@@ -104,6 +135,8 @@ class WorkoutPlan(BaseModel):
     duration_minutes: int
     estimated_calories: int
     description: str
+    workout_start_time: Optional[str] = None
+    workout_end_time: Optional[str] = None
     status: WorkoutStatus = WorkoutStatus.PENDING
     error_message: Optional[str] = None
 

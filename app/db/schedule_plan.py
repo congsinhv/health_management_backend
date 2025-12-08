@@ -142,6 +142,73 @@ class SchedulePlanRepository(BaseRepository):
                 details={"user_id": user_id, "error": str(e)},
             )
 
+    async def deactivate_and_create(self, data: Dict[str, Any]) -> asyncpg.Record:
+        """Atomically deactivate existing plan and create new one in a transaction."""
+        user_id = data.get("user_id")
+        deactivate_query = """
+            UPDATE schedule_plans
+            SET status = 'superseded', deleted_at = NOW(), updated_at = NOW()
+            WHERE user_id = $1 AND status IN ('active', 'paused') AND deleted_at IS NULL
+        """
+        create_query = """
+            INSERT INTO schedule_plans (
+                user_id, height_m, weight_kg, target_weight_kg, goal,
+                schedule_mode, selected_days, timezone,
+                fixed_start_time, fixed_end_time, flexible_periods,
+                sports_predefined, sports_custom,
+                personal_notes, health_warnings, status
+            ) VALUES (
+                $1, $2, $3, $4, $5,
+                $6, $7, $8,
+                $9, $10, $11,
+                $12, $13,
+                $14, $15, 'active'
+            )
+            RETURNING *
+        """
+        try:
+            async with self.pool.acquire() as connection:
+                async with connection.transaction():
+                    # First deactivate any existing active/paused plans
+                    await connection.execute(deactivate_query, user_id)
+                    # Then create the new plan
+                    result = await connection.fetchrow(
+                        create_query,
+                        user_id,
+                        data.get("height_m"),
+                        data.get("weight_kg"),
+                        data.get("target_weight_kg"),
+                        data.get("goal"),
+                        data.get("schedule_mode", "fixed"),
+                        data.get("selected_days"),
+                        data.get("timezone", "Asia/Ho_Chi_Minh"),
+                        data.get("fixed_start_time"),
+                        data.get("fixed_end_time"),
+                        json.dumps(data.get("flexible_periods"))
+                        if data.get("flexible_periods")
+                        else None,
+                        data.get("sports_predefined"),
+                        data.get("sports_custom"),
+                        data.get("personal_notes"),
+                        data.get("health_warnings"),
+                    )
+            if not result:
+                raise DatabaseException(
+                    message="Failed to create schedule plan",
+                    details={"user_id": user_id},
+                )
+            return result
+        except asyncpg.UniqueViolationError:
+            raise DuplicateResourceException(
+                message="User already has an active schedule plan",
+                details={"user_id": user_id},
+            )
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error creating schedule plan",
+                details={"error": str(e)},
+            )
+
     async def list_active_plans(
         self, limit: int = 100, offset: int = 0
     ) -> List[asyncpg.Record]:

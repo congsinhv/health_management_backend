@@ -46,10 +46,7 @@ class ScheduleService:
     ) -> ScheduleResponse:
         """Create or update user's workout schedule."""
 
-        # Deactivate existing plan
-        await self.plan_repo.deactivate(user_id)
-
-        # Create new plan
+        # Build plan data
         plan_data = {
             "user_id": user_id,
             "height_m": request.basic_info.height,
@@ -89,7 +86,8 @@ class ScheduleService:
                 for k, v in request.schedule.flexible_periods.items()
             }
 
-        record = await self.plan_repo.create(plan_data)
+        # Atomically deactivate existing and create new plan in one transaction
+        record = await self.plan_repo.deactivate_and_create(plan_data)
         plan_id = record["id"]
 
         # Generate AI plan
@@ -358,7 +356,7 @@ class ScheduleService:
         # Merge notification statuses into weekly plan
         if weekly_plan:
             weekly_plan = await self._merge_notification_statuses(
-                record["id"], weekly_plan
+                record, weekly_plan
             )
 
         return ScheduleResponse(
@@ -375,9 +373,10 @@ class ScheduleService:
         )
 
     async def _merge_notification_statuses(
-        self, plan_id: int, weekly_plan: Dict[str, Any]
+        self, record: asyncpg.Record, weekly_plan: Dict[str, Any]
     ) -> Dict[str, WorkoutPlan]:
-        """Merge notification statuses into the weekly plan."""
+        """Merge notification statuses and workout times into the weekly plan."""
+        plan_id = record["id"]
         notifications = await self.notification_repo.get_by_plan_id(plan_id)
 
         # Build a map of workout_day -> latest notification status
@@ -389,6 +388,14 @@ class ScheduleService:
                 "status": notif["status"],
                 "error_message": notif["error_message"],
             }
+
+        # Get workout times based on schedule mode
+        schedule_mode = record["schedule_mode"]
+        fixed_start_time = record["fixed_start_time"]
+        fixed_end_time = record["fixed_end_time"]
+        flexible_periods = record["flexible_periods"]
+        if isinstance(flexible_periods, str):
+            flexible_periods = json.loads(flexible_periods)
 
         # Merge statuses into weekly plan
         result = {}
@@ -407,11 +414,30 @@ class ScheduleService:
             elif notif_status == "failed":
                 workout_status = WorkoutStatus.FAILED
 
+            # Determine workout times based on schedule mode
+            workout_start_time = None
+            workout_end_time = None
+
+            if schedule_mode == "fixed":
+                # Fixed mode: same time for all days
+                workout_start_time = str(fixed_start_time) if fixed_start_time else None
+                workout_end_time = str(fixed_end_time) if fixed_end_time else None
+            elif schedule_mode == "flexible" and flexible_periods:
+                # Flexible mode: get time period for this specific day
+                day_periods = flexible_periods.get(day, [])
+                if day_periods and len(day_periods) > 0:
+                    # Use the first time period for the day
+                    first_period = day_periods[0]
+                    workout_start_time = first_period.get("startTime")
+                    workout_end_time = first_period.get("endTime")
+
             result[day] = WorkoutPlan(
                 exercise=plan_data.get("exercise", ""),
                 duration_minutes=plan_data.get("duration_minutes", 0),
                 estimated_calories=plan_data.get("estimated_calories", 0),
                 description=plan_data.get("description", ""),
+                workout_start_time=workout_start_time,
+                workout_end_time=workout_end_time,
                 status=workout_status,
                 error_message=status_info.get("error_message")
                 if workout_status == WorkoutStatus.FAILED
