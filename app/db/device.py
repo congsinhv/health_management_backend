@@ -38,7 +38,9 @@ class DeviceRepository(BaseRepository):
             RETURNING *
         """
         try:
-            return await self.fetch_one(query, user_id, fcm_token, device_type, device_name)
+            return await self.fetch_one(
+                query, user_id, fcm_token, device_type, device_name
+            )
         except asyncpg.PostgresError as e:
             raise DatabaseException(
                 message="Database error registering device",

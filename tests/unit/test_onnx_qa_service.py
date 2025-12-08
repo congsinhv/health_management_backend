@@ -47,9 +47,9 @@ async def test_onnx_vs_pytorch_embeddings(mock_settings):
     pytorch_settings = mock_settings.model_copy()
     pytorch_settings.qa_model_format = "pytorch"
 
-    with patch.object(QAService, "_download_from_gcs"), \
-         patch.object(QAService, "_load_vocab", return_value=set()), \
-         patch.object(QAService, "_load_data", return_value=(MagicMock(), MagicMock())):
+    with patch.object(QAService, "_download_from_gcs"), patch.object(
+        QAService, "_load_vocab", return_value=set()
+    ), patch.object(QAService, "_load_data", return_value=(MagicMock(), MagicMock())):
         qa_pytorch = QAService(pytorch_settings)
         await qa_pytorch._ensure_model_loaded()
 
@@ -57,28 +57,28 @@ async def test_onnx_vs_pytorch_embeddings(mock_settings):
     onnx_settings = mock_settings.model_copy()
     onnx_settings.qa_model_format = "onnx"
 
-    with patch.object(QAService, "_download_from_gcs"), \
-         patch.object(QAService, "_load_vocab", return_value=set()), \
-         patch.object(QAService, "_load_data", return_value=(MagicMock(), MagicMock())):
+    with patch.object(QAService, "_download_from_gcs"), patch.object(
+        QAService, "_load_vocab", return_value=set()
+    ), patch.object(QAService, "_load_data", return_value=(MagicMock(), MagicMock())):
         qa_onnx = QAService(onnx_settings)
         await qa_onnx._ensure_model_loaded()
 
     # Compare embeddings for each question
     # We don't need to patch _load_data here anymore since it's already loaded
     for question in VIETNAMESE_QUESTIONS:
-            # Generate embeddings
-            emb_pytorch = qa_pytorch.model.encode(question, convert_to_tensor=True)
-            emb_onnx = qa_onnx.model.encode(question, convert_to_tensor=True)
+        # Generate embeddings
+        emb_pytorch = qa_pytorch.model.encode(question, convert_to_tensor=True)
+        emb_onnx = qa_onnx.model.encode(question, convert_to_tensor=True)
 
-            # Compute cosine similarity
-            similarity = torch.nn.functional.cosine_similarity(
-                emb_pytorch.unsqueeze(0), emb_onnx.unsqueeze(0)
-            ).item()
+        # Compute cosine similarity
+        similarity = torch.nn.functional.cosine_similarity(
+            emb_pytorch.unsqueeze(0), emb_onnx.unsqueeze(0)
+        ).item()
 
-            # Assert similarity >0.99
-            assert (
-                similarity > 0.99
-            ), f"Embedding mismatch for '{question}': similarity={similarity:.4f}"
+        # Assert similarity >0.99
+        assert (
+            similarity > 0.99
+        ), f"Embedding mismatch for '{question}': similarity={similarity:.4f}"
 
 
 @pytest.mark.asyncio
@@ -151,9 +151,9 @@ async def test_onnx_interface_compatibility(mock_settings):
     test_settings = mock_settings.model_copy()
     test_settings.qa_model_format = "pytorch"
 
-    with patch.object(QAService, "_download_from_gcs"), \
-         patch.object(QAService, "_load_vocab", return_value=set()), \
-         patch.object(QAService, "_load_data", return_value=(MagicMock(), MagicMock())):
+    with patch.object(QAService, "_download_from_gcs"), patch.object(
+        QAService, "_load_vocab", return_value=set()
+    ), patch.object(QAService, "_load_data", return_value=(MagicMock(), MagicMock())):
         qa_service = QAService(test_settings)
         await qa_service._ensure_model_loaded()
 
@@ -188,15 +188,20 @@ async def test_onnx_search_accuracy(mock_settings):
     test_settings = mock_settings.model_copy()
     test_settings.qa_model_format = "onnx"
 
-    with patch.object(QAService, "_download_from_gcs"), \
-         patch.object(QAService, "_load_vocab", return_value=set()), \
-         patch.object(QAService, "_load_data", return_value=(MagicMock(), MagicMock())), \
-         patch.object(QAService, "_load_onnx_model", return_value=MagicMock()):
+    with patch.object(QAService, "_download_from_gcs"), patch.object(
+        QAService, "_load_vocab", return_value=set()
+    ), patch.object(
+        QAService, "_load_data", return_value=(MagicMock(), MagicMock())
+    ), patch.object(
+        QAService, "_load_onnx_model", return_value=MagicMock()
+    ):
         qa_service = QAService(test_settings)
         await qa_service._ensure_model_loaded()
 
     # Mock OpenAI API for summarization
-    with patch.object(qa_service.openai_client.chat.completions, "create") as mock_openai:
+    with patch.object(
+        qa_service.openai_client.chat.completions, "create"
+    ) as mock_openai:
         mock_response = MagicMock()
         mock_response.choices = [
             MagicMock(message=MagicMock(content="AI-generated summary"))

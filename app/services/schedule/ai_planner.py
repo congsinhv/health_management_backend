@@ -39,7 +39,9 @@ async def generate_weekly_plan(
             if periods:
                 p = periods[0]
                 duration = _calculate_duration(p["startTime"], p["endTime"])
-                time_info.append(f"{day}: {duration} min ({p['startTime']}-{p['endTime']})")
+                time_info.append(
+                    f"{day}: {duration} min ({p['startTime']}-{p['endTime']})"
+                )
 
     prompt = f"""Generate a weekly workout plan in Vietnamese:
 - Goal: {goal} weight
@@ -86,6 +88,7 @@ Keep descriptions in Vietnamese. Be specific about exercises.
 def _calculate_duration(start: str, end: str) -> int:
     """Calculate duration in minutes."""
     from datetime import datetime
+
     if not start or not end:
         return 60
 

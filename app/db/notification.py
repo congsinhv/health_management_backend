@@ -61,21 +61,25 @@ class NotificationRepository(BaseRepository):
         params = []
         param_idx = 1
         for n in notifications:
-            values.append(f"(${param_idx}, ${param_idx+1}, ${param_idx+2}, "
-                         f"${param_idx+3}, ${param_idx+4}, ${param_idx+5}, ${param_idx+6}, "
-                         f"${param_idx+7}, ${param_idx+8}, ${param_idx+9}, 'pending')")
-            params.extend([
-                n.get("schedule_plan_id"),
-                n.get("user_id"),
-                n.get("scheduled_at"),
-                n.get("workout_date"),
-                n.get("workout_day"),
-                n.get("workout_start_time"),
-                n.get("workout_end_time"),
-                n.get("title"),
-                n.get("body"),
-                json.dumps(n.get("data")) if n.get("data") else None,
-            ])
+            values.append(
+                f"(${param_idx}, ${param_idx+1}, ${param_idx+2}, "
+                f"${param_idx+3}, ${param_idx+4}, ${param_idx+5}, ${param_idx+6}, "
+                f"${param_idx+7}, ${param_idx+8}, ${param_idx+9}, 'pending')"
+            )
+            params.extend(
+                [
+                    n.get("schedule_plan_id"),
+                    n.get("user_id"),
+                    n.get("scheduled_at"),
+                    n.get("workout_date"),
+                    n.get("workout_day"),
+                    n.get("workout_start_time"),
+                    n.get("workout_end_time"),
+                    n.get("title"),
+                    n.get("body"),
+                    json.dumps(n.get("data")) if n.get("data") else None,
+                ]
+            )
             param_idx += 10
 
         query = f"""
@@ -137,7 +141,9 @@ class NotificationRepository(BaseRepository):
             RETURNING *
         """
         try:
-            result = await self.fetch_one(query, status, cloud_task_name, error_message, notification_id)
+            result = await self.fetch_one(
+                query, status, cloud_task_name, error_message, notification_id
+            )
             if not result:
                 raise ResourceNotFoundException(
                     message="Notification not found",
@@ -204,4 +210,19 @@ class NotificationRepository(BaseRepository):
             raise DatabaseException(
                 message="Database error counting pending notifications",
                 details={"error": str(e)},
+            )
+
+    async def get_by_plan_id(self, schedule_plan_id: int) -> List[asyncpg.Record]:
+        """Get all notifications for a schedule plan."""
+        query = """
+            SELECT * FROM scheduled_notifications
+            WHERE schedule_plan_id = $1
+            ORDER BY workout_date, scheduled_at
+        """
+        try:
+            return await self.fetch_many(query, schedule_plan_id)
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error fetching notifications by plan",
+                details={"schedule_plan_id": schedule_plan_id, "error": str(e)},
             )

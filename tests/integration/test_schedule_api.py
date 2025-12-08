@@ -13,8 +13,9 @@ from app.schemas.schedule import (
     DayOfWeek,
     ScheduleConfig,
     DeviceRegisterRequest,
-    DeviceResponse
+    DeviceResponse,
 )
+
 
 @pytest.fixture
 def mock_schedule_service():
@@ -33,12 +34,12 @@ def mock_schedule_service():
                 "exercise": "Gym",
                 "duration_minutes": 45,
                 "estimated_calories": 300,
-                "description": "Gym"
+                "description": "Gym",
             }
         },
         "status": "active",
         "created_at": datetime.now(),
-        "updated_at": datetime.now()
+        "updated_at": datetime.now(),
     }
 
     response_obj = ScheduleResponse(**response_data)
@@ -50,8 +51,10 @@ def mock_schedule_service():
 
     return service
 
+
 from app.auth.dependencies import get_current_user
 from app.schemas.user import UserInDB
+
 
 @pytest.fixture
 def override_dependency(mock_schedule_service):
@@ -59,9 +62,14 @@ def override_dependency(mock_schedule_service):
 
     async def mock_get_current_user():
         return UserInDB(
-            id=1, email="test@example.com", password_hash="hash",
-            first_name="Test", last_name="User", is_active=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)
+            id=1,
+            email="test@example.com",
+            password_hash="hash",
+            first_name="Test",
+            last_name="User",
+            is_active=True,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
 
     app.dependency_overrides[get_current_user] = mock_get_current_user
@@ -69,38 +77,32 @@ def override_dependency(mock_schedule_service):
     app.dependency_overrides.pop(get_schedule_service, None)
     app.dependency_overrides.pop(get_current_user, None)
 
+
 @pytest.mark.asyncio
-async def test_create_schedule_success(client, auth_token, override_dependency, mock_schedule_service):
+async def test_create_schedule_success(
+    client, auth_token, override_dependency, mock_schedule_service
+):
     schedule_data = {
         "basic_info": {
             "height": 1.75,
             "weight": 70.0,
             "target_weight": 65.0,
-            "goal": "lose"
+            "goal": "lose",
         },
         "schedule": {
             "mode": "fixed",
             "selected_days": ["monday", "wednesday"],
-            "fixed_period": {
-                "start_time": "07:00",
-                "end_time": "08:00"
-            }
+            "fixed_period": {"start_time": "07:00", "end_time": "08:00"},
         },
-        "sports": {
-            "predefined": ["gym", "running"],
-            "custom": []
-        },
-        "notes": {
-            "personal": "Test notes",
-            "health_warnings": "None"
-        },
-        "timezone": "Asia/Ho_Chi_Minh"
+        "sports": {"predefined": ["gym", "running"], "custom": []},
+        "notes": {"personal": "Test notes", "health_warnings": "None"},
+        "timezone": "Asia/Ho_Chi_Minh",
     }
 
     response = await client.post(
         "/api/v1/schedules/",
         json=schedule_data,
-        headers={"Authorization": f"Bearer {auth_token}"}
+        headers={"Authorization": f"Bearer {auth_token}"},
     )
 
     assert response.status_code == 201
@@ -108,43 +110,53 @@ async def test_create_schedule_success(client, auth_token, override_dependency, 
     assert data["id"] == 1
     mock_schedule_service.create_or_update_schedule.assert_called_once()
 
+
 @pytest.mark.asyncio
-async def test_get_schedule_success(client, auth_token, override_dependency, mock_schedule_service):
+async def test_get_schedule_success(
+    client, auth_token, override_dependency, mock_schedule_service
+):
     response = await client.get(
-        "/api/v1/schedules/",
-        headers={"Authorization": f"Bearer {auth_token}"}
+        "/api/v1/schedules/", headers={"Authorization": f"Bearer {auth_token}"}
     )
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == 1
     mock_schedule_service.get_active_schedule.assert_called_once()
 
+
 @pytest.mark.asyncio
-async def test_get_schedule_not_found(client, auth_token, override_dependency, mock_schedule_service):
+async def test_get_schedule_not_found(
+    client, auth_token, override_dependency, mock_schedule_service
+):
     mock_schedule_service.get_active_schedule.return_value = None
     response = await client.get(
-        "/api/v1/schedules/",
-        headers={"Authorization": f"Bearer {auth_token}"}
+        "/api/v1/schedules/", headers={"Authorization": f"Bearer {auth_token}"}
     )
     assert response.status_code == 404
 
+
 @pytest.mark.asyncio
-async def test_delete_schedule(client, auth_token, override_dependency, mock_schedule_service):
+async def test_delete_schedule(
+    client, auth_token, override_dependency, mock_schedule_service
+):
     response = await client.delete(
-        "/api/v1/schedules/",
-        headers={"Authorization": f"Bearer {auth_token}"}
+        "/api/v1/schedules/", headers={"Authorization": f"Bearer {auth_token}"}
     )
     assert response.status_code == 204
     mock_schedule_service.deactivate_schedule.assert_called_once()
 
+
 @pytest.mark.asyncio
-async def test_regenerate_plan(client, auth_token, override_dependency, mock_schedule_service):
+async def test_regenerate_plan(
+    client, auth_token, override_dependency, mock_schedule_service
+):
     response = await client.post(
         "/api/v1/schedules/regenerate",
-        headers={"Authorization": f"Bearer {auth_token}"}
+        headers={"Authorization": f"Bearer {auth_token}"},
     )
     assert response.status_code == 200
     mock_schedule_service.regenerate_plan.assert_called_once()
+
 
 class TestScheduleAPI:
     """Tests for schedule API endpoints (unauthorized)."""
@@ -152,26 +164,33 @@ class TestScheduleAPI:
     @pytest.mark.asyncio
     async def test_create_schedule_unauthorized(self):
         """Test creating schedule without auth returns 401."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             response = await client.post("/api/v1/schedules/", json={})
             assert response.status_code == 403  # No auth header
 
     @pytest.mark.asyncio
     async def test_get_schedule_unauthorized(self):
         """Test getting schedule without auth returns 401."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             response = await client.get("/api/v1/schedules/")
             assert response.status_code == 403
 
     @pytest.mark.asyncio
     async def test_delete_schedule_unauthorized(self):
         """Test deleting schedule without auth returns 401."""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
             response = await client.delete("/api/v1/schedules/")
             assert response.status_code == 403
 
 
 from pydantic import ValidationError
+
 
 class TestScheduleValidation:
     """Tests for schedule request validation."""
@@ -201,7 +220,7 @@ class TestScheduleValidation:
         config = ScheduleConfig(
             mode=ScheduleMode.FIXED,
             selected_days=[DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY],
-            fixed_period={"start_time": "07:00", "end_time": "08:00"}
+            fixed_period={"start_time": "07:00", "end_time": "08:00"},
         )
         assert config.mode == ScheduleMode.FIXED
         assert len(config.selected_days) == 2
@@ -214,9 +233,9 @@ class TestScheduleValidation:
             flexible_periods={
                 DayOfWeek.TUESDAY: [
                     {"start_time": "07:00", "end_time": "08:00"},
-                    {"start_time": "18:00", "end_time": "19:00"}
+                    {"start_time": "18:00", "end_time": "19:00"},
                 ]
-            }
+            },
         )
         assert config.mode == ScheduleMode.FLEXIBLE
         assert DayOfWeek.TUESDAY in config.flexible_periods
@@ -229,18 +248,12 @@ class TestDeviceValidation:
         """Test FCM token must be at least 100 characters."""
         # Should raise with short token
         with pytest.raises(ValueError):
-            DeviceRegisterRequest(
-                fcm_token="short_token",
-                device_type="ios"
-            )
+            DeviceRegisterRequest(fcm_token="short_token", device_type="ios")
 
     def test_fcm_token_valid(self):
         """Test valid FCM token passes validation."""
         valid_token = "a" * 152
-        request = DeviceRegisterRequest(
-            fcm_token=valid_token,
-            device_type="android"
-        )
+        request = DeviceRegisterRequest(fcm_token=valid_token, device_type="android")
         assert request.fcm_token == valid_token
         assert request.device_type == "android"
 
@@ -249,8 +262,7 @@ class TestDeviceValidation:
         valid_token = "a" * 152
         for device_type in ["ios", "android", "web"]:
             request = DeviceRegisterRequest(
-                fcm_token=valid_token,
-                device_type=device_type
+                fcm_token=valid_token, device_type=device_type
             )
             assert request.device_type == device_type
 
@@ -270,10 +282,17 @@ class TestScheduleResponseModel:
             "fixed_end_time": time(8, 0),
             "flexible_periods": None,
             "timezone": "UTC",
-            "weekly_plan": {"monday": {"exercise": "Gym", "duration_minutes": 45, "estimated_calories": 300, "description": "Gym"}},
+            "weekly_plan": {
+                "monday": {
+                    "exercise": "Gym",
+                    "duration_minutes": 45,
+                    "estimated_calories": 300,
+                    "description": "Gym",
+                }
+            },
             "status": "active",
             "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc)
+            "updated_at": datetime.now(timezone.utc),
         }
 
         # Pydantic model can accept dict if strict=False or passed via **
@@ -290,7 +309,7 @@ class TestScheduleResponseModel:
             "device_type": "ios",
             "device_name": "iPhone 14",
             "is_active": True,
-            "last_used_at": datetime.now(timezone.utc)
+            "last_used_at": datetime.now(timezone.utc),
         }
 
         response = DeviceResponse(**db_record)

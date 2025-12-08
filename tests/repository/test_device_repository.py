@@ -4,13 +4,16 @@ from app.db.device import DeviceRepository
 from app.exceptions import DatabaseException
 import asyncpg
 
+
 @pytest.fixture
 def mock_pool():
     return AsyncMock()
 
+
 @pytest.fixture
 def repo(mock_pool):
     return DeviceRepository(mock_pool)
+
 
 @pytest.mark.asyncio
 async def test_register_new(repo):
@@ -22,6 +25,7 @@ async def test_register_new(repo):
     assert result["is_active"] is True
     repo.fetch_one.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_get_active_by_user(repo):
     repo.fetch_many = AsyncMock(return_value=[{"id": 1}, {"id": 2}])
@@ -30,6 +34,7 @@ async def test_get_active_by_user(repo):
 
     assert len(result) == 2
     repo.fetch_many.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_deactivate(repo):
@@ -40,6 +45,7 @@ async def test_deactivate(repo):
     assert result is True
     repo.execute.assert_called_once()
 
+
 @pytest.mark.asyncio
 async def test_deactivate_token(repo):
     repo.execute = AsyncMock(return_value="UPDATE 5")
@@ -48,6 +54,7 @@ async def test_deactivate_token(repo):
 
     assert count == 5
     repo.execute.assert_called_once()
+
 
 @pytest.mark.asyncio
 async def test_update_last_used(repo):

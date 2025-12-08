@@ -68,11 +68,11 @@ async def test_stream_ask_question_event_sequence():
     # Setup with mocked SBERT and data
     settings = Settings(qa_enabled=True, model_auto_download=False)
 
-    with patch.object(QAService, "_load_vocab", return_value=set()), \
-         patch.object(QAService, "_load_model", return_value=MagicMock()), \
-         patch.object(QAService, "_load_data", return_value=(pd.DataFrame(), [])), \
-         patch("app.services.qa_service.util.cos_sim") as mock_cos_sim:
-
+    with patch.object(QAService, "_load_vocab", return_value=set()), patch.object(
+        QAService, "_load_model", return_value=MagicMock()
+    ), patch.object(QAService, "_load_data", return_value=(pd.DataFrame(), [])), patch(
+        "app.services.qa_service.util.cos_sim"
+    ) as mock_cos_sim:
         mock_cos_sim.return_value = torch.tensor([[0.9, 0.8]])  # Mock high similarity
 
         qa_service = QAService(settings)
@@ -89,7 +89,9 @@ async def test_stream_ask_question_event_sequence():
             }
         )
         qa_service._df = mock_df
-        qa_service._question_embeddings = torch.tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]])
+        qa_service._question_embeddings = torch.tensor(
+            [[0.1, 0.2, 0.3], [0.2, 0.3, 0.4]]
+        )
         qa_service._model_loaded = True  # Prevent overwriting by _ensure_model_loaded
 
         # Mock OpenAI streaming

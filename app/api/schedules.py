@@ -12,10 +12,10 @@ from app.db.database import get_database_pool
 from app.auth.dependencies import get_current_active_user
 from app.schemas.user import UserInDB
 from app.core.error_context import ErrorContext
-from app.exceptions import ResourceNotFoundException
 from app.schemas.schedule import (
     ScheduleCreateRequest,
     ScheduleResponse,
+    ScheduleStatusUpdate,
 )
 
 router = APIRouter()
@@ -54,29 +54,59 @@ async def create_schedule(
             "days_count": len(request_data.schedule.selected_days),
         },
     ):
-        schedule = await service.create_or_update_schedule(current_user.id, request_data)
+        schedule = await service.create_or_update_schedule(
+            current_user.id, request_data
+        )
         ErrorContext.add_context("schedule_id", schedule.id)
         return schedule
 
 
-@router.get("/", response_model=ScheduleResponse)
-async def get_schedule(
+@router.get("/", response_model=list[ScheduleResponse])
+async def list_schedules(
     current_user: Annotated[UserInDB, Depends(get_current_active_user)],
     request: Request,
     service: ScheduleService = Depends(get_schedule_service),
 ):
-    """Get user's active workout schedule."""
+    """List all workout schedules for the current user."""
     ErrorContext.set_request_id()
     ErrorContext.set_user_id(current_user.id)
-    ErrorContext.add_context("endpoint", "get_schedule")
+    ErrorContext.add_context("endpoint", "list_schedules")
 
-    with ErrorContext("get_schedule", {"user_id": current_user.id}):
-        schedule = await service.get_active_schedule(current_user.id)
-        if not schedule:
-            raise ResourceNotFoundException(
-                message="No active schedule found",
-                details={"user_id": current_user.id},
-            )
+    with ErrorContext("list_schedules", {"user_id": current_user.id}):
+        return await service.list_schedules(current_user.id)
+
+
+@router.patch("/{schedule_id}/", response_model=ScheduleResponse)
+async def update_schedule_status(
+    schedule_id: int,
+    request_data: ScheduleStatusUpdate,
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
+    request: Request,
+    service: ScheduleService = Depends(get_schedule_service),
+):
+    """Toggle schedule on/off.
+
+    Activates or pauses a specific schedule.
+    Only 1 schedule can be active per user at a time.
+
+    - When activated: notifications are scheduled for the week
+    - When paused: pending notifications are cancelled
+    """
+    ErrorContext.set_request_id()
+    ErrorContext.set_user_id(current_user.id)
+    ErrorContext.add_context("endpoint", "update_schedule_status")
+
+    with ErrorContext(
+        "update_schedule_status",
+        {
+            "user_id": current_user.id,
+            "schedule_id": schedule_id,
+            "is_active": request_data.is_active,
+        },
+    ):
+        schedule = await service.toggle_schedule_status(
+            current_user.id, schedule_id, request_data.is_active
+        )
         return schedule
 
 

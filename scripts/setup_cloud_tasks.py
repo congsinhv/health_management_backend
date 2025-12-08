@@ -59,9 +59,7 @@ def create_queue(
 
     try:
         # Try to create the queue
-        response = client.create_queue(
-            request={"parent": parent, "queue": queue}
-        )
+        response = client.create_queue(request={"parent": parent, "queue": queue})
         print(f"Created queue: {response.name}")
 
     except exceptions.AlreadyExists:
@@ -93,7 +91,8 @@ def create_service_account(project_id: str) -> None:
     print("\n" + "=" * 60)
     print("Service Account Setup")
     print("=" * 60)
-    print(f"""
+    print(
+        f"""
 To create a dedicated service account for Cloud Tasks, run:
 
 # Create service account
@@ -113,7 +112,8 @@ gcloud projects add-iam-policy-binding {project_id} \\
 
 Then set CLOUD_TASKS_SERVICE_ACCOUNT environment variable:
 CLOUD_TASKS_SERVICE_ACCOUNT=cloudtasks-invoker@{project_id}.iam.gserviceaccount.com
-""")
+"""
+    )
 
 
 def main():

@@ -49,7 +49,9 @@ class SchedulePlanRepository(BaseRepository):
                 data.get("timezone", "Asia/Ho_Chi_Minh"),
                 data.get("fixed_start_time"),
                 data.get("fixed_end_time"),
-                json.dumps(data.get("flexible_periods")) if data.get("flexible_periods") else None,
+                json.dumps(data.get("flexible_periods"))
+                if data.get("flexible_periods")
+                else None,
                 data.get("sports_predefined"),
                 data.get("sports_custom"),
                 data.get("personal_notes"),
@@ -86,14 +88,14 @@ class SchedulePlanRepository(BaseRepository):
                 details={"user_id": user_id, "error": str(e)},
             )
 
-    async def get_by_id(self, plan_id: int, user_id: int) -> Optional[asyncpg.Record]:
-        """Get schedule plan by ID and user."""
+    async def get_by_id(self, plan_id: int) -> Optional[asyncpg.Record]:
+        """Get schedule plan by ID."""
         query = """
             SELECT * FROM schedule_plans
-            WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+            WHERE id = $1
         """
         try:
-            return await self.fetch_one(query, plan_id, user_id)
+            return await self.fetch_one(query, plan_id)
         except asyncpg.PostgresError as e:
             raise DatabaseException(
                 message="Database error fetching schedule plan",
@@ -125,11 +127,11 @@ class SchedulePlanRepository(BaseRepository):
             )
 
     async def deactivate(self, user_id: int) -> bool:
-        """Deactivate current active plan (soft delete + status change)."""
+        """Deactivate current plan - active or paused (soft delete + status change)."""
         query = """
             UPDATE schedule_plans
             SET status = 'superseded', deleted_at = NOW(), updated_at = NOW()
-            WHERE user_id = $1 AND status = 'active' AND deleted_at IS NULL
+            WHERE user_id = $1 AND status IN ('active', 'paused') AND deleted_at IS NULL
         """
         try:
             result = await self.execute(query, user_id)
@@ -140,7 +142,9 @@ class SchedulePlanRepository(BaseRepository):
                 details={"user_id": user_id, "error": str(e)},
             )
 
-    async def list_active_plans(self, limit: int = 100, offset: int = 0) -> List[asyncpg.Record]:
+    async def list_active_plans(
+        self, limit: int = 100, offset: int = 0
+    ) -> List[asyncpg.Record]:
         """List all active schedule plans (for batch processing)."""
         query = """
             SELECT * FROM schedule_plans
@@ -154,4 +158,63 @@ class SchedulePlanRepository(BaseRepository):
             raise DatabaseException(
                 message="Database error listing active plans",
                 details={"error": str(e)},
+            )
+
+    async def update_status(
+        self, schedule_id: int, new_status: str
+    ) -> Optional[asyncpg.Record]:
+        """Update schedule status by ID.
+
+        Args:
+            schedule_id: Schedule plan ID
+            new_status: New status ('active' or 'paused')
+
+        Returns:
+            Updated record or None if no schedule found
+        """
+        query = """
+            UPDATE schedule_plans
+            SET status = $1, updated_at = NOW()
+            WHERE id = $2 AND deleted_at IS NULL AND status IN ('active', 'paused')
+            RETURNING *
+        """
+        try:
+            return await self.fetch_one(query, new_status, schedule_id)
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error updating schedule status",
+                details={
+                    "schedule_id": schedule_id,
+                    "new_status": new_status,
+                    "error": str(e),
+                },
+            )
+
+    async def get_current_by_user(self, user_id: int) -> Optional[asyncpg.Record]:
+        """Get current schedule plan for user (active or paused)."""
+        query = """
+            SELECT * FROM schedule_plans
+            WHERE user_id = $1 AND status IN ('active', 'paused') AND deleted_at IS NULL
+        """
+        try:
+            return await self.fetch_one(query, user_id)
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error fetching schedule plan",
+                details={"user_id": user_id, "error": str(e)},
+            )
+
+    async def list_by_user(self, user_id: int) -> List[asyncpg.Record]:
+        """List all schedule plans for a user (excluding soft-deleted)."""
+        query = """
+            SELECT * FROM schedule_plans
+            WHERE user_id = $1 AND deleted_at IS NULL
+            ORDER BY created_at DESC
+        """
+        try:
+            return await self.fetch_many(query, user_id)
+        except asyncpg.PostgresError as e:
+            raise DatabaseException(
+                message="Database error listing schedule plans",
+                details={"user_id": user_id, "error": str(e)},
             )

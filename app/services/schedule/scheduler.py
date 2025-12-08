@@ -69,23 +69,25 @@ def schedule_notifications_for_week(
         duration = workout_info.get("duration_minutes", 60)
         calories = workout_info.get("estimated_calories", 300)
 
-        notifications.append({
-            "schedule_plan_id": plan_id,
-            "user_id": user_id,
-            "scheduled_at": utc_notify_dt,
-            "workout_date": next_date,
-            "workout_day": day_name,
-            "workout_start_time": start_time,
-            "workout_end_time": end_time,
-            "title": f"Sap den gio tap {exercise}!",
-            "body": f"{exercise} trong {duration} phut (~{calories} calo)",
-            "data": {
-                "exercise": exercise,
-                "duration_minutes": duration,
-                "estimated_calories": calories,
-                "workout_date": next_date.isoformat(),
-            },
-        })
+        notifications.append(
+            {
+                "schedule_plan_id": plan_id,
+                "user_id": user_id,
+                "scheduled_at": utc_notify_dt,
+                "workout_date": next_date,
+                "workout_day": day_name,
+                "workout_start_time": start_time,
+                "workout_end_time": end_time,
+                "title": f"Sap den gio tap {exercise}!",
+                "body": f"{exercise} trong {duration} phut (~{calories} calo)",
+                "data": {
+                    "exercise": exercise,
+                    "duration_minutes": duration,
+                    "estimated_calories": calories,
+                    "workout_date": next_date.isoformat(),
+                },
+            }
+        )
 
     logger.info(f"Scheduled {len(notifications)} notifications for plan {plan_id}")
     return notifications
@@ -94,8 +96,13 @@ def schedule_notifications_for_week(
 def _find_next_weekday(start_date: date, day_name: str) -> date:
     """Find next occurrence of weekday."""
     days = {
-        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
-        "friday": 4, "saturday": 5, "sunday": 6
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
     }
     target = days.get(day_name.lower(), 0)
     current = start_date.weekday()

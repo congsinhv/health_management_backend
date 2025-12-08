@@ -28,8 +28,7 @@ class TestNotificationBatchProcessing:
             mock_settings.debug = False
 
             async with AsyncClient(
-                transport=ASGITransport(app=app),
-                base_url="http://test"
+                transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
                 response = await client.post("/api/v1/notifications/process-batch")
                 # Should reject without proper auth
@@ -39,16 +38,15 @@ class TestNotificationBatchProcessing:
     async def test_process_batch_allows_cloud_tasks_headers(self):
         """Test process-batch accepts Cloud Tasks headers."""
         async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test"
+            transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             # With Cloud Tasks headers (simulating actual Cloud Tasks call)
             response = await client.post(
                 "/api/v1/notifications/process-batch",
                 headers={
                     "X-CloudTasks-QueueName": "workout-notifications",
-                    "X-CloudTasks-TaskName": "test-task-123"
-                }
+                    "X-CloudTasks-TaskName": "test-task-123",
+                },
             )
             # Should accept (may fail later due to DB, but auth passes)
             assert response.status_code != 401
@@ -58,8 +56,7 @@ class TestNotificationBatchProcessing:
         """Test process-batch allows bypass in debug mode."""
         # In debug mode (default for tests), auth is bypassed
         async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test"
+            transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.post("/api/v1/notifications/process-batch")
             # Should not be 401 (auth bypassed)
@@ -82,16 +79,15 @@ class TestNotificationSend:
     async def test_send_notification_requires_body(self):
         """Test send endpoint requires notification_id in body."""
         async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test"
+            transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.post(
                 "/api/v1/notifications/send",
                 json={},  # Empty body
                 headers={
                     "X-CloudTasks-QueueName": "workout-notifications",
-                    "X-CloudTasks-TaskName": "test-task-123"
-                }
+                    "X-CloudTasks-TaskName": "test-task-123",
+                },
             )
             # Should fail validation (missing notification_id)
             assert response.status_code == 422
@@ -100,16 +96,15 @@ class TestNotificationSend:
     async def test_send_notification_valid_request(self):
         """Test send endpoint with valid request structure."""
         async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test"
+            transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.post(
                 "/api/v1/notifications/send",
                 json={"notification_id": 999},  # Non-existent but valid format
                 headers={
                     "X-CloudTasks-QueueName": "workout-notifications",
-                    "X-CloudTasks-TaskName": "test-task-123"
-                }
+                    "X-CloudTasks-TaskName": "test-task-123",
+                },
             )
             # Should not be 422 (validation error)
             # Will likely be 503 (FCM service) or 404 (notification not found)
@@ -130,15 +125,14 @@ class TestNotificationStats:
     async def test_stats_endpoint_exists(self):
         """Test stats endpoint is accessible."""
         async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test"
+            transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             response = await client.get(
                 "/api/v1/notifications/stats",
                 headers={
                     "X-CloudTasks-QueueName": "workout-notifications",
-                    "X-CloudTasks-TaskName": "test-task-123"
-                }
+                    "X-CloudTasks-TaskName": "test-task-123",
+                },
             )
             # Should not be 404 (endpoint exists)
             assert response.status_code != 404

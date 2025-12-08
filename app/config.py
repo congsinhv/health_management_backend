@@ -286,7 +286,8 @@ class Settings(BaseSettings):
 
     # Backend URL for Cloud Tasks callbacks
     backend_url: Optional[str] = Field(
-        None, description="Backend URL for Cloud Tasks callbacks (e.g., https://api.vhealth.io.vn)"
+        None,
+        description="Backend URL for Cloud Tasks callbacks (e.g., https://api.vhealth.io.vn)",
     )
 
     @property

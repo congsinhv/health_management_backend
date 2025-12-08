@@ -31,13 +31,17 @@ class DayOfWeek(str, Enum):
 
 class TimePeriod(BaseModel):
     """Time period for workout."""
+
     start_time: str = Field(..., pattern=r"^\d{2}:\d{2}(:\d{2})?$")
     end_time: str = Field(..., pattern=r"^\d{2}:\d{2}(:\d{2})?$")
 
 
 class BasicInfo(BaseModel):
     """User basic info for plan generation."""
-    height: Optional[float] = Field(None, ge=0.5, le=2.5, description="Height in meters")
+
+    height: Optional[float] = Field(
+        None, ge=0.5, le=2.5, description="Height in meters"
+    )
     weight: Optional[float] = Field(None, ge=20, le=300, description="Weight in kg")
     target_weight: Optional[float] = Field(None, ge=20, le=300)
     goal: GoalType
@@ -45,6 +49,7 @@ class BasicInfo(BaseModel):
 
 class ScheduleConfig(BaseModel):
     """Schedule configuration."""
+
     mode: ScheduleMode = ScheduleMode.FIXED
     selected_days: List[DayOfWeek] = Field(..., min_length=1, max_length=7)
     fixed_period: Optional[TimePeriod] = None
@@ -62,18 +67,21 @@ class ScheduleConfig(BaseModel):
 
 class SportsPreferences(BaseModel):
     """Sports preferences."""
+
     predefined: List[str] = Field(default_factory=list)
     custom: List[str] = Field(default_factory=list)
 
 
 class ScheduleNotes(BaseModel):
     """User notes."""
+
     personal: Optional[str] = Field(None, max_length=1000)
     health_warnings: Optional[str] = Field(None, max_length=1000)
 
 
 class ScheduleCreateRequest(BaseModel):
     """Request to create/update schedule."""
+
     basic_info: BasicInfo
     schedule: ScheduleConfig
     sports: SportsPreferences
@@ -81,16 +89,28 @@ class ScheduleCreateRequest(BaseModel):
     timezone: str = Field(default="Asia/Ho_Chi_Minh")
 
 
+class WorkoutStatus(str, Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    COMPLETED = "completed"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
 class WorkoutPlan(BaseModel):
     """AI-generated workout for a day."""
+
     exercise: str
     duration_minutes: int
     estimated_calories: int
     description: str
+    status: WorkoutStatus = WorkoutStatus.PENDING
+    error_message: Optional[str] = None
 
 
 class ScheduleResponse(BaseModel):
     """Schedule response."""
+
     id: int
     user_id: int
     goal: GoalType
@@ -103,14 +123,23 @@ class ScheduleResponse(BaseModel):
     updated_at: datetime
 
 
+class ScheduleStatusUpdate(BaseModel):
+    """Request to update schedule status (on/off)."""
+
+    is_active: bool = Field(
+        ..., description="True to activate, False to pause schedule"
+    )
+
+
 class DeviceRegisterRequest(BaseModel):
     """FCM device registration."""
+
     fcm_token: str = Field(
         ...,
         min_length=100,
         max_length=500,
         pattern=r"^[A-Za-z0-9_:/-]+$",
-        description="FCM registration token (typically 150-165 chars)"
+        description="FCM registration token (typically 150-165 chars)",
     )
     device_type: Optional[str] = Field(None, pattern=r"^(ios|android|web)$")
     device_name: Optional[str] = Field(None, max_length=100)
@@ -118,6 +147,7 @@ class DeviceRegisterRequest(BaseModel):
 
 class DeviceResponse(BaseModel):
     """Device response."""
+
     id: int
     device_type: Optional[str]
     device_name: Optional[str]

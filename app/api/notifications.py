@@ -28,11 +28,13 @@ router = APIRouter()
 
 class ProcessBatchRequest(BaseModel):
     """Batch processing request (empty - uses current time)."""
+
     pass
 
 
 class SendNotificationRequest(BaseModel):
     """Single notification send request."""
+
     notification_id: int
 
 
@@ -48,12 +50,16 @@ async def verify_cloud_tasks_auth(
     """
     # Check for Cloud Tasks headers (production-safe)
     if x_cloudtasks_queuename and x_cloudtasks_taskname:
-        logger.debug(f"Cloud Tasks request: queue={x_cloudtasks_queuename}, task={x_cloudtasks_taskname}")
+        logger.debug(
+            f"Cloud Tasks request: queue={x_cloudtasks_queuename}, task={x_cloudtasks_taskname}"
+        )
         return True
 
     # In production, reject requests without Cloud Tasks headers
     if not settings.debug:
-        raise HTTPException(status_code=401, detail="Unauthorized - Cloud Tasks headers required")
+        raise HTTPException(
+            status_code=401, detail="Unauthorized - Cloud Tasks headers required"
+        )
 
     # Allow in development mode for testing
     logger.warning("Cloud Tasks auth bypassed in debug mode")
@@ -168,7 +174,9 @@ async def send_notification(
     notification_repo = NotificationRepository(db_pool)
     device_repo = DeviceRepository(db_pool)
 
-    with ErrorContext("send_notification", {"notification_id": request_data.notification_id}):
+    with ErrorContext(
+        "send_notification", {"notification_id": request_data.notification_id}
+    ):
         # Get notification
         notif = await notification_repo.get_by_id(request_data.notification_id)
         if not notif:

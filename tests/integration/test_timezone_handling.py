@@ -50,9 +50,7 @@ class TestTimezoneConversion:
 
         # Notification should be 5 minutes before
         notify_time_local = datetime.combine(
-            workout_date,
-            time(6, 55),  # 5 min before 7:00
-            tzinfo=vietnam_tz
+            workout_date, time(6, 55), tzinfo=vietnam_tz  # 5 min before 7:00
         )
 
         # Store in UTC
@@ -88,7 +86,7 @@ class TestTimezoneConversion:
 
         # Convert to local times
         vietnam_time = instant_utc.astimezone(vietnam_tz)  # 19:00 (UTC+7)
-        tokyo_time = instant_utc.astimezone(tokyo_tz)      # 21:00 (UTC+9)
+        tokyo_time = instant_utc.astimezone(tokyo_tz)  # 21:00 (UTC+9)
 
         # Different local times
         assert vietnam_time.hour == 19
@@ -143,7 +141,7 @@ class TestWeeklyScheduleTimezone:
             "thursday": 3,
             "friday": 4,
             "saturday": 5,
-            "sunday": 6
+            "sunday": 6,
         }
 
         weekday_numbers = [day_mapping[day] for day in selected_days]
@@ -166,8 +164,12 @@ class TestDSTHandling:
         winter_utc = winter.astimezone(timezone.utc)
 
         # Both should have same offset (7 hours)
-        assert summer.hour - summer_utc.hour == 7 or summer.hour - summer_utc.hour == -17
-        assert winter.hour - winter_utc.hour == 7 or winter.hour - winter_utc.hour == -17
+        assert (
+            summer.hour - summer_utc.hour == 7 or summer.hour - summer_utc.hour == -17
+        )
+        assert (
+            winter.hour - winter_utc.hour == 7 or winter.hour - winter_utc.hour == -17
+        )
 
     def test_us_timezone_dst_transition(self):
         """Test handling US timezone with DST (for travelers)."""
@@ -216,14 +218,12 @@ class TestNotificationScheduling:
 
         # Find next Monday from a known date
         base_date = date(2025, 1, 13)  # This is a Monday
-        workout_datetime = datetime.combine(
-            base_date,
-            workout_time,
-            tzinfo=vietnam_tz
-        )
+        workout_datetime = datetime.combine(base_date, workout_time, tzinfo=vietnam_tz)
 
         # Notification time (5 min before) in UTC
-        notification_utc = (workout_datetime - timedelta(minutes=5)).astimezone(timezone.utc)
+        notification_utc = (workout_datetime - timedelta(minutes=5)).astimezone(
+            timezone.utc
+        )
 
         # Store this in DB
         stored_scheduled_at = notification_utc
@@ -236,14 +236,15 @@ class TestNotificationScheduling:
         assert stored_scheduled_at.hour == 23
         assert stored_scheduled_at.minute == 55
 
+
 @pytest.mark.asyncio
 async def test_scheduler_function_logic():
     """Test the actual scheduler function logic."""
     from app.services.schedule.scheduler import schedule_notifications_for_week
-    
+
     tz_name = "Asia/Ho_Chi_Minh"
     fixed_start = time(7, 0)
-    
+
     notifications = schedule_notifications_for_week(
         plan_id=1,
         user_id=1,
@@ -252,15 +253,15 @@ async def test_scheduler_function_logic():
         schedule_mode="fixed",
         fixed_start_time=fixed_start,
         fixed_end_time=time(8, 0),
-        weekly_plan={"monday": {"exercise": "run"}}
+        weekly_plan={"monday": {"exercise": "run"}},
     )
-    
+
     assert len(notifications) >= 1
     scheduled_at = notifications[0]["scheduled_at"]
-    
+
     # Verify it is UTC
     assert str(scheduled_at.tzinfo) == "UTC" or scheduled_at.tzinfo == timezone.utc
-    
+
     # Verify local time is 6:55 AM
     local_time = scheduled_at.astimezone(ZoneInfo(tz_name))
     assert local_time.hour == 6

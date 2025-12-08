@@ -189,7 +189,10 @@ def main():
     args = parser.parse_args()
 
     # Default service account
-    service_account = args.service_account or f"cloud-scheduler@{args.project}.iam.gserviceaccount.com"
+    service_account = (
+        args.service_account
+        or f"cloud-scheduler@{args.project}.iam.gserviceaccount.com"
+    )
 
     try:
         if args.delete:
@@ -211,7 +214,8 @@ def main():
             print("\n" + "=" * 60)
             print("Service Account Setup")
             print("=" * 60)
-            print(f"""
+            print(
+                f"""
 If you haven't created the service account yet, run:
 
 # Create service account
@@ -223,7 +227,8 @@ gcloud iam service-accounts create cloud-scheduler \\
 gcloud projects add-iam-policy-binding {args.project} \\
     --member="serviceAccount:cloud-scheduler@{args.project}.iam.gserviceaccount.com" \\
     --role="roles/run.invoker"
-""")
+"""
+            )
 
         print("\nSetup complete!")
 

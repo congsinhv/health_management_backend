@@ -15,6 +15,7 @@ from app.main import app
 
 from app.db.database import database
 
+
 @pytest.fixture(autouse=True)
 def override_database(mock_database_pool):
     """Override database pool for all tests."""
@@ -22,6 +23,7 @@ def override_database(mock_database_pool):
     database.pool = mock_database_pool
     yield
     database.pool = original_pool
+
 
 @pytest.fixture
 def mock_connection():
@@ -189,6 +191,7 @@ def mock_openai_stream():
 
     return create_mock_stream
 
+
 @pytest.fixture
 def test_user(sample_user):
     """Test user object with attribute access."""
@@ -227,9 +230,9 @@ async def test_schedule_plan(db_pool, test_user):
         "sports_predefined": ["gym"],
         "weekly_plan": {
             "monday": {"exercise": "Gym", "duration": 45},
-            "wednesday": {"exercise": "Running", "duration": 30}
+            "wednesday": {"exercise": "Running", "duration": 30},
         },
-        "status": "active"
+        "status": "active",
     }
 
 
@@ -241,7 +244,7 @@ async def test_device(db_pool, test_user):
         "fcm_token": f"test-token-{uuid.uuid4()}",
         "device_type": "android",
         "device_name": "Test Phone",
-        "is_active": True
+        "is_active": True,
     }
 
 
@@ -251,18 +254,18 @@ def mock_cloud_tasks_service():
     service = MagicMock()
     service.create_notification_task = AsyncMock(return_value="task-123")
     service.delete_task = AsyncMock(return_value=None)
-    service.get_queue_stats = AsyncMock(return_value={
-        "name": "projects/vhealth-dev/locations/asia-southeast1/queues/workout-notifications",
-        "state": "RUNNING",
-        "rate_limits": {
-            "max_dispatches_per_second": 500.0,
-            "max_burst_size": 100,
-            "max_concurrent_dispatches": 1000
-        },
-        "retry_config": {
-            "max_attempts": 3
+    service.get_queue_stats = AsyncMock(
+        return_value={
+            "name": "projects/vhealth-dev/locations/asia-southeast1/queues/workout-notifications",
+            "state": "RUNNING",
+            "rate_limits": {
+                "max_dispatches_per_second": 500.0,
+                "max_burst_size": 100,
+                "max_concurrent_dispatches": 1000,
+            },
+            "retry_config": {"max_attempts": 3},
         }
-    })
+    )
     service.pause_queue = AsyncMock(return_value=True)
     service.resume_queue = AsyncMock(return_value=True)
     return service
@@ -272,10 +275,7 @@ def mock_cloud_tasks_service():
 def mock_fcm_service():
     """Mock FCM service."""
     service = MagicMock()
-    service.send_notification.return_value = {
-        "success_count": 1,
-        "failure_count": 0
-    }
+    service.send_notification.return_value = {"success_count": 1, "failure_count": 0}
     return service
 
 

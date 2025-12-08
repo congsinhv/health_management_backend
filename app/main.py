@@ -160,6 +160,7 @@ async def lifespan(app: FastAPI):
         try:
             import json
             from app.services.fcm import FCMService
+
             creds = json.loads(settings.fcm_credentials_json)
             app.state.fcm_service = FCMService(creds)
             logger.info("FCM Service initialized")
@@ -173,6 +174,7 @@ async def lifespan(app: FastAPI):
     if settings.cloud_tasks_enabled and settings.gcp_project_id:
         try:
             from app.services.cloud_tasks import CloudTasksService
+
             app.state.cloud_tasks_service = CloudTasksService()
             logger.info(
                 f"Cloud Tasks Service initialized (queue: {settings.cloud_tasks_queue})"
@@ -277,7 +279,8 @@ async def lifespan(app: FastAPI):
 # Enable docs in test environment for easier API testing
 def get_docs_urls():
     """Determine if docs should be enabled based on environment."""
-    return settings.debug or getattr(settings, 'environment', None) == "test"
+    return settings.debug or getattr(settings, "environment", None) == "test"
+
 
 app = FastAPI(
     title=settings.app_name,

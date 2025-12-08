@@ -38,7 +38,9 @@ class ExerciseLogRepository(BaseRepository):
                 details={"user_id": data.get("user_id"), "error": str(e)},
             )
 
-    async def get_by_user_and_date(self, user_id: int, log_date: date) -> List[asyncpg.Record]:
+    async def get_by_user_and_date(
+        self, user_id: int, log_date: date
+    ) -> List[asyncpg.Record]:
         """Get exercise logs for a user on a specific date."""
         query = """
             SELECT * FROM user_exercise_logs

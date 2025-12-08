@@ -11,8 +11,8 @@ from migrations.utils import database_connect
 
 
 # revision identifiers, used by Alembic.
-revision = '2487ac2dc0ea'
-down_revision = '6fc6b98c4223'
+revision = "2487ac2dc0ea"
+down_revision = "6fc6b98c4223"
 branch_labels = None
 depends_on = None
 
