@@ -76,16 +76,13 @@ class FCMService:
                 ),
             ),
             # Web Push configuration (required for iOS PWA / Safari 16.4+)
+            # Note: Don't include notification here - use top-level notification
+            # to avoid duplicate notifications. WebpushConfig is for headers/options only.
             webpush=messaging.WebpushConfig(
-                notification=messaging.WebpushNotification(
-                    title=title,
-                    body=body,
-                    icon="/icons/icon-192x192.png",  # PWA icon
-                    badge="/icons/badge-72x72.png",   # iOS badge icon
-                    tag="workout-reminder",           # Collapse duplicate notifications
-                    renotify=True,                    # Re-alert even if tag matches
-                    require_interaction=True,         # Don't auto-dismiss on iOS
-                ),
+                headers={
+                    "Urgency": "high",
+                    "TTL": "86400",  # 24 hours
+                },
             ),
         )
 
