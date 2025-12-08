@@ -1,5 +1,11 @@
 """
 Firebase Cloud Messaging service.
+
+Supports:
+- Android (native + PWA) via FCM
+- iOS native apps via APNs
+- iOS PWA (Safari 16.4+) via Web Push
+- Desktop browsers via Web Push
 """
 
 import logging
@@ -35,7 +41,11 @@ class FCMService:
         body: str,
         data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Send notification to multiple devices."""
+        """Send notification to multiple devices.
+        
+        Sends to Android, iOS native, and Web/PWA (including iOS Safari).
+        Web Push config is required for iOS PWA notifications to work.
+        """
         if not tokens:
             return {"success_count": 0, "failure_count": 0, "invalid_tokens": []}
 
@@ -46,6 +56,7 @@ class FCMService:
             notification=messaging.Notification(title=title, body=body),
             data=fcm_data,
             tokens=tokens,
+            # Android configuration
             android=messaging.AndroidConfig(
                 priority="high",
                 notification=messaging.AndroidNotification(
@@ -54,6 +65,7 @@ class FCMService:
                     sound="default",
                 ),
             ),
+            # iOS native app configuration (APNs)
             apns=messaging.APNSConfig(
                 payload=messaging.APNSPayload(
                     aps=messaging.Aps(
@@ -61,6 +73,21 @@ class FCMService:
                         badge=1,
                         content_available=True,
                     ),
+                ),
+            ),
+            # Web Push configuration (required for iOS PWA / Safari 16.4+)
+            webpush=messaging.WebpushConfig(
+                notification=messaging.WebpushNotification(
+                    title=title,
+                    body=body,
+                    icon="/icons/icon-192x192.png",  # PWA icon
+                    badge="/icons/badge-72x72.png",   # iOS badge icon
+                    tag="workout-reminder",           # Collapse duplicate notifications
+                    renotify=True,                    # Re-alert even if tag matches
+                    require_interaction=True,         # Don't auto-dismiss on iOS
+                ),
+                fcm_options=messaging.WebpushFCMOptions(
+                    link="/schedules",  # URL to open when notification is clicked
                 ),
             ),
         )
