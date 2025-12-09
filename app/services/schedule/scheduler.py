@@ -94,8 +94,8 @@ def schedule_notifications_for_week(
                     "workout_day": day_name,
                     "workout_start_time": start_time,
                     "workout_end_time": end_time,
-                    "title": "",
-                    "body": f"{title} \nThời gian: {duration} phút · Calories: ~{calories} calo",
+                    "title": title,
+                    "body": f"Thời gian: {duration} phút · Calories: ~{calories} calo",
                     "data": {
                         "exercise": exercise,
                         "duration_minutes": duration,
