@@ -92,7 +92,7 @@ class CloudTasksService:
         # Build task with schedule time
         task = {
             "http_request": http_request,
-            "name": f"{self.parent}/tasks/notif-{notification_id}-{scheduled_at.isoformat().replace(':', '-')}",
+            "name": f"{self.parent}/tasks/notif-{notification_id}-{scheduled_at.strftime('%Y%m%dT%H%M%SZ')}",
         }
 
         # Set schedule time if in the future
