@@ -197,10 +197,11 @@ async def send_notification(
 
         tokens = [d["fcm_token"] for d in devices]
 
-        # Send via FCM
+        # Send via FCM (data-only messages for all platforms)
+        # Service worker handles notification display
         data = json.loads(notif["data"]) if notif["data"] else None
 
-        result = await fcm_service.send_notification(
+        result = await fcm_service.send_to_all(
             tokens=tokens,
             title=notif["title"],
             body=notif["body"],
