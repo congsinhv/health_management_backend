@@ -42,6 +42,7 @@ resource "google_project_service" "required_apis" {
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
     "cloudscheduler.googleapis.com",
+    "cloudtasks.googleapis.com",
     "storage.googleapis.com",
     "redis.googleapis.com",
   ])
@@ -52,8 +53,8 @@ resource "google_project_service" "required_apis" {
 
 # Create a dedicated service account for Cloud Run
 resource "google_service_account" "cloud_run_sa" {
-  account_id   = "vhealth-backend-${var.environment}"
-  display_name = "Cloud Run Service Account for VHealth Backend - ${var.environment}"
+  account_id   = "vhealth-${var.environment}-backend"
+  display_name = "VHealth Cloud Run Backend - ${var.environment}"
   description  = "Service account used by Cloud Run services in ${var.environment} environment"
 
   depends_on = [google_project_service.required_apis]
@@ -184,7 +185,7 @@ module "cloud_sql" {
 # Reference existing private IP allocation (already exists in GCP)
 # Note: SQL uses public IP, so this is only for Redis and other private services
 data "google_compute_global_address" "private_ip_alloc" {
-  name = "vhealth-private-ip-${var.environment}"
+  name = "vhealth-${var.environment}-private-ip"
 }
 
 # Manage existing VPC peering connection
@@ -205,12 +206,12 @@ resource "google_service_networking_connection" "private_vpc_connection" {
 module "memorystore" {
   source = "./modules/memorystore"
 
-  instance_name  = "vhealth-cache-${var.environment}"
+  instance_name  = "vhealth-${var.environment}-cache"
   tier           = var.redis_tier
   memory_size_gb = var.redis_memory_size_gb
   region         = var.region
   redis_version  = var.redis_version
-  display_name   = "VHealth API Cache - ${var.environment}"
+  display_name   = "VHealth Cache - ${var.environment}"
   vpc_network    = "projects/${var.project_id}/global/networks/${var.vpc_network}"
   environment    = var.environment
 
@@ -235,49 +236,109 @@ resource "google_secret_manager_secret_iam_member" "redis_auth_access" {
 
 # Create a service account for Cloud Scheduler
 resource "google_service_account" "cloud_scheduler_sa" {
-  account_id   = "vhealth-scheduler-${var.environment}"
-  display_name = "Cloud Scheduler Service Account - ${var.environment}"
+  account_id   = "vhealth-${var.environment}-scheduler"
+  display_name = "VHealth Cloud Scheduler - ${var.environment}"
   description  = "Service account used by Cloud Scheduler to invoke Cloud Run endpoints"
 
   depends_on = [google_project_service.required_apis]
 }
 
-# Temporarily commented out due to existing resources
-# # Cloud Scheduler module for periodic tasks
-# module "cloud_scheduler" {
-#   source = "./modules/cloud_scheduler"
+# Grant Cloud Run invoker role to Cloud Scheduler service account
+resource "google_project_iam_member" "scheduler_run_invoker" {
+  count = var.enable_notification_scheduler ? 1 : 0
 
-#   project_id      = var.project_id
-#   region          = var.region
-#   environment     = var.environment
-#   job_name        = "vhealth-scheduler-${var.environment}"
-#   description     = "Periodic task that runs every 30 minutes - ${var.environment}"
-#   schedule        = var.scheduler_cron_schedule
-#   time_zone       = var.scheduler_time_zone
-#   http_target_uri = var.scheduler_endpoint_url
-#   http_method     = "POST"
-#   http_headers = {
-#     "Content-Type" = "application/json"
-#   }
+  project = var.project_id
+  role    = "roles/run.invoker"
+  member  = "serviceAccount:${google_service_account.cloud_scheduler_sa.email}"
 
-#   # Enable OIDC authentication if Cloud Run requires authentication
-#   oidc_token            = var.scheduler_use_oidc_auth
-#   service_account_email = var.scheduler_use_oidc_auth ? google_service_account.cloud_scheduler_sa.email : null
+  depends_on = [google_service_account.cloud_scheduler_sa]
+}
 
-#   # Retry configuration
-#   retry_config = {
-#     retry_count          = 3
-#     max_retry_duration   = "0s"
-#     min_backoff_duration = "5s"
-#     max_backoff_duration = "3600s"
-#     max_doublings        = 5
-#   }
+# ============================================================================
+# Cloud Tasks Module - Notification Queue
+# ============================================================================
+module "cloud_tasks" {
+  count  = var.enable_cloud_tasks ? 1 : 0
+  source = "./modules/cloud_tasks"
 
-#   paused = var.scheduler_paused
+  project_id  = var.project_id
+  location    = var.region
+  queue_name  = var.cloud_tasks_queue_name
+  environment = var.environment
 
-#   depends_on = [
-#     google_project_service.required_apis,
-#     google_service_account.cloud_scheduler_sa
-#   ]
-# }
+  rate_limits = {
+    max_dispatches_per_second = var.cloud_tasks_max_dispatches_per_second
+    max_burst_size            = var.cloud_tasks_max_burst_size
+    max_concurrent_dispatches = var.cloud_tasks_max_concurrent_dispatches
+  }
+
+  retry_config = {
+    max_attempts       = var.cloud_tasks_max_attempts
+    min_backoff        = var.cloud_tasks_min_backoff
+    max_backoff        = var.cloud_tasks_max_backoff
+    max_doublings      = var.cloud_tasks_max_doublings
+    max_retry_duration = "0s"
+  }
+
+  enable_logging         = var.cloud_tasks_enable_logging
+  logging_sampling_ratio = var.cloud_tasks_logging_sampling_ratio
+
+  # Create dedicated service account for Cloud Tasks OIDC invocation
+  create_service_account       = true
+  service_account_id           = "vhealth-${var.environment}-tasks-invoker"
+  service_account_display_name = "VHealth Cloud Tasks Invoker - ${var.environment}"
+  grant_enqueuer_role          = true
+  grant_run_invoker_role       = true
+  grant_token_creator_role     = false
+
+  # Allow Cloud Run SA to enqueue tasks
+  cloud_run_service_account_email = google_service_account.cloud_run_sa.email
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_service_account.cloud_run_sa
+  ]
+}
+
+# ============================================================================
+# Cloud Scheduler Module - Notification Batch Processing
+# ============================================================================
+module "notification_scheduler" {
+  count  = var.enable_notification_scheduler ? 1 : 0
+  source = "./modules/cloud_scheduler"
+
+  project_id      = var.project_id
+  region          = var.region
+  environment     = var.environment
+  job_name        = "vhealth-${var.environment}-notification-processor"
+  description     = "Process pending workout notifications every ${var.notification_scheduler_interval_minutes} minutes"
+  schedule        = "*/${var.notification_scheduler_interval_minutes} * * * *"
+  time_zone       = var.scheduler_time_zone
+  http_target_uri = "${var.backend_url}/api/v1/notifications/process-batch"
+  http_method     = "POST"
+  http_headers = {
+    "Content-Type" = "application/json"
+  }
+
+  # Enable OIDC authentication for Cloud Run
+  oidc_token            = true
+  service_account_email = google_service_account.cloud_scheduler_sa.email
+
+  # Retry configuration
+  retry_config = {
+    retry_count          = 3
+    max_retry_duration   = "0s"
+    min_backoff_duration = "5s"
+    max_backoff_duration = "300s"
+    max_doublings        = 5
+  }
+
+  paused = var.notification_scheduler_paused
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_service_account.cloud_scheduler_sa,
+    google_project_iam_member.scheduler_run_invoker
+  ]
+}
 

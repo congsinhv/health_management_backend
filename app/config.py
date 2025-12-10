@@ -124,6 +124,8 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # environment
+    environment: str = Field(default="test", description="Environment")
     # Documentation settings
     docs_enabled: bool = True
     # Q&A Service settings
@@ -260,6 +262,32 @@ class Settings(BaseSettings):
     qa_cache_warmup_questions_file: str = Field(
         default="data/top_questions.txt",
         description="File with top questions for cache warming",
+    )
+
+    # FCM Settings (Phase 3)
+    fcm_credentials_json: Optional[str] = Field(
+        None, description="Firebase credentials JSON (from Secret Manager)"
+    )
+    fcm_enabled: bool = Field(default=True, description="Enable FCM notifications")
+
+    # Cloud Tasks Settings (Phase 5)
+    cloud_tasks_enabled: bool = Field(
+        default=True, description="Enable Cloud Tasks for notification scheduling"
+    )
+    cloud_tasks_queue: str = Field(
+        default="workout-notifications", description="Cloud Tasks queue name"
+    )
+    cloud_tasks_location: str = Field(
+        default="asia-southeast1", description="Cloud Tasks queue location"
+    )
+    cloud_tasks_service_account: Optional[str] = Field(
+        None, description="Service account email for Cloud Tasks OIDC"
+    )
+
+    # Backend URL for Cloud Tasks callbacks
+    backend_url: Optional[str] = Field(
+        None,
+        description="Backend URL for Cloud Tasks callbacks (e.g., https://api.vhealth.io.vn)",
     )
 
     @property

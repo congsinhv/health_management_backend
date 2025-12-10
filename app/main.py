@@ -34,6 +34,9 @@ from app.api.user import router as user_router
 from app.api.upload import router as upload_router
 from app.api.conversations import router as conversations_router
 from app.api.messages import router as messages_router
+from app.api.schedules import router as schedules_router
+from app.api.devices import router as devices_router
+from app.api.notifications import router as notifications_router
 from app.api import predict
 from app.config import settings
 from app.db.database import database
@@ -152,6 +155,38 @@ async def lifespan(app: FastAPI):
             "Cache Service and Invalidator created in fallback mode (no Redis)"
         )
 
+    # Initialize FCM Service (Phase 3)
+    if settings.fcm_enabled and settings.fcm_credentials_json:
+        try:
+            import json
+            from app.services.fcm import FCMService
+
+            creds = json.loads(settings.fcm_credentials_json)
+            app.state.fcm_service = FCMService(creds)
+            logger.info("FCM Service initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize FCM Service: {e}")
+            app.state.fcm_service = None
+    else:
+        app.state.fcm_service = None
+
+    # Initialize Cloud Tasks Service (Phase 5)
+    if settings.cloud_tasks_enabled and settings.gcp_project_id:
+        try:
+            from app.services.cloud_tasks import CloudTasksService
+
+            app.state.cloud_tasks_service = CloudTasksService()
+            logger.info(
+                f"Cloud Tasks Service initialized (queue: {settings.cloud_tasks_queue})"
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize Cloud Tasks Service: {e}")
+            app.state.cloud_tasks_service = None
+    else:
+        app.state.cloud_tasks_service = None
+        if settings.cloud_tasks_enabled:
+            logger.warning("Cloud Tasks enabled but GCP project ID not set")
+
     # Initialize Q&A Service if enabled (completely non-blocking)
     if settings.qa_enabled:
         logger.info("Q&A Service will initialize in background (non-blocking)")
@@ -241,13 +276,19 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI application
+# Enable docs in test environment for easier API testing
+def get_docs_urls():
+    """Determine if docs should be enabled based on environment."""
+    return settings.debug or getattr(settings, "environment", None) == "test"
+
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     debug=settings.debug,
     lifespan=lifespan,
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None,
+    docs_url="/docs" if get_docs_urls() else None,
+    redoc_url="/redoc" if get_docs_urls() else None,
 )
 
 # Add CORS middleware
@@ -283,6 +324,21 @@ app.include_router(
 )
 app.include_router(
     messages_router, prefix=f"{settings.api_v1_prefix}/messages", tags=["messages"]
+)
+app.include_router(
+    schedules_router,
+    prefix=f"{settings.api_v1_prefix}/schedules",
+    tags=["schedules"],
+)
+app.include_router(
+    devices_router,
+    prefix=f"{settings.api_v1_prefix}/devices",
+    tags=["devices"],
+)
+app.include_router(
+    notifications_router,
+    prefix=f"{settings.api_v1_prefix}/notifications",
+    tags=["notifications"],
 )
 
 

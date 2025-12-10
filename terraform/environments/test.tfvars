@@ -28,11 +28,11 @@ cloud_sql_deletion_protection = false # Allow deletion in test
 cloud_run_service_name    = "vhealth-backend-test"
 cloud_run_image           = "asia-southeast1-docker.pkg.dev/vhealth-test/vhealth-backend-test/health-api:latest"
 cloud_run_cpu_limit       = "2000m" # Need 2 vCPU for model loading
-cloud_run_memory_limit    = "1.5Gi"   # Reduced from 4Gi (Phase 1 ONNX quantization enables 1Gi)
+cloud_run_memory_limit    = "1.5Gi" # Reduced from 4Gi (Phase 1 ONNX quantization enables 1Gi)
 cloud_run_max_instances   = 10      # Increased from 3 (auto-scale capacity)
 cloud_run_min_instances   = 1       # Changed from 0 (Phase 2 lazy loading eliminates cold-start cost)
 cloud_run_timeout_seconds = 300
-cloud_run_concurrency     = 20      # Increased from 15 (safe with Phase 3 caching)
+cloud_run_concurrency     = 20 # Increased from 15 (safe with Phase 3 caching)
 
 # Application Settings
 debug       = "true"
@@ -61,3 +61,22 @@ scheduler_paused        = true
 redis_tier           = "BASIC" # No HA for test
 redis_memory_size_gb = 1       # Minimum size
 enable_redis_cache   = true
+
+# Cloud Tasks Configuration - Notification Queue
+enable_cloud_tasks                    = true
+cloud_tasks_queue_name                = "vhealth-test-notification-queue"
+cloud_tasks_max_dispatches_per_second = 100 # Lower for test
+cloud_tasks_max_burst_size            = 50
+cloud_tasks_max_concurrent_dispatches = 100
+cloud_tasks_max_attempts              = 3
+cloud_tasks_min_backoff               = "1s"
+cloud_tasks_max_backoff               = "3600s"
+cloud_tasks_max_doublings             = 16
+cloud_tasks_enable_logging            = true
+cloud_tasks_logging_sampling_ratio    = 1.0
+
+# Notification Scheduler Configuration
+enable_notification_scheduler           = true
+notification_scheduler_interval_minutes = 5
+notification_scheduler_paused           = true # Start paused in test
+backend_url                             = "https://test.api.vhealth.io.vn"

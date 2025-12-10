@@ -40,6 +40,11 @@ requests==2.32.3
 google-cloud-secret-manager==2.20.2
 google-cloud-storage>=2.10.0
 google-cloud-monitoring>=2.15.0  # For memory monitoring script (Phase 4)
+google-cloud-tasks>=2.15.0
+google-cloud-scheduler>=2.13.0
+
+# Firebase Cloud Messaging
+firebase-admin==6.2.0
 
 # Q&A Service dependencies
 sentence-transformers==5.1.2

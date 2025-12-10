@@ -6,8 +6,23 @@ import pytest
 import asyncpg
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime, timezone
+from datetime import datetime, timezone, time, date
+import uuid
+import os
+from types import SimpleNamespace
 from app.main import app
+
+
+from app.db.database import database
+
+
+@pytest.fixture(autouse=True)
+def override_database(mock_database_pool):
+    """Override database pool for all tests."""
+    original_pool = database.pool
+    database.pool = mock_database_pool
+    yield
+    database.pool = original_pool
 
 
 @pytest.fixture
@@ -175,3 +190,99 @@ def mock_openai_stream():
         return mock_stream
 
     return create_mock_stream
+
+
+@pytest.fixture
+def test_user(sample_user):
+    """Test user object with attribute access."""
+    return SimpleNamespace(**sample_user)
+
+
+@pytest.fixture
+def db_pool(mock_database_pool):
+    """Alias for mock_database_pool to match test plan."""
+    return mock_database_pool
+
+
+@pytest.fixture
+def auth_token():
+    """Test auth token."""
+    return "test-token-jwt"
+
+
+@pytest.fixture
+async def client(async_client):
+    """Alias for async_client."""
+    yield async_client
+
+
+@pytest.fixture
+async def test_schedule_plan(db_pool, test_user):
+    """Create test schedule plan."""
+    return {
+        "id": 1,
+        "user_id": test_user.id,
+        "goal": "maintain",
+        "schedule_mode": "fixed",
+        "selected_days": ["monday", "wednesday"],
+        "fixed_start_time": time(7, 0),
+        "fixed_end_time": time(8, 0),
+        "sports_predefined": ["gym"],
+        "weekly_plan": {
+            "monday": {"exercise": "Gym", "duration": 45},
+            "wednesday": {"exercise": "Running", "duration": 30},
+        },
+        "status": "active",
+    }
+
+
+@pytest.fixture
+async def test_device(db_pool, test_user):
+    """Create test device."""
+    return {
+        "user_id": test_user.id,
+        "fcm_token": f"test-token-{uuid.uuid4()}",
+        "device_type": "android",
+        "device_name": "Test Phone",
+        "is_active": True,
+    }
+
+
+@pytest.fixture
+def mock_cloud_tasks_service():
+    """Mock Cloud Tasks service."""
+    service = MagicMock()
+    service.create_notification_task = AsyncMock(return_value="task-123")
+    service.delete_task = AsyncMock(return_value=None)
+    service.get_queue_stats = AsyncMock(
+        return_value={
+            "name": "projects/vhealth-dev/locations/asia-southeast1/queues/workout-notifications",
+            "state": "RUNNING",
+            "rate_limits": {
+                "max_dispatches_per_second": 500.0,
+                "max_burst_size": 100,
+                "max_concurrent_dispatches": 1000,
+            },
+            "retry_config": {"max_attempts": 3},
+        }
+    )
+    service.pause_queue = AsyncMock(return_value=True)
+    service.resume_queue = AsyncMock(return_value=True)
+    return service
+
+
+@pytest.fixture
+def mock_fcm_service():
+    """Mock FCM service."""
+    service = MagicMock()
+    service.send_notification.return_value = {"success_count": 1, "failure_count": 0}
+    return service
+
+
+@pytest.fixture
+def mock_scheduler_auth():
+    """Mock Cloud Scheduler auth for testing."""
+    os.environ["NOTIFICATION_BATCH_API_KEY"] = "test-key-for-scheduler"
+    yield
+    if "NOTIFICATION_BATCH_API_KEY" in os.environ:
+        del os.environ["NOTIFICATION_BATCH_API_KEY"]
