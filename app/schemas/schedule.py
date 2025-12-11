@@ -187,6 +187,7 @@ class DeviceResponse(BaseModel):
     is_active: bool
     last_used_at: Optional[datetime]
 
+
 class RegeneratePlanRequest_predict(BaseModel):
     prediction_id: str
     user_id: int

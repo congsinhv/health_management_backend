@@ -7,7 +7,7 @@ from app.schemas.predict import UserInput, PredictionResponse, PdfResponse
 from app.schemas.schedule import RegeneratePlanRequest_predict
 from app.services.predict_service import ObesityPredictorComplete
 from app.services.pdf_service import PdfGeneratorService, PdfGenerationError
-from app.db.database import get_database_pool 
+from app.db.database import get_database_pool
 from app.core.error_context import ErrorContext
 from app.exceptions import (
     ServiceUnavailableException,
@@ -26,6 +26,7 @@ router = APIRouter()
 # Request schemas
 class RegeneratePlanRequest(BaseModel):
     """Request body for regenerating weekly plan from prediction."""
+
     prediction_id: str
     user_id: int
     goal: str  # "lose", "gain", "maintain"
@@ -68,10 +69,10 @@ async def predict_obesity(
 ):
     """
     Generate obesity prediction (PUBLIC endpoint - no authentication required).
-    
+
     **Request Body**:
     - User demographic and lifestyle data
-    
+
     **Response**:
     - Comprehensive prediction with health analysis, diet plan, workout plan
     - Includes prediction_id for PDF generation
@@ -112,10 +113,10 @@ async def export_prediction_pdf(
 ):
     """
     Export prediction as PDF (PUBLIC endpoint - no authentication required).
-    
+
     **Path Parameters**:
     - prediction_id: External prediction ID from PredictionResponse.id
-    
+
     **Response**:
     - PDF public URL
     """
@@ -132,20 +133,23 @@ async def export_prediction_pdf(
 
         return PdfResponse(pdf_url=pdf_url)
 
-@router.post("/regenerate_weekly_plan", response_model=dict, status_code=status.HTTP_200_OK)
+
+@router.post(
+    "/regenerate_weekly_plan", response_model=dict, status_code=status.HTTP_200_OK
+)
 async def regenerate_weekly_plan(
     request_data: RegeneratePlanRequest_predict,
     predict_service: ObesityPredictorComplete = Depends(create_predict_service),
 ):
     """
     Regenerate weekly workout plan based on existing prediction.
-    
+
     **Request Body**:
     - prediction_id: External prediction ID from PredictionResponse.id
     - user_id: ID of the user
     - schedule: Schedule configuration (mode, selected_days, times)
     - timezone: User's timezone (default: Asia/Ho_Chi_Minh)
-    
+
     **Response**:
     - Schedule record with weekly plan and notifications
     """
@@ -170,24 +174,28 @@ async def regenerate_weekly_plan(
         existing_prediction = await predict_service.get_prediction_by_id(
             request_data.prediction_id
         )
-        
+
         if not existing_prediction:
             raise ResourceNotFoundException(
                 message="Prediction not found for regenerating plan",
                 details={"prediction_id": request_data.prediction_id},
             )
-        
+
         if not existing_prediction.workoutPlan.weeklyPlans:
-            raise ValidationException("Prediction has no weekly plans to regenerate from")
+            raise ValidationException(
+                "Prediction has no weekly plans to regenerate from"
+            )
 
         # Generate và trả về schedule record trực tiếp
-        record = await predict_service.generate_weekly_schedule_from_prediction(
-            weeklyPlans=existing_prediction.workoutPlan.weeklyPlans,
-            user_id=request_data.user_id,
-            schedule=request_data.schedule,
-            timezone=request_data.timezone or "Asia/Ho_Chi_Minh"
+        schedule_response = (
+            await predict_service.generate_weekly_schedule_from_prediction(
+                weeklyPlans=existing_prediction.workoutPlan.weeklyPlans,
+                user_id=request_data.user_id,
+                schedule=request_data.schedule,
+                timezone=request_data.timezone or "Asia/Ho_Chi_Minh",
+            )
         )
 
-        ErrorContext.add_context("schedule_id", record.get("id"))
-        
-        return record
+        ErrorContext.add_context("schedule_id", schedule_response.id)
+
+        return schedule_response.model_dump()

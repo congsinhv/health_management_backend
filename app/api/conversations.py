@@ -29,6 +29,7 @@ from app.schemas.conversation import (
 
 router = APIRouter()
 
+
 async def create_conversation_service(
     request: Request,
     db_pool: asyncpg.Pool = Depends(get_database_pool),

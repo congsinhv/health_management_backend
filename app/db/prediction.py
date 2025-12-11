@@ -167,6 +167,7 @@ class PredictionRepository(BaseRepository):
                 message="Database error while deleting prediction",
                 details={"prediction_id": prediction_id, "error": str(e)},
             )
+
     async def get_prediction(self, prediction_id: str) -> asyncpg.Record:
         """
         Backward-compatible method used by other services.
@@ -175,6 +176,7 @@ class PredictionRepository(BaseRepository):
         Ensures older service code calling repo.get_prediction() still works.
         """
         return await self.get_prediction_by_prediction_id(prediction_id)
+
     async def update_prediction(
         self,
         prediction_id: str,
@@ -225,7 +227,7 @@ class PredictionRepository(BaseRepository):
             SELECT id, prediction_id, user_input, prediction_data,
                 pdf_url, created_at, updated_at
             FROM predictions
-            WHERE id = $1 AND deleted_at IS NULL
+            WHERE prediction_id = $1 AND deleted_at IS NULL
         """
         try:
             result = await self.fetch_one(query, id)
