@@ -186,3 +186,9 @@ class DeviceResponse(BaseModel):
     device_name: Optional[str]
     is_active: bool
     last_used_at: Optional[datetime]
+
+class RegeneratePlanRequest_predict(BaseModel):
+    prediction_id: str
+    user_id: int
+    schedule: ScheduleConfig
+    timezone: Optional[str] = "Asia/Ho_Chi_Minh"
