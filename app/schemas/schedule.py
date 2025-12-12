@@ -137,6 +137,7 @@ class WorkoutPlan(BaseModel):
     description: str
     workout_start_time: Optional[str] = None
     workout_end_time: Optional[str] = None
+    workout_date: Optional[date] = None
     status: WorkoutStatus = WorkoutStatus.PENDING
     error_message: Optional[str] = None
 

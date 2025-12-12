@@ -61,7 +61,7 @@ async def create_schedule(
         return schedule
 
 
-@router.get("/", response_model=list[ScheduleResponse])
+@router.get("/", response_model=ScheduleResponse)
 async def list_schedules(
     current_user: Annotated[UserInDB, Depends(get_current_active_user)],
     request: Request,

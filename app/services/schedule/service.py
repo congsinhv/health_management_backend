@@ -153,10 +153,12 @@ class ScheduleService:
             return None
         return await self._to_response(record)
 
-    async def list_schedules(self, user_id: int) -> list[ScheduleResponse]:
+    async def list_schedules(self, user_id: int) -> Optional[ScheduleResponse]:
         """List all schedules for a user."""
-        records = await self.plan_repo.list_by_user(user_id)
-        return [await self._to_response(record) for record in records]
+        record = await self.plan_repo.get_by_user(user_id)
+        if not record:
+            return None
+        return await self._to_response(record)
 
     async def toggle_schedule_status(
         self, user_id: int, schedule_id: int, is_active: bool
@@ -436,6 +438,7 @@ class ScheduleService:
                 description=plan_data.get("description", ""),
                 workout_start_time=workout_start_time,
                 workout_end_time=workout_end_time,
+                workout_date=notif["workout_date"],
                 status=workout_status,
                 error_message=status_info.get("error_message")
                 if workout_status == WorkoutStatus.FAILED

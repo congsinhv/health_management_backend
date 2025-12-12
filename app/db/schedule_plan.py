@@ -271,15 +271,15 @@ class SchedulePlanRepository(BaseRepository):
                 details={"user_id": user_id, "error": str(e)},
             )
 
-    async def list_by_user(self, user_id: int) -> List[asyncpg.Record]:
+    async def get_by_user(self, user_id: int) -> Optional[asyncpg.Record]:
         """List all schedule plans for a user (excluding soft-deleted)."""
         query = """
             SELECT * FROM schedule_plans
             WHERE user_id = $1 AND deleted_at IS NULL
-            ORDER BY created_at DESC
+            AND status IN ('active')
         """
         try:
-            return await self.fetch_many(query, user_id)
+            return await self.fetch_one(query, user_id)
         except asyncpg.PostgresError as e:
             raise DatabaseException(
                 message="Database error listing schedule plans",

@@ -465,9 +465,6 @@ class ObesityPredictorComplete:
 
         # Handle fixed mode times
         if schedule.mode == ScheduleMode.FIXED and schedule.fixed_period:
-            print(
-                f"Fixed period: {schedule.fixed_period.start_time} - {schedule.fixed_period.end_time}"
-            )
             plan_data["fixed_start_time"] = self._parse_time(
                 schedule.fixed_period.start_time
             )
@@ -478,13 +475,7 @@ class ObesityPredictorComplete:
         # Handle flexible mode periods
         if schedule.mode == ScheduleMode.FLEXIBLE and schedule.flexible_periods:
             plan_data["flexible_periods"] = {
-                k.value: [
-                    {
-                        "startTime": self._parse_time(p.start_time),
-                        "endTime": self._parse_time(p.end_time),
-                    }
-                    for p in v
-                ]
+                k.value: [{"startTime": p.start_time, "endTime": p.end_time} for p in v]
                 for k, v in schedule.flexible_periods.items()
             }
 
@@ -509,19 +500,19 @@ class ObesityPredictorComplete:
         # Map day numbers to day names
         # prediction `day` values are 1..7 (Mon=1 .. Sun=7) so map accordingly
         day_mapping = {
-            1: "monday",
-            2: "tuesday",
-            3: "wednesday",
-            4: "thursday",
-            5: "friday",
-            6: "saturday",
-            7: "sunday",
+            "monday": 1,
+            "tuesday": 2,
+            "wednesday": 3,
+            "thursday": 4,
+            "friday": 5,
+            "saturday": 6,
+            "sunday": 7,
         }
 
         weekly_plan = {}
-        for daily_plan in weeklyPlans:
+        for day in schedule.selected_days:
             # Convert day number to day name
-            day_key = day_mapping.get(daily_plan.day)
+            day_key = day_mapping.get(day)
             if not day_key:
                 continue  # Skip invalid day numbers
 
@@ -529,6 +520,7 @@ class ObesityPredictorComplete:
             total_duration = 0
             total_calories = 0
             exercise_descriptions = []
+            daily_plan = weeklyPlans[day_key - 1]
 
             if daily_plan.exercises:
                 for exercise in daily_plan.exercises:
@@ -565,7 +557,7 @@ class ObesityPredictorComplete:
                 else daily_plan.name
             )
 
-            weekly_plan[day_key] = {
+            weekly_plan[day] = {
                 "exercise": daily_plan.name,
                 "duration_minutes": total_duration,
                 "estimated_calories": total_calories,
