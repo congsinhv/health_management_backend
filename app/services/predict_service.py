@@ -494,7 +494,8 @@ class ObesityPredictorComplete:
             raise ResourceNotFoundException(
                 message="User profile not found", details={"user_id": user_id}
             )
-        plan_data["height_m"] = (user_profile.get("height_cm") or 0) / 100.0
+        height_cm = user_profile.get("height_cm") or 0
+        plan_data["height_m"] = float(height_cm) / 100.0
         plan_data["weight_kg"] = user_profile.get("weight_kg") or 0
         plan_data["target_weight_kg"] = user_profile.get("weight_kg") or 0
         plan_data["goal"] = user_profile.get("goal") or "maintain"
