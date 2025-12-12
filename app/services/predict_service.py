@@ -224,7 +224,7 @@ class ObesityPredictorComplete:
         }
 
     async def predict_obesity_ai(
-        self, data: UserInput, save_to_db: bool = True
+        self, data: UserInput, save_to_db: bool = True, user_id: int = None
     ) -> PredictionResponse:
         """Generate obesity prediction with optional database storage."""
         result = self.predict_complete(data.dict())
@@ -269,6 +269,7 @@ class ObesityPredictorComplete:
                     prediction_id=prediction_response.id,
                     user_input=data.dict(),
                     prediction_response=prediction_response.dict(),
+                    user_id=user_id,
                 )
                 if saved_record:
                     logger.info(
@@ -282,6 +283,36 @@ class ObesityPredictorComplete:
                 logger.error(f"Failed to save prediction {prediction_response.id}: {e}")
 
         return prediction_response
+
+    async def get_prediction_by_prediction_id(
+        self, prediction_id: str
+    ) -> PredictionResponse:
+        """Retrieve prediction by prediction_id."""
+        if not self.prediction_repo:
+            raise ServiceUnavailableException("Prediction repository not available")
+
+        record = await self.prediction_repo.get_prediction_by_prediction_id(
+            prediction_id
+        )
+        if not record:
+            raise ValidationException(
+                message="Prediction not found", details={"prediction_id": prediction_id}
+            )
+
+        prediction_data_raw = record.get("prediction_data", {})
+        if isinstance(prediction_data_raw, str):
+            try:
+                prediction_data = json.loads(prediction_data_raw)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in prediction_data: {e}")
+                raise PredictionDataException(
+                    message="Invalid prediction_data JSON",
+                    details={"prediction_id": prediction_id, "error": str(e)},
+                )
+        else:
+            prediction_data = prediction_data_raw
+
+        return PredictionResponse(**prediction_data)
 
     async def generate_plans_from_prediction(
         self, prediction_id: str
@@ -787,6 +818,7 @@ class ObesityPredictorComplete:
         prediction_id: str,
         user_input: Dict[str, Any],
         prediction_response: Dict[str, Any],
+        user_id: int,
     ) -> Optional[asyncpg.Record]:
         """Save prediction to database (PUBLIC - no user_id)."""
         if not self.prediction_repo:
@@ -797,6 +829,7 @@ class ObesityPredictorComplete:
             prediction_id=prediction_id,
             user_input=user_input,
             prediction_data=prediction_response,
+            user_id=user_id,
         )
 
     def _get_bmi_category(self, bmi):

@@ -24,6 +24,7 @@ class PredictionRepository(BaseRepository):
         prediction_id: str,
         user_input: Dict[str, Any],
         prediction_data: Dict[str, Any],
+        user_id: int,
     ) -> asyncpg.Record:
         """
         Create a new prediction record.
@@ -38,10 +39,10 @@ class PredictionRepository(BaseRepository):
         """
         query = """
             INSERT INTO predictions (
-                prediction_id, user_input, prediction_data
+                prediction_id, user_input, prediction_data, user_id
             )
-            VALUES ($1, $2, $3)
-            RETURNING id, prediction_id, user_input, prediction_data,
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, prediction_id, user_input, prediction_data, user_id,
                       pdf_url, created_at, updated_at
         """
         try:
@@ -51,6 +52,7 @@ class PredictionRepository(BaseRepository):
                 prediction_id,
                 json.dumps(user_input),
                 json.dumps(prediction_data),
+                user_id,
             )
             if not result:
                 raise DatabaseException(

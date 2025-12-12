@@ -3,7 +3,7 @@ User-related Pydantic schemas.
 """
 
 from datetime import datetime, date
-from typing import Optional
+from typing import List, Optional
 from decimal import Decimal
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
@@ -75,6 +75,17 @@ class UserResponse(UserBase, IDMixin, TimestampMixin):
 
     profile: Optional[UserProfileResponse] = Field(
         None, description="User profile information"
+    )
+
+
+class UserTracking(BaseSchema):
+    """Schema for user tracking."""
+
+    id: str = Field(..., description="Tracking ID")
+    created_at: datetime = Field(..., description="Tracking created at")
+    type: str = Field(..., description="Tracking type (prediction, chat)")
+    description: str = Field(
+        ..., description="Tracking description (prediction result, chat message)"
     )
 
 

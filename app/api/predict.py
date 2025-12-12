@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, status, HTTPException
-from typing import List, Optional
+from typing import Annotated, List, Optional
 import asyncpg
 import logging
 from pydantic import BaseModel
 from app.schemas.predict import UserInput, PredictionResponse, PdfResponse
 from app.schemas.schedule import RegeneratePlanRequest_predict
+from app.schemas.user import UserInDB
 from app.services.predict_service import ObesityPredictorComplete
 from app.services.pdf_service import PdfGeneratorService, PdfGenerationError
 from app.db.database import get_database_pool
@@ -18,6 +19,7 @@ from app.exceptions import (
     PredictionException,
 )
 from app.db.prediction import PredictionRepository
+from app.auth.dependencies import get_current_active_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -65,6 +67,7 @@ def create_pdf_service(
 @router.post("/", response_model=PredictionResponse, status_code=status.HTTP_200_OK)
 async def predict_obesity(
     data: UserInput,
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
     predict_service: ObesityPredictorComplete = Depends(create_predict_service),
 ):
     """
@@ -78,6 +81,7 @@ async def predict_obesity(
     - Includes prediction_id for PDF generation
     """
     ErrorContext.set_request_id()
+    ErrorContext.set_user_id(current_user.id)
     ErrorContext.add_context("endpoint", "predict_obesity")
     ErrorContext.add_context("operation", "obesity_prediction")
 
@@ -95,10 +99,35 @@ async def predict_obesity(
             )
 
         prediction = await predict_service.predict_obesity_ai(
-            data=data, save_to_db=True
+            data=data, save_to_db=True, user_id=current_user.id
         )
 
         ErrorContext.add_context("prediction_id", prediction.id)
+        return prediction
+
+
+@router.get(
+    "/{prediction_id}",
+    response_model=PredictionResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_prediction_by_prediction_id(
+    prediction_id: str,
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
+    predict_service: ObesityPredictorComplete = Depends(create_predict_service),
+):
+    """Get prediction by prediction_id."""
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "get_prediction_by_prediction_id")
+    ErrorContext.add_context("operation", "prediction_retrieval")
+    ErrorContext.add_context("prediction_id", prediction_id)
+    ErrorContext.add_context("user_id", current_user.id)
+    with ErrorContext(
+        "get_prediction_by_prediction_id", {"prediction_id": prediction_id}
+    ):
+        prediction = await predict_service.get_prediction_by_prediction_id(
+            prediction_id
+        )
         return prediction
 
 

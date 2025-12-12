@@ -21,6 +21,7 @@ from app.schemas.user import (
     UserUpdate,
     UserResponse,
     UserInDB,
+    UserTracking,
 )
 
 router = APIRouter()
@@ -68,6 +69,27 @@ async def get_user(
                 "User not found", details={"user_id": user_id}
             )
         return user
+
+
+@router.get("/me/tracking", response_model=List[UserTracking])
+async def get_user_tracking(
+    current_user: Annotated[UserInDB, Depends(get_current_active_user)],
+    user_service: UserService = Depends(create_user_service),
+):
+    """Get user tracking."""
+    # Set error context for request correlation
+    ErrorContext.set_request_id()
+    ErrorContext.add_context("endpoint", "get_user_tracking")
+    ErrorContext.add_context("operation", "user_tracking_retrieval")
+    ErrorContext.add_context("target_user_id", current_user.id)
+
+    with ErrorContext("get_user_tracking", {"target_user_id": current_user.id}):
+        tracking_data = await user_service.get_user_tracking(current_user.id)
+        if not tracking_data:
+            raise ResourceNotFoundException(
+                "User tracking not found", details={"user_id": current_user.id}
+            )
+        return tracking_data
 
 
 @router.put("/{user_id}", response_model=UserResponse)

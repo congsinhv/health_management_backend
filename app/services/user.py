@@ -13,6 +13,7 @@ from app.db.user import UserRepository
 from app.db.user_profile import UserProfileRepository
 from app.schemas.user import (
     UserCreate,
+    UserTracking,
     UserUpdate,
     UserResponse,
     UserInDB,
@@ -251,6 +252,19 @@ class UserService:
         return [
             UserResponse(**self._transform_user_record(record))
             for record in user_records
+        ]
+
+    async def get_user_tracking(self, user_id: int) -> List[UserTracking]:
+        """Get user tracking."""
+        tracking_records = await self.user_repo.get_user_tracking(user_id)
+        return [
+            UserTracking(
+                id=record["id"],
+                created_at=record["created_at"],
+                type=record["type"],
+                description=record["description"],
+            )
+            for record in tracking_records
         ]
 
     async def update_user(

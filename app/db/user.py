@@ -518,3 +518,32 @@ class UserRepository(BaseRepository):
                 message="Database error while cleaning up expired refresh tokens",
                 details={"error": str(e)},
             )
+
+    async def get_user_tracking(self, user_id: int) -> List[asyncpg.Record]:
+        """Get user tracking."""
+        chatbox_query = """
+            SELECT c.id::text, c.created_at, 'chatbox' as type, c.title as description
+            FROM conversations c
+            WHERE c.user_id = $1
+            ORDER BY c.updated_at desc
+            limit 5
+        """
+        prediction_query = """
+            SELECT p.prediction_id::text as id, p.created_at, 'prediction' as type, p.prediction_data->'prediction'->'level' as description
+            FROM predictions p
+            WHERE p.user_id = $1
+            ORDER BY p.created_at desc
+            limit 5
+        """
+        try:
+            chatbox_records = await self.fetch_many(chatbox_query, user_id)
+            prediction_records = await self.fetch_many(prediction_query, user_id)
+            # limit to 5 records total by sorting by created_at desc and taking the first 5
+            records = chatbox_records + prediction_records
+            records.sort(key=lambda x: x["created_at"], reverse=True)
+            return records[:5] if len(records) > 5 else records
+        except Exception as e:
+            raise DatabaseException(
+                message="Database error while fetching user tracking",
+                details={"user_id": user_id, "error": str(e)},
+            )
