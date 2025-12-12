@@ -1,3 +1,4 @@
+from datetime import time
 from app.exceptions import (
     PredictionException,
     PredictionModelException,
@@ -5,9 +6,15 @@ from app.exceptions import (
     ModelNotLoadedException,
     ExternalServiceException,
     DatabaseException,
+    ResourceNotFoundException,
     ValidationException,
     ServiceUnavailableException,
 )
+from app.services.schedule.service import ScheduleService
+from app.db.schedule_plan import SchedulePlanRepository
+from app.services.schedule.ai_planner import generate_weekly_plan
+from app.services.schedule.scheduler import schedule_notifications_for_week
+
 from app.core.error_context import ErrorContext
 import os
 import joblib
@@ -31,9 +38,14 @@ from app.schemas.predict import (
     HealthAnalysis,
     DietPlan,
     WorkoutPlan,
+    DailyWorkoutPlan,
 )
+from app.db.notification import NotificationRepository
+from app.schemas.schedule import ScheduleConfig, ScheduleMode
 from app.utils.gcs_downloader import GCSDownloader
 from app.db.prediction import PredictionRepository
+import json
+from app.db.user_profile import UserProfileRepository
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +55,11 @@ class ObesityPredictorComplete:
         # Database setup
         self.pool = pool
         self.prediction_repo = PredictionRepository(pool) if pool else None
-
+        self.plan_repo = SchedulePlanRepository(pool)
+        self.notification_repo = NotificationRepository(pool)
+        self.user_profile_repo = UserProfileRepository(pool)
         # Define paths - use writable directory from config
-        model_dir = settings.obesity_model_dir
+        model_dir = r"C:\health\be\health_management_backend\tmp\models_obesity"
         model_path = os.path.join(model_dir, "obesity_classifier_final.pkl")
         encoder_path = os.path.join(model_dir, "label_encoder.pkl")
 
@@ -86,21 +100,14 @@ class ObesityPredictorComplete:
     ):
         """
         Ensure obesity prediction models are downloaded from GCS if not present locally.
-
-        Args:
-            model_path: Path to the model file
-            encoder_path: Path to the encoder file
-            model_dir: Directory where models should be stored
         """
         model_exists = os.path.exists(model_path)
         encoder_exists = os.path.exists(encoder_path)
 
-        # If both files exist, no need to download
         if model_exists and encoder_exists:
             logger.info("Obesity prediction models already exist locally")
             return
 
-        # Check if GCS bucket is configured
         if not settings.gcp_model_bucket:
             logger.error(
                 "GCS bucket not configured. Please set gcp_model_bucket in settings "
@@ -114,7 +121,6 @@ class ObesityPredictorComplete:
         logger.info("Downloading obesity prediction models from GCS...")
 
         try:
-            # Create model directory if it doesn't exist
             try:
                 Path(model_dir).mkdir(parents=True, exist_ok=True)
                 logger.info(f"Model directory ready: {model_dir}")
@@ -124,14 +130,12 @@ class ObesityPredictorComplete:
                     f"Ensure the directory is writable or set OBESITY_MODEL_DIR to a writable location like /tmp"
                 ) from pe
 
-            # Initialize GCS downloader
             downloader = GCSDownloader(
                 bucket_name=settings.gcp_model_bucket,
                 project_id=settings.gcp_project_id,
                 timeout=settings.model_download_timeout,
             )
 
-            # Download model file if missing
             if not model_exists:
                 blob_path = "models_obesity/obesity_classifier_final.pkl"
                 logger.info(f"Downloading {blob_path}...")
@@ -141,7 +145,6 @@ class ObesityPredictorComplete:
                         f"Failed to download model file from GCS: {blob_path}"
                     )
 
-            # Download encoder file if missing
             if not encoder_exists:
                 blob_path = "models_obesity/label_encoder.pkl"
                 logger.info(f"Downloading {blob_path}...")
@@ -223,30 +226,16 @@ class ObesityPredictorComplete:
     async def predict_obesity_ai(
         self, data: UserInput, save_to_db: bool = True
     ) -> PredictionResponse:
-        """
-        Generate obesity prediction with optional database storage.
-
-        Args:
-            data: User input data
-            save_to_db: Whether to save prediction to database (default: True)
-
-        Returns:
-            PredictionResponse with database save attempted if save_to_db=True
-        """
-        # 1. Get base prediction
+        """Generate obesity prediction with optional database storage."""
         result = self.predict_complete(data.dict())
         level = result["dự_đoán"]
         confidence_str = result["độ_tin_cậy"].replace("%", "")
         confidence = float(confidence_str)
         bmi = float(result["bmi"])
 
-        # 2. Generate AI advice
         ai_response = await self._generate_ai_advice(data, level, bmi)
-
-        # 3. Construct UserInputResponse
         user_input_response = self._map_user_input_response(data)
 
-        # 4. Construct prediction response
         prediction_response = PredictionResponse(
             id=str(uuid.uuid4()),
             timestamp=datetime.now(timezone.utc).isoformat(),
@@ -274,7 +263,6 @@ class ObesityPredictorComplete:
             ),
         )
 
-        # 5. Save to database if requested and repository is available
         if save_to_db and self.prediction_repo:
             try:
                 saved_record = await self._save_prediction(
@@ -292,15 +280,338 @@ class ObesityPredictorComplete:
                     )
             except Exception as e:
                 logger.error(f"Failed to save prediction {prediction_response.id}: {e}")
-                # Don't fail the request if save fails - graceful degradation
 
         return prediction_response
 
+    async def generate_plans_from_prediction(
+        self, prediction_id: str
+    ) -> PredictionResponse:
+        """
+        Generate diet and workout plans based on existing prediction data.
+
+        Args:
+            prediction_id: External prediction ID from PredictionResponse.id
+        Returns:
+            Updated PredictionResponse with diet and workout plans
+        """
+        try:
+            # Kiểm tra repository
+            if not self.prediction_repo:
+                raise PredictionException(
+                    message="Prediction repository not available",
+                    details={"prediction_id": prediction_id},
+                )
+
+            # Lấy prediction từ DB
+            prediction_record = await self.prediction_repo.get_prediction(prediction_id)
+            if not prediction_record:
+                raise PredictionException(
+                    message="Prediction not found",
+                    details={"prediction_id": prediction_id},
+                )
+
+            # Parse prediction_data
+            prediction_data_raw = prediction_record.get("prediction_data", {})
+            if isinstance(prediction_data_raw, str):
+                try:
+                    prediction_data = json.loads(prediction_data_raw)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON in prediction_data: {e}")
+                    raise PredictionException(
+                        message="Invalid prediction_data JSON",
+                        details={"prediction_id": prediction_id, "error": str(e)},
+                    )
+            else:
+                prediction_data = prediction_data_raw
+
+            logger.info(f"Prediction data keys: {list(prediction_data.keys())}")
+
+            # Khởi tạo PredictionResponse
+            prediction = PredictionResponse(**prediction_data)
+
+            # Reconstruct UserInput từ prediction.userInput
+            family_history = bool(getattr(prediction.userInput, "familyHistory", False))
+            user_input = UserInput(
+                name=prediction.userInput.name,
+                gender=prediction.userInput.gender,
+                age=prediction.userInput.age,
+                height=prediction.userInput.height,
+                weight=prediction.userInput.weight,
+                family_history=family_history,
+            )
+
+            # Gọi AI tạo kế hoạch
+            ai_response = await self._generate_ai_advice(
+                data=user_input,
+                level=prediction.prediction.level,
+                bmi=prediction.prediction.bmi,
+            )
+
+            # Sanitize diet và workout plan
+            diet_plan_data = self._sanitize_diet_plan(ai_response.get("dietPlan") or {})
+            workout_plan_data = self._sanitize_workout_plan(
+                ai_response.get("workoutPlan") or {}
+            )
+
+            # Ensure weeklyPlans đủ 7 ngày
+            def fill_weekly_plans(plans, default_template):
+                filled = []
+                for day in range(1, 8):
+                    plan_for_day = next((p for p in plans if p.get("day") == day), None)
+                    if not plan_for_day:
+                        plan_for_day = default_template.copy()
+                        plan_for_day["day"] = day
+                    filled.append(plan_for_day)
+                return filled
+
+            diet_plan_data["weeklyPlans"] = fill_weekly_plans(
+                diet_plan_data.get("weeklyPlans", []),
+                {
+                    "day": 0,
+                    "breakfast": [],
+                    "lunch": [],
+                    "dinner": [],
+                    "recommendedFoods": "",
+                    "foodsToLimit": "",
+                },
+            )
+            workout_plan_data["weeklyPlans"] = fill_weekly_plans(
+                workout_plan_data.get("weeklyPlans", []),
+                {"day": 0, "name": "", "exercises": []},
+            )
+
+            # Update PredictionResponse
+            prediction.dietPlan = DietPlan(**diet_plan_data)
+            prediction.workoutPlan = WorkoutPlan(**workout_plan_data)
+
+            if ai_response.get("healthAnalysis"):
+                prediction.healthAnalysis = HealthAnalysis(
+                    paragraphs=ai_response.get("healthAnalysis", [])
+                )
+
+            # Lưu lại DB
+            await self.prediction_repo.update_prediction(
+                prediction_id=prediction_id, prediction_data=prediction.dict()
+            )
+
+            logger.info(f"Generated plans for prediction {prediction_id}")
+            return prediction
+
+        except PredictionException:
+            # Re-raise custom exception
+            raise
+        except Exception as e:
+            logger.error(
+                f"Error generating plans for prediction {prediction_id}: {e}",
+                exc_info=True,
+            )
+            raise PredictionException(
+                message="Failed to generate diet and workout plans",
+                details={"prediction_id": prediction_id, "error": str(e)},
+            )
+
+    async def get_prediction_by_id(self, prediction_id: str) -> PredictionResponse:
+        """Retrieve prediction by ID."""
+        if not self.prediction_repo:
+            raise ServiceUnavailableException("Prediction repository not available")
+
+        record = await self.prediction_repo.get_prediction_by_id(prediction_id)
+        if not record:
+            raise ValidationException(
+                message="Prediction not found", details={"prediction_id": prediction_id}
+            )
+
+        prediction_data_raw = record.get("prediction_data", {})
+        if isinstance(prediction_data_raw, str):
+            try:
+                prediction_data = json.loads(prediction_data_raw)
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON in prediction_data: {e}")
+                raise PredictionDataException(
+                    message="Invalid prediction_data JSON",
+                    details={"prediction_id": prediction_id, "error": str(e)},
+                )
+        else:
+            prediction_data = prediction_data_raw
+
+        return PredictionResponse(**prediction_data)
+
+    @staticmethod
+    def _parse_time(time_str: Optional[str]):
+        """Parse time string to time object."""
+        if not time_str:
+            return None
+        parts = str(time_str).split(":")
+        return time(
+            int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0
+        )
+
+    async def generate_weekly_schedule_from_prediction(
+        self,
+        weeklyPlans: List[DailyWorkoutPlan],
+        user_id: int,
+        schedule: ScheduleConfig,
+        timezone: str = "Asia/Ho_Chi_Minh",
+    ) -> Dict[str, Any]:
+        """Generate weekly schedule from ML prediction results."""
+
+        # Step 1: Atomically deactivate existing and create new plan in one transaction
+        plan_data = {
+            "user_id": user_id,
+            "timezone": timezone,
+            "schedule_mode": schedule.mode.value,
+            "selected_days": [d.value for d in schedule.selected_days],
+        }
+
+        # Handle fixed mode times
+        if schedule.mode == ScheduleMode.FIXED and schedule.fixed_period:
+            print(
+                f"Fixed period: {schedule.fixed_period.start_time} - {schedule.fixed_period.end_time}"
+            )
+            plan_data["fixed_start_time"] = self._parse_time(
+                schedule.fixed_period.start_time
+            )
+            plan_data["fixed_end_time"] = self._parse_time(
+                schedule.fixed_period.end_time
+            )
+
+        # Handle flexible mode periods
+        if schedule.mode == ScheduleMode.FLEXIBLE and schedule.flexible_periods:
+            plan_data["flexible_periods"] = {
+                k.value: [
+                    {
+                        "startTime": self._parse_time(p.start_time),
+                        "endTime": self._parse_time(p.end_time),
+                    }
+                    for p in v
+                ]
+                for k, v in schedule.flexible_periods.items()
+            }
+
+        # Get user profile
+        user_profile = await self.user_profile_repo.get_profile_by_user_id(user_id)
+        if not user_profile:
+            raise ResourceNotFoundException(
+                message="User profile not found", details={"user_id": user_id}
+            )
+        height_cm = user_profile.get("height_cm") or 0
+        plan_data["height_m"] = float(height_cm) / 100.0
+        plan_data["weight_kg"] = user_profile.get("weight_kg") or 0
+        plan_data["target_weight_kg"] = user_profile.get("weight_kg") or 0
+        plan_data["goal"] = user_profile.get("goal") or "maintain"
+        plan_data["sports_predefined"] = []
+
+        # Create new plan and deactivate old ones atomically
+        record = await self.plan_repo.deactivate_and_create(plan_data)
+        plan_id = record["id"]
+
+        # Step 2: Convert weekly_plan to correct format
+        # Map day numbers to day names
+        # prediction `day` values are 1..7 (Mon=1 .. Sun=7) so map accordingly
+        day_mapping = {
+            1: "monday",
+            2: "tuesday",
+            3: "wednesday",
+            4: "thursday",
+            5: "friday",
+            6: "saturday",
+            7: "sunday",
+        }
+
+        weekly_plan = {}
+        for daily_plan in weeklyPlans:
+            # Convert day number to day name
+            day_key = day_mapping.get(daily_plan.day)
+            if not day_key:
+                continue  # Skip invalid day numbers
+
+            # Calculate total duration and calories from exercises
+            total_duration = 0
+            total_calories = 0
+            exercise_descriptions = []
+
+            if daily_plan.exercises:
+                for exercise in daily_plan.exercises:
+                    # Support both `duration` and `duration_minutes` field names
+                    dur = getattr(exercise, "duration_minutes", None)
+                    if dur is None:
+                        dur = getattr(exercise, "duration", None)
+                    if dur is not None:
+                        try:
+                            total_duration += int(dur)
+                        except Exception:
+                            pass
+
+                    # Support both `estimated_calories` and `calories`
+                    cal = getattr(exercise, "estimated_calories", None)
+                    if cal is None:
+                        cal = getattr(exercise, "calories", None)
+                    if cal is not None:
+                        try:
+                            total_calories += int(cal)
+                        except Exception:
+                            pass
+
+                    name = getattr(exercise, "name", None)
+                    if name:
+                        exercise_descriptions.append(name)
+
+            # Use defaults if no exercises provided
+            total_duration = total_duration or 60
+            total_calories = total_calories or 300
+            description = (
+                ", ".join(exercise_descriptions)
+                if exercise_descriptions
+                else daily_plan.name
+            )
+
+            weekly_plan[day_key] = {
+                "exercise": daily_plan.name,
+                "duration_minutes": total_duration,
+                "estimated_calories": total_calories,
+                "description": description,
+            }
+
+        # Step 3: Update plan with converted weekly plan
+        record = await self.plan_repo.update_weekly_plan(plan_id, weekly_plan)
+
+        print(f"Plan data: {plan_data}")
+        # Step 4: Schedule notifications for the week
+        notifications = schedule_notifications_for_week(
+            plan_id=plan_id,
+            user_id=user_id,
+            timezone=timezone,
+            selected_days=plan_data["selected_days"],
+            schedule_mode=plan_data["schedule_mode"],
+            fixed_start_time=plan_data.get("fixed_start_time"),
+            fixed_end_time=plan_data.get("fixed_end_time"),
+            flexible_periods=plan_data.get("flexible_periods"),
+            weekly_plan=weekly_plan,
+        )
+
+        if notifications:
+            await self.notification_repo.create_batch(notifications)
+        schedule_service = ScheduleService(self.pool)
+        # Return the schedule response
+        return await schedule_service._to_response(record)
+
+    # 4 bước chính:
+    # 1. Atomically deactivate existing and create new plan in one transaction
+    # 2. Convert weekly_plan to correct format
+    # Return JSON format:
+    # {{
+    #     "monday": {{
+    #         "exercise": "Gym - Upper Body",
+    #         "duration_minutes": 60,
+    #         "estimated_calories": 350,
+    #         "description": "Chest press, shoulder press, bicep curls"
+    #     }}
+    # }}
+    # 3. Update plan with converted weeklyplan
+    # 4. Schedule notifications for the week
+
     def _sanitize_diet_plan(self, diet_plan: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Sanitize AI-generated diet plan to ensure all required fields exist.
-        This handles cases where AI returns incomplete data.
-        """
+        """Sanitize AI-generated diet plan to ensure all required fields exist."""
         weekly_plans = diet_plan.get("weeklyPlans", [])
         sanitized_plans = []
 
@@ -318,9 +629,7 @@ class ObesityPredictorComplete:
         return {"weeklyPlans": sanitized_plans}
 
     def _sanitize_workout_plan(self, workout_plan: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Sanitize AI-generated workout plan to ensure all required fields exist.
-        """
+        """Sanitize AI-generated workout plan to ensure all required fields exist."""
         weekly_plans = workout_plan.get("weeklyPlans", [])
         sanitized_plans = []
 
@@ -390,7 +699,6 @@ class ObesityPredictorComplete:
             return json.loads(content)
         except Exception as e:
             logger.error(f"Error generating AI advice: {e}")
-            # Return empty structure on error to avoid crash
             return {
                 "healthAnalysis": ["Không thể tạo phân tích lúc này."],
                 "dietPlan": {"weeklyPlans": []},
@@ -417,9 +725,7 @@ class ObesityPredictorComplete:
             height=data.height,
             weight=data.weight,
             familyHistory="Có" if data.family_history else "Không",
-            highCalorieFood="Thường xuyên"
-            if data.FAVC
-            else "Không",  # FAVC is usually binary yes/no
+            highCalorieFood="Thường xuyên" if data.FAVC else "Không",
             vegetableFrequency=self._map_frequency(
                 data.FCVC, ["Không bao giờ", "Thỉnh thoảng", "Thường xuyên"]
             ),
@@ -437,7 +743,7 @@ class ObesityPredictorComplete:
                 data.TUE, ["0-2h", "3-5h", "> 5h"], offset=0
             ),
             transportation=self._map_transport(data.MTRANS_Calorie),
-            smoking="Không",  # Default as not in input
+            smoking="Không",
             alcohol=self._map_frequency(
                 data.CALC,
                 ["Không", "Thỉnh thoảng", "Thường xuyên", "Luôn luôn"],
@@ -457,12 +763,6 @@ class ObesityPredictorComplete:
         return labels[idx]
 
     def _map_transport(self, value: Optional[int]) -> str:
-        # Mapping based on dataset encoding usually:
-        # 0: Automobile, 1: Motorbike, 2: Bike, 3: Public_Transportation, 4: Walking
-        # But check the model training encoding. Assuming standard mapping or just returning generic.
-        # In the original code, MTRANS_Calorie default is 1.
-        # Let's use a generic mapping or just return the value if unknown.
-        # User example says "Xe đạp".
         mapping = {
             0: "Ô tô",
             1: "Xe máy",
@@ -496,17 +796,7 @@ class ObesityPredictorComplete:
         user_input: Dict[str, Any],
         prediction_response: Dict[str, Any],
     ) -> Optional[asyncpg.Record]:
-        """
-        Save prediction to database (PUBLIC - no user_id).
-
-        Args:
-            prediction_id: External prediction ID from PredictionResponse.id
-            user_input: UserInput dict
-            prediction_response: PredictionResponse dict
-
-        Returns:
-            Saved prediction record or None
-        """
+        """Save prediction to database (PUBLIC - no user_id)."""
         if not self.prediction_repo:
             logger.warning("Prediction repository not available - skipping save")
             return None

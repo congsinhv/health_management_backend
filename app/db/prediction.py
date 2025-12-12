@@ -167,3 +167,78 @@ class PredictionRepository(BaseRepository):
                 message="Database error while deleting prediction",
                 details={"prediction_id": prediction_id, "error": str(e)},
             )
+
+    async def get_prediction(self, prediction_id: str) -> asyncpg.Record:
+        """
+        Backward-compatible method used by other services.
+
+        Alias for get_prediction_by_prediction_id().
+        Ensures older service code calling repo.get_prediction() still works.
+        """
+        return await self.get_prediction_by_prediction_id(prediction_id)
+
+    async def update_prediction(
+        self,
+        prediction_id: str,
+        prediction_data: Dict[str, Any],
+    ) -> asyncpg.Record:
+        """
+        Backward-compatible method used by other services.
+
+        Alias for updating prediction_data of a prediction record.
+        Ensures older service code calling repo.update_prediction() still works.
+        """
+        query = """
+            UPDATE predictions
+            SET prediction_data = $2, updated_at = NOW()
+            WHERE prediction_id = $1 AND deleted_at IS NULL
+            RETURNING id, prediction_id, user_input, prediction_data,
+                      pdf_url, created_at, updated_at
+        """
+        try:
+            result = await self.fetch_one(
+                query,
+                prediction_id,
+                json.dumps(prediction_data),
+            )
+            if not result:
+                raise ResourceNotFoundException(
+                    message="Prediction not found for update",
+                    details={"prediction_id": prediction_id},
+                )
+            return result
+        except asyncpg.PostgresError as e:
+            raise PredictionException(
+                message="Database error while updating prediction",
+                details={"prediction_id": prediction_id, "error": str(e)},
+            )
+
+    async def get_prediction_by_id(self, id: int) -> asyncpg.Record:
+        """
+        Get prediction by internal database ID.
+
+        Args:
+            id: Internal database ID (primary key)
+
+        Returns:
+            Prediction record
+        """
+        query = """
+            SELECT id, prediction_id, user_input, prediction_data,
+                pdf_url, created_at, updated_at
+            FROM predictions
+            WHERE prediction_id = $1 AND deleted_at IS NULL
+        """
+        try:
+            result = await self.fetch_one(query, id)
+            if not result:
+                raise ResourceNotFoundException(
+                    message="Prediction not found",
+                    details={"id": id},
+                )
+            return result
+        except asyncpg.PostgresError as e:
+            raise PredictionException(
+                message="Database error while fetching prediction",
+                details={"id": id, "error": str(e)},
+            )

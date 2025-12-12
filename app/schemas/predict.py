@@ -77,7 +77,7 @@ class Exercise(BaseModel):
 class DailyWorkoutPlan(BaseModel):
     name: str
     day: int
-    exercises: List[Exercise]
+    exercises: Optional[List[Exercise]] = []
 
 
 class WorkoutPlan(BaseModel):

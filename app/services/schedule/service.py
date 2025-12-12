@@ -355,9 +355,7 @@ class ScheduleService:
 
         # Merge notification statuses into weekly plan
         if weekly_plan:
-            weekly_plan = await self._merge_notification_statuses(
-                record, weekly_plan
-            )
+            weekly_plan = await self._merge_notification_statuses(record, weekly_plan)
 
         return ScheduleResponse(
             id=record["id"],
