@@ -434,13 +434,31 @@ async def create_cache_service() -> CacheService:
         try:
             logger.info(f"Connecting to Redis at: {settings.redis_host}")
 
-            redis_client = redis.from_url(
-                settings.redis_url,
-                max_connections=settings.redis_max_connections,
-                retry_on_timeout=True,
-                socket_connect_timeout=settings.redis_connection_timeout,
-                socket_timeout=settings.redis_connection_timeout,
-                health_check_interval=30,  # Check connection every 30 seconds
+            # Create Redis client with authentication for GCP Memorystore
+            connection_kwargs = {
+                "max_connections": settings.redis_max_connections,
+                "retry_on_timeout": True,
+                "socket_connect_timeout": settings.redis_connection_timeout,
+                "socket_timeout": settings.redis_connection_timeout,
+                "health_check_interval": 30,  # Check connection every 30 seconds
+                "encoding": "utf-8",
+                "decode_responses": True,
+            }
+
+            # Add SSL options if enabled
+            if settings.redis_ssl and not settings.redis_ssl_cert_verify:
+                import ssl
+                connection_kwargs["ssl"] = True
+                connection_kwargs["ssl_cert_reqs"] = ssl.CERT_NONE
+                connection_kwargs["ssl_check_hostname"] = False
+                connection_kwargs["ssl_certfile"] = None
+
+            redis_client = redis.Redis(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                db=settings.redis_db,
+                password=settings.redis_password,
+                **connection_kwargs,
             )
 
             # Test connection

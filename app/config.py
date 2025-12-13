@@ -133,15 +133,18 @@ class Settings(BaseSettings):
     qa_enabled: bool = Field(default=True, description="Enable/disable Q&A service")
 
     # Local paths (used as cache directory when downloading from GCS)
+    # Defaults use /tmp for Cloud Run writable filesystem
     qa_model_path: str = Field(
-        default="./models/vietnamese-sbert",
-        description="Path to SBERT model directory (local cache)",
+        default="/tmp/models/vietnamese-sbert",
+        description="Path to SBERT model directory (writable cache)",
     )
     qa_data_path: str = Field(
-        default="data.xlsx", description="Path to Q&A dataset Excel file"
+        default="/tmp/data/data.xlsx",
+        description="Path to Q&A dataset Excel file (writable cache)",
     )
     qa_vocab_path: str = Field(
-        default="tuvung.txt", description="Path to Vietnamese vocabulary file"
+        default="/tmp/data/tuvung.txt",
+        description="Path to Vietnamese vocabulary file (writable cache)",
     )
 
     # ONNX optimization settings
@@ -225,6 +228,10 @@ class Settings(BaseSettings):
     redis_ssl: bool = Field(
         default=True, description="Use SSL/TLS for Redis connection"
     )
+    redis_ssl_cert_verify: bool = Field(
+        default=False,
+        description="Verify SSL certificate (disable for GCP Memorystore via VPC)",
+    )
     redis_max_connections: int = Field(
         default=20, description="Maximum Redis connection pool size"
     )
@@ -301,11 +308,9 @@ class Settings(BaseSettings):
         if self.redis_password:
             auth_part = f":{self.redis_password}@"
 
-        # Build URL with SSL requirement
-        url = f"redis://{auth_part}{self.redis_host}:{self.redis_port}/{self.redis_db}"
-
-        if self.redis_ssl:
-            url += "?ssl_cert_reqs=required"
+        # Build URL with SSL using rediss:// scheme (redis-py 5.0+ compatible)
+        scheme = "rediss" if self.redis_ssl else "redis"
+        url = f"{scheme}://{auth_part}{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
         return url
 

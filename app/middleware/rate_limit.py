@@ -14,19 +14,69 @@ logger = logging.getLogger(__name__)
 class SSERateLimiter:
     """Rate limiter for SSE streaming endpoints."""
 
-    def __init__(self, redis_url: Optional[str] = None):
+    def __init__(
+        self,
+        redis_url: Optional[str] = None,
+        redis_ssl: bool = True,
+        redis_ssl_cert_verify: bool = False,
+    ):
         """
         Initialize rate limiter.
 
         Args:
             redis_url: Optional Redis URL for distributed rate limiting
+            redis_ssl: Whether SSL is enabled for Redis
+            redis_ssl_cert_verify: Whether to verify SSL certificate
         """
         self.redis_client = None
         if redis_url:
             try:
+                import ssl
                 import redis.asyncio as redis
 
-                self.redis_client = redis.from_url(redis_url)
+                # Parse Redis URL to get connection details
+                if redis_url.startswith('rediss://'):
+                    redis_url = redis_url[8:]  # Remove 'rediss://'
+                    use_ssl = True
+                elif redis_url.startswith('redis://'):
+                    redis_url = redis_url[7:]  # Remove 'redis://'
+                    use_ssl = False
+                else:
+                    use_ssl = False
+
+                # Extract password if present (format: :password@host:port/db)
+                password = None
+                if ':' in redis_url and '@' in redis_url:
+                    auth_part = redis_url.split('@')[0]
+                    if auth_part.startswith(':'):
+                        password = auth_part[1:]
+                    redis_url = redis_url.split('@')[1]
+
+                # Extract host, port, and db
+                parts = redis_url.split('/')
+                host_port = parts[0]
+                db = int(parts[1]) if len(parts) > 1 else 0
+
+                if ':' in host_port:
+                    host, port = host_port.split(':')
+                else:
+                    host = host_port
+                    port = 6379
+
+                # SSL options for GCP Memorystore (disable cert verification for VPC)
+                connection_kwargs = {}
+                if use_ssl and not redis_ssl_cert_verify:
+                    connection_kwargs["ssl"] = True
+                    connection_kwargs["ssl_cert_reqs"] = ssl.CERT_NONE
+                    connection_kwargs["ssl_check_hostname"] = False
+
+                self.redis_client = redis.Redis(
+                    host=host,
+                    port=int(port),
+                    db=db,
+                    password=password,
+                    **connection_kwargs
+                )
                 logger.info("Redis rate limiting enabled")
             except ImportError:
                 logger.warning(
@@ -208,8 +258,16 @@ def get_rate_limiter() -> Optional[SSERateLimiter]:
     return rate_limiter
 
 
-def init_rate_limiter(redis_url: Optional[str] = None) -> SSERateLimiter:
+def init_rate_limiter(
+    redis_url: Optional[str] = None,
+    redis_ssl: bool = True,
+    redis_ssl_cert_verify: bool = False,
+) -> SSERateLimiter:
     """Initialize the global rate limiter."""
     global rate_limiter
-    rate_limiter = SSERateLimiter(redis_url=redis_url)
+    rate_limiter = SSERateLimiter(
+        redis_url=redis_url,
+        redis_ssl=redis_ssl,
+        redis_ssl_cert_verify=redis_ssl_cert_verify,
+    )
     return rate_limiter

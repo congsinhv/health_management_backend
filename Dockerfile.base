@@ -37,9 +37,9 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/home/appuser/.local/bin:$PATH" \
     PORT=8080 \
-    QA_MODEL_PATH=/home/appuser/.cache/models/vietnamese-sbert \
-    QA_DATA_PATH=/home/appuser/.cache/data/data.xlsx \
-    QA_VOCAB_PATH=/home/appuser/.cache/data/tuvung.txt
+    QA_MODEL_PATH=/tmp/models/vietnamese-sbert \
+    QA_DATA_PATH=/tmp/data/data.xlsx \
+    QA_VOCAB_PATH=/tmp/data/tuvung.txt
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
@@ -61,5 +61,6 @@ COPY --from=builder /home/appuser/.local /home/appuser/.local
 USER appuser
 WORKDIR /home/appuser/app
 
-RUN mkdir -p /home/appuser/.cache/models/vietnamese-sbert && \
-    mkdir -p /home/appuser/.cache/data
+# Create writable directories for model cache (/tmp is world-writable)
+RUN mkdir -p /tmp/models/vietnamese-sbert && \
+    mkdir -p /tmp/data

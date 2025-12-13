@@ -108,7 +108,11 @@ async def lifespan(app: FastAPI):
     # Initialize rate limiter
     try:
         redis_url = getattr(settings, "redis_url", None)
-        rate_limiter = init_rate_limiter(redis_url=redis_url)
+        rate_limiter = init_rate_limiter(
+            redis_url=redis_url,
+            redis_ssl=settings.redis_ssl,
+            redis_ssl_cert_verify=settings.redis_ssl_cert_verify,
+        )
         logger.info("Rate limiter initialized")
     except Exception as e:
         logger.error(f"Failed to initialize rate limiter: {e}")
