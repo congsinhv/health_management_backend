@@ -78,6 +78,10 @@ class SSERateLimiter:
                     password=password,  # Pass password directly
                     **connection_kwargs
                 )
+
+                # Test the connection
+                import asyncio
+                asyncio.create_task(self._test_connection())
                 logger.info("Redis rate limiting enabled")
             except ImportError:
                 logger.warning(
@@ -248,6 +252,14 @@ class SSERateLimiter:
     def _register_local_request(self, user_id: str):
         """Register request locally."""
         self.local_requests[user_id].append(datetime.utcnow())
+
+    async def _test_connection(self):
+        """Test Redis connection and log result."""
+        try:
+            await self.redis_client.ping()
+            logger.info("Rate limiter Redis connection test: SUCCESS")
+        except Exception as e:
+            logger.error(f"Rate limiter Redis connection test: {type(e).__name__}: {e}")
 
 
 # Global rate limiter instance
