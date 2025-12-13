@@ -453,11 +453,12 @@ async def create_cache_service() -> CacheService:
                 connection_kwargs["ssl_check_hostname"] = False
                 connection_kwargs["ssl_certfile"] = None
 
+            # GCP Memorystore uses password-only authentication
             redis_client = redis.Redis(
                 host=settings.redis_host,
                 port=settings.redis_port,
                 db=settings.redis_db,
-                password=settings.redis_password,
+                password=settings.redis_password,  # Use auth string as password
                 **connection_kwargs,
             )
 

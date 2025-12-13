@@ -70,11 +70,12 @@ class SSERateLimiter:
                     connection_kwargs["ssl_cert_reqs"] = ssl.CERT_NONE
                     connection_kwargs["ssl_check_hostname"] = False
 
+                # Create Redis client with password
                 self.redis_client = redis.Redis(
                     host=host,
                     port=int(port),
                     db=db,
-                    password=password,
+                    password=password,  # Pass password directly
                     **connection_kwargs
                 )
                 logger.info("Redis rate limiting enabled")
