@@ -66,14 +66,19 @@ class SSERateLimiter:
                 # SSL options for GCP Memorystore (disable cert verification for VPC)
                 connection_kwargs = {}
                 if use_ssl and not redis_ssl_cert_verify:
+                    # Create SSL context for GCP Memorystore
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+                    connection_kwargs["ssl"] = ssl_context
+                elif use_ssl:
                     connection_kwargs["ssl"] = True
-                    connection_kwargs["ssl_cert_reqs"] = ssl.CERT_NONE
-                    connection_kwargs["ssl_check_hostname"] = False
 
                 # Debug log parsed values
                 logger.debug(f"Rate limiter parsed - host: {host}, port: {port}, password: {'***' if password else 'None'}")
 
                 # Create Redis client with password
+                # Note: SSL options should be set properly for redis-py 5.0+
                 self.redis_client = redis.Redis(
                     host=host,
                     port=int(port),

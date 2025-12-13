@@ -447,13 +447,18 @@ async def create_cache_service() -> CacheService:
                 "decode_responses": True,
             }
 
-            # Add SSL options if enabled
+            # Add SSL options if enabled (redis-py 5.0+ compatible)
             if settings.redis_ssl and not settings.redis_ssl_cert_verify:
                 import ssl
+                # Create SSL context for GCP Memorystore
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                connection_kwargs["ssl"] = ssl_context
+            elif settings.redis_ssl:
+                import ssl
+                # Create SSL context for normal SSL with verification
                 connection_kwargs["ssl"] = True
-                connection_kwargs["ssl_cert_reqs"] = ssl.CERT_NONE
-                connection_kwargs["ssl_check_hostname"] = False
-                connection_kwargs["ssl_certfile"] = None
 
             # GCP Memorystore uses password-only authentication
             # Don't use URL, pass parameters directly to avoid parsing issues
