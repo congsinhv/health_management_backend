@@ -433,6 +433,8 @@ async def create_cache_service() -> CacheService:
     if settings.enable_redis_cache and settings.redis_url:
         try:
             logger.info(f"Connecting to Redis at: {settings.redis_host}")
+        logger.debug(f"Redis URL: {settings.redis_url}")
+        logger.debug(f"Redis password present: {'Yes' if settings.redis_password else 'No'}")
 
             # Create Redis client with authentication for GCP Memorystore
             connection_kwargs = {

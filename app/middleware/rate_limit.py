@@ -70,6 +70,9 @@ class SSERateLimiter:
                     connection_kwargs["ssl_cert_reqs"] = ssl.CERT_NONE
                     connection_kwargs["ssl_check_hostname"] = False
 
+                # Debug log parsed values
+                logger.debug(f"Rate limiter parsed - host: {host}, port: {port}, password: {'***' if password else 'None'}")
+
                 # Create Redis client with password
                 self.redis_client = redis.Redis(
                     host=host,
