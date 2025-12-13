@@ -66,7 +66,12 @@ Keep descriptions in Vietnamese. Be specific about exercises.
 """
 
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        # Configure retry with exponential backoff for rate limits (429)
+        client = AsyncOpenAI(
+            api_key=settings.openai_api_key,
+            max_retries=3,
+            timeout=60.0,
+        )
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],

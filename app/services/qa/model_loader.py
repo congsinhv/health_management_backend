@@ -28,8 +28,12 @@ try:
 except ImportError:
     SentenceTransformer = None
 
+from google.api_core.exceptions import Forbidden, PermissionDenied, GoogleAPIError
+from google.auth.exceptions import GoogleAuthError
+
 from app.core.qa_constants import DEFAULT_MODEL_NAME, REQUIRED_MODEL_FILES
 from app.config import settings
+from app.utils.gcs_downloader import GCSDownloader
 
 logger = logging.getLogger(__name__)
 

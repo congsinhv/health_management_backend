@@ -59,7 +59,7 @@ class ObesityPredictorComplete:
         self.notification_repo = NotificationRepository(pool)
         self.user_profile_repo = UserProfileRepository(pool)
         # Define paths - use writable directory from config
-        model_dir = r"C:\health\be\health_management_backend\tmp\models_obesity"
+        model_dir = settings.obesity_model_dir
         model_path = os.path.join(model_dir, "obesity_classifier_final.pkl")
         encoder_path = os.path.join(model_dir, "label_encoder.pkl")
 
@@ -93,7 +93,12 @@ class ObesityPredictorComplete:
             "Diet_Quality",
         ]
 
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        # Configure retry with exponential backoff for rate limits (429)
+        self.client = AsyncOpenAI(
+            api_key=settings.openai_api_key,
+            max_retries=3,
+            timeout=60.0,
+        )
 
     def _ensure_models_downloaded(
         self, model_path: str, encoder_path: str, model_dir: str

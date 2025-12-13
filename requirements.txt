@@ -53,7 +53,7 @@ firebase-admin==6.2.0
 sentence-transformers==5.1.2
 pandas==2.3.3
 openpyxl==3.1.5
-torch==2.5.1
+torch==2.9.0
 openai==2.8.0
 
 # SSE Streaming dependencies

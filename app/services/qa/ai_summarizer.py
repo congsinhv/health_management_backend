@@ -63,11 +63,22 @@ class AISummarizer:
             self._initialize_clients()
 
     def _initialize_clients(self) -> None:
-        """Initialize OpenAI clients."""
+        """Initialize OpenAI clients with retry configuration."""
         try:
-            self.client = OpenAI(api_key=self.api_key)
-            self.async_client = AsyncOpenAI(api_key=self.api_key)
-            logger.info("OpenAI clients initialized successfully")
+            # Configure retry with exponential backoff for rate limits (429)
+            # max_retries: 3 attempts with exponential backoff
+            # timeout: 60s per request
+            self.client = OpenAI(
+                api_key=self.api_key,
+                max_retries=3,
+                timeout=60.0,
+            )
+            self.async_client = AsyncOpenAI(
+                api_key=self.api_key,
+                max_retries=3,
+                timeout=60.0,
+            )
+            logger.info("OpenAI clients initialized successfully with retry configuration")
         except Exception as e:
             logger.error(f"Failed to initialize OpenAI clients: {e}")
 

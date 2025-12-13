@@ -146,7 +146,12 @@ class QAService:
 
         # Q&A behavior settings
         self.max_per_field = settings.qa_max_per_field
-        self.openai_client = OpenAI(api_key=settings.openai_api_key)
+        # Configure retry with exponential backoff for rate limits (429)
+        self.openai_client = OpenAI(
+            api_key=settings.openai_api_key,
+            max_retries=3,
+            timeout=60.0,
+        )
 
         # Log cache service status
         if self.cache_service and self.cache_service.enabled:
