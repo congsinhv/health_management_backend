@@ -2,8 +2,6 @@
 
 A production-ready FastAPI system for health management with Vietnamese semantic search (SBERT), AI-powered Q&A, health predictions, and conversation management.
 
-**For Claude Code Users:** See [CLAUDE.md](./CLAUDE.md) for development commands, architecture patterns, and critical implementation details.
-
 ---
 
 ## Quick Overview
@@ -467,9 +465,6 @@ git push origin feature/feature-name
 
 For issues, questions, or contributions:
 - Create GitHub issue
-- Review documentation in `docs/` directory
-- Check API docs at `/docs` endpoint
-- See CLAUDE.md for development guidance
 
 ---
 
